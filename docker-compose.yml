@@ -1,0 +1,72 @@
+version: "3.9"
+
+# Lê automaticamente o arquivo .env na raiz do projeto
+# Copie .env.example para .env e preencha os valores antes de rodar
+
+services:
+  # -------------------------------------------------------
+  # Frontend React (dev server)
+  # -------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080}
+    depends_on:
+      - backend-quarkus
+
+  # -------------------------------------------------------
+  # Backend Quarkus (dev mode)
+  # Banco: Supabase (direto — sem postgres local)
+  # -------------------------------------------------------
+  backend-quarkus:
+    build:
+      context: ./backend-quarkus
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8080:8080"
+    environment:
+      # Banco — Supabase (Direct connection)
+      - QUARKUS_DATASOURCE_JDBC_URL=${QUARKUS_DATASOURCE_JDBC_URL}
+      - QUARKUS_DATASOURCE_USERNAME=${QUARKUS_DATASOURCE_USERNAME}
+      - QUARKUS_DATASOURCE_PASSWORD=${QUARKUS_DATASOURCE_PASSWORD}
+      # JWT
+      - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
+      - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
+      # Python
+      - PYTHON_AI_BASE_URL=http://backend-python:8001
+      - PYTHON_AI_INTERNAL_TOKEN=${PYTHON_AI_INTERNAL_TOKEN}
+      # CORS
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      # Trial
+      - TRIAL_DURATION_DAYS=${TRIAL_DURATION_DAYS:-14}
+      - MAX_FREE_TRIAL_TENANTS=${MAX_FREE_TRIAL_TENANTS:-100}
+      - TRIAL_DATA_RETENTION_DAYS=${TRIAL_DATA_RETENTION_DAYS:-30}
+    depends_on:
+      - backend-python
+    volumes:
+      - pdf-storage:/tmp/saas-pdf
+
+  # -------------------------------------------------------
+  # Backend Python (FastAPI)
+  # -------------------------------------------------------
+  backend-python:
+    build:
+      context: ./backend-python
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - INTERNAL_TOKEN=${INTERNAL_TOKEN}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+volumes:
+  pdf-storage:

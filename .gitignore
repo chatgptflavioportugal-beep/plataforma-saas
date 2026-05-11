@@ -1,0 +1,31 @@
+# Secrets — nunca commitar
+.env
+*.env.local
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Quarkus
+backend-quarkus/target/
+backend-quarkus/.mvn/wrapper/maven-wrapper.jar
+
+# Python
+backend-python/__pycache__/
+backend-python/.venv/
+backend-python/venv/
+backend-python/*.pyc
+backend-python/.pytest_cache/
+
+# PDF storage local
+/tmp/saas-pdf/
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db

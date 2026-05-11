@@ -1,0 +1,3 @@
+[submodule ".claude-base"]
+	path = .claude-base
+	url = https://github.com/chatgptflavioportugal-beep/claude-saas-base.git
