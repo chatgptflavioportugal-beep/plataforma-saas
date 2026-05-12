@@ -1,6 +1,7 @@
-FROM eclipse-temurin:21-jdk
+FROM maven:3.9-eclipse-temurin-21
 WORKDIR /app
-COPY . .
-RUN ./mvnw dependency:go-offline -q
+COPY pom.xml .
+RUN mvn dependency:go-offline -q
+COPY src ./src
 EXPOSE 8080
-CMD ["./mvnw", "quarkus:dev", "-Dquarkus.http.host=0.0.0.0"]
+CMD ["mvn", "quarkus:dev", "-Dquarkus.http.host=0.0.0.0"]
