@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
+import { AxiosError } from 'axios'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -31,8 +32,30 @@ export function OnboardingPage() {
         slug: data.company_slug,
       })
       navigate('/app/dashboard', { replace: true })
-    } catch {
-      setServerError('Erro ao criar empresa. Verifique se o slug está disponível.')
+    } catch (err) {
+      const axiosErr = err as AxiosError<{ error?: string; message?: string }>
+
+      if (!axiosErr.response) {
+        setServerError('Não foi possível conectar ao servidor. Verifique se o backend está rodando.')
+        return
+      }
+
+      const status = axiosErr.response.status
+      const body = axiosErr.response.data
+
+      if (status === 409) {
+        setServerError('Este identificador (slug) já está em uso. Escolha outro.')
+        return
+      }
+
+      if (status === 401) {
+        setServerError('Sessão expirada. Faça login novamente.')
+        return
+      }
+
+      setServerError(
+        body?.message ?? body?.error ?? `Erro ${status} ao criar empresa. Tente novamente.`
+      )
     }
   }
 

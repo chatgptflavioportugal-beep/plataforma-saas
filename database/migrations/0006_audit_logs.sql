@@ -12,7 +12,7 @@ CREATE TABLE audit_logs (
     resource    TEXT,
     resource_id TEXT,
     metadata    JSONB       NOT NULL DEFAULT '{}',
-    ip_address  INET,
+    ip_address  TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

@@ -25,10 +25,15 @@ api.interceptors.request.use(async (config) => {
   return config
 })
 
+const SKIP_SIGNOUT_URLS = ['/api/v1/tenants/mine', '/api/v1/tenants/']
+
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ApiError>) => {
-    if (error.response?.status === 401) {
+    const url = error.config?.url ?? ''
+    const isSkipped = SKIP_SIGNOUT_URLS.some((u) => url.includes(u))
+
+    if (error.response?.status === 401 && !isSkipped) {
       supabase.auth.signOut()
       window.location.href = '/login'
     }

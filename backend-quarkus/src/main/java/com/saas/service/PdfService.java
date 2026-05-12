@@ -75,12 +75,14 @@ public class PdfService {
         job.persist();
 
         try {
-            var multipart = new PdfMergeMultipart(job.fileAPath, job.fileBPath);
+            var form = new com.saas.proxy.PdfMergeForm();
+            form.fileA = new java.io.File(job.fileAPath);
+            form.fileB = new java.io.File(job.fileBPath);
             Response response = pythonAiClient.mergePdf(
                     internalToken,
                     job.tenantId.toString(),
                     job.userId.toString(),
-                    multipart
+                    form
             );
 
             if (response.getStatus() == 200) {
@@ -115,5 +117,4 @@ public class PdfService {
         return Files.readAllBytes(Paths.get(job.resultPath));
     }
 
-    record PdfMergeMultipart(String fileAPath, String fileBPath) {}
 }

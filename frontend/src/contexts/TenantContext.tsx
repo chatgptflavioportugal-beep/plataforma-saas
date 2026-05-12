@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { api, setActiveTenant } from '@/lib/api'
 import type { TenantContext as TenantContextType, UserTenant } from '@/types'
 import { useAuth } from './AuthContext'
@@ -18,6 +19,9 @@ const TenantCtx = createContext<TenantContextValue | null>(null)
 
 export function TenantProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+
   const [activeTenantId, setActiveTenantIdState] = useState<string | null>(
     sessionStorage.getItem('active_tenant_id')
   )
@@ -29,12 +33,23 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       return data
     },
     enabled: !!user,
-    onSuccess: (data) => {
-      if (!activeTenantId && data.length > 0) {
-        switchTenant(data[0].tenant_id)
+    retry: false,
+  })
+
+  useEffect(() => {
+    if (tenantsLoading) return
+
+    if (userTenants.length === 0) {
+      if (location.pathname !== '/onboarding') {
+        navigate('/onboarding', { replace: true })
       }
-    },
-  } as Parameters<typeof useQuery>[0])
+      return
+    }
+
+    if (!activeTenantId) {
+      switchTenant(userTenants[0].tenant_id)
+    }
+  }, [tenantsLoading, userTenants, activeTenantId])
 
   const { data: currentTenant, isLoading: tenantLoading } = useQuery({
     queryKey: ['tenant-context', activeTenantId],
@@ -43,6 +58,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       return data
     },
     enabled: !!activeTenantId,
+    retry: false,
   })
 
   function switchTenant(tenantId: string) {

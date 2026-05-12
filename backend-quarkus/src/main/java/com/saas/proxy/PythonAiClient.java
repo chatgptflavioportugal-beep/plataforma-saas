@@ -8,6 +8,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
+import org.jboss.resteasy.reactive.MultipartForm;
 
 @RegisterRestClient(configKey = "python-ai")
 @Path("/")
@@ -21,6 +22,6 @@ public interface PythonAiClient {
             @HeaderParam("X-Internal-Token") String internalToken,
             @HeaderParam("X-Tenant-ID") String tenantId,
             @HeaderParam("X-User-ID") String userId,
-            Object multipartBody
+            @MultipartForm PdfMergeForm form
     );
 }

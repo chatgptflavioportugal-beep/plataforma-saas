@@ -38,7 +38,10 @@ public class TenantResolutionFilter implements ContainerRequestFilter {
     public void filter(ContainerRequestContext requestContext) throws IOException {
         String path = requestContext.getUriInfo().getPath();
 
-        if (path.startsWith("/q/") || path.startsWith("/api/v1/public/")) {
+        if (path.startsWith("/q/")
+                || path.startsWith("/api/v1/public/")
+                || path.equals("/api/v1/tenants/mine")
+                || path.startsWith("/api/v1/admin/")) {
             return;
         }
 
