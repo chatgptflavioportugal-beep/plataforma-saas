@@ -28,11 +28,7 @@ Plataforma SaaS modular com multi-tenant, controle de planos, free trial e módu
 
 ## Pré-requisitos
 
-- Node.js 20+
-- Java 21 (JDK)
-- Python 3.11+
-- Maven 3.9+
-- Docker + Docker Compose (opcional, para rodar tudo junto)
+- Docker Desktop instalado
 - Conta no [Supabase](https://supabase.com)
 
 ## Setup rápido
@@ -78,6 +74,60 @@ docker-compose up --build
 ### 5. Sem Docker — manualmente
 
 Ver [docs/execucao-local.md](docs/execucao-local.md)
+
+---
+
+## Comandos Docker — do dia a dia
+
+### Após alterar código do Frontend
+
+```bash
+docker-compose up --build frontend
+```
+
+### Após alterar código do Quarkus
+
+```bash
+docker-compose up --build backend-quarkus
+```
+
+### Após alterar código do Python
+
+```bash
+docker-compose up --build backend-python
+```
+
+### Reiniciar um serviço com rebuild
+
+```bash
+docker-compose up --build --force-recreate frontend
+docker-compose up --build --force-recreate backend-quarkus
+docker-compose up --build --force-recreate backend-python
+```
+
+### Ver logs em tempo real
+
+```bash
+# Todos os serviços
+docker-compose logs -f
+
+# Serviço específico
+docker-compose logs -f frontend
+docker-compose logs -f backend-quarkus
+docker-compose logs -f backend-python
+```
+
+### Parar tudo
+
+```bash
+docker-compose down
+```
+
+### Parar e apagar volumes (reset completo)
+
+```bash
+docker-compose down -v
+```
 
 ## Módulos disponíveis
 
