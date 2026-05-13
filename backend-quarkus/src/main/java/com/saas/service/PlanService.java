@@ -6,7 +6,6 @@ import jakarta.persistence.EntityManager;
 
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 @ApplicationScoped
 public class PlanService {
@@ -28,12 +27,25 @@ public class PlanService {
 
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> listActivePlans() {
-        return em.createNativeQuery(
-                "SELECT id, name, code, description, price_monthly, " +
-                "max_users, max_ai_requests_month, features, sort_order " +
-                "FROM plans WHERE is_active = TRUE ORDER BY sort_order",
-                "PlanDtoMapping"
+        List<Object[]> rows = em.createNativeQuery(
+                "SELECT id::text, name, code, description, price_monthly, " +
+                "max_users, max_ai_requests_month, features::text, sort_order " +
+                "FROM plans WHERE is_active = TRUE ORDER BY sort_order"
         ).getResultList();
+
+        return rows.stream().map(row -> {
+            Map<String, Object> plan = new java.util.LinkedHashMap<>();
+            plan.put("id", row[0]);
+            plan.put("name", row[1]);
+            plan.put("code", row[2]);
+            plan.put("description", row[3]);
+            plan.put("price_monthly", row[4]);
+            plan.put("max_users", row[5]);
+            plan.put("max_ai_requests_month", row[6]);
+            plan.put("features", row[7]);
+            plan.put("sort_order", row[8]);
+            return plan;
+        }).collect(java.util.stream.Collectors.toList());
     }
 
     public long countActiveTenantsByPlan(String planCode) {

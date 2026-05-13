@@ -7,6 +7,7 @@ import { SubscriptionGuard } from '@/components/auth/SubscriptionGuard'
 
 import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
+import { AuthCallbackPage } from '@/pages/AuthCallbackPage'
 import { OnboardingPage } from '@/pages/OnboardingPage'
 
 import { AppLayout } from '@/pages/app/AppLayout'
@@ -31,6 +32,7 @@ export function AppRouter() {
           {/* Public */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
           {/* Onboarding (autenticado, sem tenant ainda) */}
           <Route path="/onboarding" element={

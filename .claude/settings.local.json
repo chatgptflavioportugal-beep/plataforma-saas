@@ -6,7 +6,8 @@
       "Bash(docker-compose logs *)",
       "Bash(docker-compose build *)",
       "Bash(docker run *)",
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Read(//c/desenvolup/sistema/saas-plataforma/frontend/**)"
     ]
   }
 }
