@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/Button'
@@ -21,23 +21,29 @@ function GoogleIcon() {
   )
 }
 
+async function resolveDestination(userId: string): Promise<string> {
+  const { data } = await supabase
+    .from('user_profiles')
+    .select('system_role')
+    .eq('id', userId)
+    .single()
+  return data?.system_role === 'SUPER_ADMIN' ? '/admin/dashboard' : '/app/dashboard'
+}
+
 export function LoginPage() {
   const navigate = useNavigate()
-  const location = useLocation()
-  const from = (location.state as { from?: Location })?.from?.pathname ?? '/app/dashboard'
-
   const [serverError, setServerError] = useState<string | null>(null)
   const [googleLoading, setGoogleLoading] = useState(false)
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginForm>()
 
   async function onSubmit(data: LoginForm) {
     setServerError(null)
-    const { error } = await supabase.auth.signInWithPassword(data)
+    const { error, data: authData } = await supabase.auth.signInWithPassword(data)
     if (error) {
       setServerError('Email ou senha inválidos.')
       return
     }
-    navigate(from, { replace: true })
+    navigate(await resolveDestination(authData.user!.id), { replace: true })
   }
 
   async function signInWithGoogle() {

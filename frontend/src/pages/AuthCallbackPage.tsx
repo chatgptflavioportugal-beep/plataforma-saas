@@ -3,14 +3,18 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 
 export function AuthCallbackPage() {
-  const { session, isLoading } = useAuth()
+  const { session, profile, isLoading } = useAuth()
   const navigate = useNavigate()
 
   useEffect(() => {
-    if (!isLoading) {
-      navigate(session ? '/app/dashboard' : '/login', { replace: true })
+    if (isLoading) return
+    if (!session) {
+      navigate('/login', { replace: true })
+      return
     }
-  }, [isLoading, session, navigate])
+    const destination = profile?.system_role === 'SUPER_ADMIN' ? '/admin/dashboard' : '/app/dashboard'
+    navigate(destination, { replace: true })
+  }, [isLoading, session, profile, navigate])
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50">

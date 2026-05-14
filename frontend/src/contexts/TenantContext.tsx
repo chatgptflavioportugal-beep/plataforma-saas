@@ -26,7 +26,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     sessionStorage.getItem('active_tenant_id')
   )
 
-  const { data: userTenants = [], isLoading: tenantsLoading } = useQuery({
+  const { data: userTenants = [], isLoading: tenantsLoading, isFetching: tenantsFetching, isError: tenantsError } = useQuery({
     queryKey: ['user-tenants', user?.id],
     queryFn: async () => {
       const { data } = await api.get<UserTenant[]>('/api/v1/tenants/mine')
@@ -37,7 +37,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   })
 
   useEffect(() => {
-    if (tenantsLoading) return
+    if (tenantsLoading || tenantsFetching) return
+    if (tenantsError) return
 
     if (userTenants.length === 0) {
       if (location.pathname !== '/onboarding') {
@@ -49,7 +50,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     if (!activeTenantId) {
       switchTenant(userTenants[0].tenant_id)
     }
-  }, [tenantsLoading, userTenants, activeTenantId])
+  }, [tenantsLoading, tenantsFetching, tenantsError, userTenants, activeTenantId])
 
   const { data: currentTenant, isLoading: tenantLoading } = useQuery({
     queryKey: ['tenant-context', activeTenantId],

@@ -15,6 +15,8 @@ export function AdminTenantsPage() {
       const { data } = await api.get<AdminTenant[]>('/api/v1/admin/tenants')
       return data
     },
+    retry: false,
+    staleTime: 30_000,
   })
 
   const statusColor: Record<string, string> = {
@@ -26,7 +28,7 @@ export function AdminTenantsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">Tenants</h1>
+      <h1 className="text-2xl font-bold text-white">Empresas</h1>
 
       {isLoading ? (
         <p className="text-gray-400">Carregando...</p>

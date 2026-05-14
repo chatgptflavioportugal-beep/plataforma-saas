@@ -9,6 +9,8 @@ export function AdminPlansPage() {
       const { data } = await api.get<Plan[]>('/api/v1/admin/plans')
       return data
     },
+    retry: false,
+    staleTime: 30_000,
   })
 
   return (

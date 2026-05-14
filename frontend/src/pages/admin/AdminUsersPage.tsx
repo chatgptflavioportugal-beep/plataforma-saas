@@ -18,6 +18,8 @@ export function AdminUsersPage() {
       const { data } = await api.get<AdminUser[]>('/api/v1/admin/users')
       return data
     },
+    retry: false,
+    staleTime: 30_000,
   })
 
   return (
@@ -28,7 +30,7 @@ export function AdminUsersPage() {
         <table className="min-w-full divide-y divide-gray-700">
           <thead>
             <tr>
-              {['Nome', 'Email', 'Papel', 'Tenants', 'Status', 'Criado em'].map((h) => (
+              {['Nome', 'Email', 'Papel', 'Empresas', 'Status', 'Criado em'].map((h) => (
                 <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">
                   {h}
                 </th>

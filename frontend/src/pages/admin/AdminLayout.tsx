@@ -13,7 +13,7 @@ export function AdminLayout() {
 
   const navItems = [
     { path: '/admin/dashboard', label: 'Dashboard' },
-    { path: '/admin/tenants', label: 'Tenants' },
+    { path: '/admin/tenants', label: 'Empresas' },
     { path: '/admin/plans', label: 'Planos' },
     { path: '/admin/users', label: 'Usuários' },
   ]

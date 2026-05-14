@@ -31,9 +31,19 @@ public class AdminResource {
     JsonWebToken jwt;
 
     private void ensureSuperAdmin() {
-        String role = jwt.getClaim("system_role");
-        if (!"SUPER_ADMIN".equals(role)) {
+        String userId = jwt.getSubject();
+        if (userId == null) {
             throw new jakarta.ws.rs.ForbiddenException("Acesso restrito a SUPER_ADMIN");
+        }
+        try {
+            String role = (String) em.createNativeQuery(
+                    "SELECT system_role FROM user_profiles WHERE id::text = :id"
+            ).setParameter("id", userId).getSingleResult();
+            if (!"SUPER_ADMIN".equals(role)) {
+                throw new jakarta.ws.rs.ForbiddenException("Acesso restrito a SUPER_ADMIN");
+            }
+        } catch (jakarta.persistence.NoResultException e) {
+            throw new jakarta.ws.rs.ForbiddenException("Perfil de usuário não encontrado");
         }
     }
 
@@ -42,12 +52,12 @@ public class AdminResource {
     public Response stats(@Context SecurityContext ctx) {
         ensureSuperAdmin();
 
-        long totalTenants = (Long) em.createNativeQuery("SELECT COUNT(*) FROM tenants").getSingleResult();
-        long activeTenants = (Long) em.createNativeQuery("SELECT COUNT(*) FROM tenants WHERE status = 'active'").getSingleResult();
-        long trialTenants = (Long) em.createNativeQuery("SELECT COUNT(*) FROM tenants WHERE status = 'trial'").getSingleResult();
-        long suspendedTenants = (Long) em.createNativeQuery("SELECT COUNT(*) FROM tenants WHERE status = 'suspended'").getSingleResult();
-        long totalUsers = (Long) em.createNativeQuery("SELECT COUNT(*) FROM user_profiles").getSingleResult();
-        long totalPdfJobs = (Long) em.createNativeQuery("SELECT COUNT(*) FROM pdf_jobs").getSingleResult();
+        long totalTenants = ((Number) em.createNativeQuery("SELECT COUNT(*) FROM tenants").getSingleResult()).longValue();
+        long activeTenants = ((Number) em.createNativeQuery("SELECT COUNT(*) FROM tenants WHERE status = 'active'").getSingleResult()).longValue();
+        long trialTenants = ((Number) em.createNativeQuery("SELECT COUNT(*) FROM tenants WHERE status = 'trial'").getSingleResult()).longValue();
+        long suspendedTenants = ((Number) em.createNativeQuery("SELECT COUNT(*) FROM tenants WHERE status = 'suspended'").getSingleResult()).longValue();
+        long totalUsers = ((Number) em.createNativeQuery("SELECT COUNT(*) FROM user_profiles").getSingleResult()).longValue();
+        long totalPdfJobs = ((Number) em.createNativeQuery("SELECT COUNT(*) FROM pdf_jobs").getSingleResult()).longValue();
 
         return Response.ok(Map.of(
                 "total_tenants", totalTenants,
@@ -68,30 +78,52 @@ public class AdminResource {
 
     @GET
     @Path("/plans")
+    @SuppressWarnings("unchecked")
     public Response listPlans() {
         ensureSuperAdmin();
-        var plans = em.createNativeQuery(
-                "SELECT id, name, code, price_monthly, max_users, max_ai_requests_month, is_active " +
-                "FROM plans ORDER BY sort_order",
-                Object[].class
+        List<Object[]> rows = (java.util.List<Object[]>) em.createNativeQuery(
+                "SELECT id::text, name, code, price_monthly, max_users, max_ai_requests_month, is_active " +
+                "FROM plans ORDER BY sort_order"
         ).getResultList();
+        var plans = rows.stream().map(row -> {
+            Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("id", row[0]);
+            m.put("name", row[1]);
+            m.put("code", row[2]);
+            m.put("price_monthly", row[3]);
+            m.put("max_users", row[4]);
+            m.put("max_ai_requests_month", row[5]);
+            m.put("is_active", row[6]);
+            return m;
+        }).toList();
         return Response.ok(plans).build();
     }
 
     @GET
     @Path("/users")
+    @SuppressWarnings("unchecked")
     public Response listUsers() {
         ensureSuperAdmin();
-        var users = em.createNativeQuery(
-                "SELECT up.id, au.email, up.full_name, up.system_role, up.is_active, " +
-                "COUNT(ut.tenant_id) as tenant_count, up.created_at " +
+        List<Object[]> rows = (java.util.List<Object[]>) em.createNativeQuery(
+                "SELECT up.id::text, au.email, up.full_name, up.system_role, up.is_active, " +
+                "COUNT(ut.tenant_id) as tenant_count, up.created_at::text " +
                 "FROM user_profiles up " +
                 "JOIN auth.users au ON au.id = up.id " +
                 "LEFT JOIN user_tenants ut ON ut.user_id = up.id AND ut.is_active = TRUE " +
                 "GROUP BY up.id, au.email, up.full_name, up.system_role, up.is_active, up.created_at " +
-                "ORDER BY up.created_at DESC",
-                Object[].class
+                "ORDER BY up.created_at DESC"
         ).getResultList();
+        var users = rows.stream().map(row -> {
+            Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("id", row[0]);
+            m.put("email", row[1]);
+            m.put("full_name", row[2]);
+            m.put("system_role", row[3]);
+            m.put("is_active", row[4]);
+            m.put("tenant_count", row[5]);
+            m.put("created_at", row[6]);
+            return m;
+        }).toList();
         return Response.ok(users).build();
     }
 }

@@ -1,5 +1,3 @@
-version: "3.9"
-
 # Lê automaticamente o arquivo .env na raiz do projeto
 # Copie .env.example para .env e preencha os valores antes de rodar
 

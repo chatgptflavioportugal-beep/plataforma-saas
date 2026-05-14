@@ -60,19 +60,18 @@ public class TenantService {
 
     @SuppressWarnings("unchecked")
     public Map<String, Object> getTenantContext(UUID tenantId) {
-        var rows = em.createNativeQuery(
-                "SELECT t.id, t.name, t.slug, t.status, t.trial_ends_at, " +
-                "ts.status as sub_status, ts.trial_end, " +
-                "p.id as plan_id, p.name as plan_name, p.code as plan_code, " +
-                "p.price_monthly, p.max_users, p.max_ai_requests_month, p.features, " +
+        var rows = (java.util.List<Object[]>) em.createNativeQuery(
+                "SELECT t.id::text, t.name, t.slug, t.status, t.trial_ends_at::text, " +
+                "ts.status as sub_status, ts.trial_end::text, " +
+                "p.id::text as plan_id, p.name as plan_name, p.code as plan_code, " +
+                "p.price_monthly, p.max_users, p.max_ai_requests_month, p.features::text, " +
                 "ut.role " +
                 "FROM tenants t " +
                 "JOIN tenant_subscriptions ts ON ts.tenant_id = t.id " +
                 "JOIN plans p ON p.id = ts.plan_id " +
                 "LEFT JOIN user_tenants ut ON ut.tenant_id = t.id " +
                 "WHERE t.id = :tenantId " +
-                "ORDER BY ts.created_at DESC LIMIT 1",
-                Object[].class
+                "ORDER BY ts.created_at DESC LIMIT 1"
         )
         .setParameter("tenantId", tenantId)
         .getResultList();
@@ -91,8 +90,8 @@ public class TenantService {
 
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> listAdminTenants() {
-        return em.createNativeQuery(
-                "SELECT t.id, t.name, t.slug, t.status, t.created_at, " +
+        List<Object[]> rows = (java.util.List<Object[]>) em.createNativeQuery(
+                "SELECT t.id::text, t.name, t.slug, t.status, t.created_at::text, " +
                 "p.name as plan_name, ts.status as sub_status, " +
                 "COUNT(ut.user_id) as user_count " +
                 "FROM tenants t " +
@@ -100,8 +99,19 @@ public class TenantService {
                 "LEFT JOIN plans p ON p.id = ts.plan_id " +
                 "LEFT JOIN user_tenants ut ON ut.tenant_id = t.id AND ut.is_active = TRUE " +
                 "GROUP BY t.id, t.name, t.slug, t.status, t.created_at, p.name, ts.status " +
-                "ORDER BY t.created_at DESC",
-                Object[].class
+                "ORDER BY t.created_at DESC"
         ).getResultList();
+        return rows.stream().map(row -> {
+            Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("id", row[0]);
+            m.put("name", row[1]);
+            m.put("slug", row[2]);
+            m.put("status", row[3]);
+            m.put("created_at", row[4]);
+            m.put("plan_name", row[5]);
+            m.put("sub_status", row[6]);
+            m.put("user_count", row[7]);
+            return m;
+        }).collect(java.util.stream.Collectors.toList());
     }
 }

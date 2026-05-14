@@ -33,13 +33,12 @@ public class UserTenantRepository {
 
     @SuppressWarnings("unchecked")
     public List<UserTenantRow> findAllByUser(UUID userId) {
-        var rows = em.createNativeQuery(
-            "SELECT ut.id, ut.user_id, ut.tenant_id, ut.role, ut.is_active, " +
-            "t.name, t.slug, t.status, t.plan_id, t.trial_ends_at, ut.created_at, ut.updated_at " +
+        var rows = (java.util.List<Object[]>) em.createNativeQuery(
+            "SELECT ut.id::text, ut.user_id::text, ut.tenant_id::text, ut.role, ut.is_active, " +
+            "t.name, t.slug, t.status, t.plan_id::text, t.trial_ends_at::text, ut.created_at::text, ut.updated_at::text " +
             "FROM user_tenants ut JOIN tenants t ON t.id = ut.tenant_id " +
             "WHERE ut.user_id = :userId AND ut.is_active = TRUE " +
-            "ORDER BY ut.created_at ASC",
-            Object[].class
+            "ORDER BY ut.created_at ASC"
         )
         .setParameter("userId", userId)
         .getResultList();
@@ -63,34 +62,34 @@ public class UserTenantRepository {
         }).toList();
     }
 
+    @SuppressWarnings("unchecked")
     public Optional<UserTenantResult> findByUserAndTenant(UUID userId, UUID tenantId) {
-        var result = em.createNativeQuery(
-                "SELECT ut.tenant_id, ut.role FROM user_tenants ut " +
-                "WHERE ut.user_id = :userId AND ut.tenant_id = :tenantId AND ut.is_active = TRUE",
-                Object[].class
+        var result = (java.util.List<Object[]>) em.createNativeQuery(
+                "SELECT ut.tenant_id::text, ut.role FROM user_tenants ut " +
+                "WHERE ut.user_id = :userId AND ut.tenant_id = :tenantId AND ut.is_active = TRUE"
         )
         .setParameter("userId", userId)
         .setParameter("tenantId", tenantId)
         .getResultList();
 
         if (result.isEmpty()) return Optional.empty();
-        Object[] row = (Object[]) result.get(0);
-        return Optional.of(new UserTenantResult((UUID) row[0], (String) row[1]));
+        Object[] row = result.get(0);
+        return Optional.of(new UserTenantResult(UUID.fromString((String) row[0]), (String) row[1]));
     }
 
+    @SuppressWarnings("unchecked")
     public Optional<UserTenantResult> findDefaultTenant(UUID userId) {
-        var result = em.createNativeQuery(
-                "SELECT ut.tenant_id, ut.role FROM user_tenants ut " +
+        var result = (java.util.List<Object[]>) em.createNativeQuery(
+                "SELECT ut.tenant_id::text, ut.role FROM user_tenants ut " +
                 "WHERE ut.user_id = :userId AND ut.is_active = TRUE " +
-                "ORDER BY ut.created_at ASC LIMIT 1",
-                Object[].class
+                "ORDER BY ut.created_at ASC LIMIT 1"
         )
         .setParameter("userId", userId)
         .getResultList();
 
         if (result.isEmpty()) return Optional.empty();
-        Object[] row = (Object[]) result.get(0);
-        return Optional.of(new UserTenantResult((UUID) row[0], (String) row[1]));
+        Object[] row = result.get(0);
+        return Optional.of(new UserTenantResult(UUID.fromString((String) row[0]), (String) row[1]));
     }
 
     public long countByTenant(UUID tenantId) {

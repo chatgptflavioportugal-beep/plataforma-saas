@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
+import { useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import { api } from '@/lib/api'
+import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 
@@ -13,6 +15,8 @@ interface OnboardingForm {
 
 export function OnboardingPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
   const [serverError, setServerError] = useState<string | null>(null)
   const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<OnboardingForm>()
 
@@ -31,6 +35,7 @@ export function OnboardingPage() {
         name: data.company_name,
         slug: data.company_slug,
       })
+      await queryClient.invalidateQueries({ queryKey: ['user-tenants', user?.id] })
       navigate('/app/dashboard', { replace: true })
     } catch (err) {
       const axiosErr = err as AxiosError<{ error?: string; message?: string }>
