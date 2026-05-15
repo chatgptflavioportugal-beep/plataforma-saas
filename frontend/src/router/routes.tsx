@@ -21,8 +21,10 @@ import { SettingsPage } from '@/pages/app/SettingsPage'
 import { AdminLayout } from '@/pages/admin/AdminLayout'
 import { AdminDashboardPage } from '@/pages/admin/AdminDashboardPage'
 import { AdminTenantsPage } from '@/pages/admin/AdminTenantsPage'
+import { AdminCompanyUsersPage } from '@/pages/admin/AdminCompanyUsersPage'
+import { AdminSystemAdminsPage } from '@/pages/admin/AdminSystemAdminsPage'
 import { AdminPlansPage } from '@/pages/admin/AdminPlansPage'
-import { AdminUsersPage } from '@/pages/admin/AdminUsersPage'
+import { AdminSubscriptionsPage } from '@/pages/admin/AdminSubscriptionsPage'
 
 export function AppRouter() {
   return (
@@ -71,8 +73,12 @@ export function AppRouter() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<AdminDashboardPage />} />
             <Route path="tenants" element={<AdminTenantsPage />} />
+            <Route path="company-users" element={<AdminCompanyUsersPage />} />
+            <Route path="system-admins" element={<AdminSystemAdminsPage />} />
             <Route path="plans" element={<AdminPlansPage />} />
-            <Route path="users" element={<AdminUsersPage />} />
+            <Route path="subscriptions" element={<AdminSubscriptionsPage />} />
+            {/* Redireciona rota legada */}
+            <Route path="users" element={<Navigate to="/admin/company-users" replace />} />
           </Route>
 
           {/* Default */}

@@ -3,7 +3,7 @@ export interface UserProfile {
   full_name: string | null
   avatar_url: string | null
   phone: string | null
-  system_role: 'user' | 'SUPER_ADMIN'
+  system_role: 'user' | 'SUPER_ADMIN' | 'ADMIN' | 'SUPPORT' | 'FINANCE'
   is_active: boolean
   metadata: Record<string, unknown>
   created_at: string

@@ -175,20 +175,23 @@ public class AdminResource {
     }
 
     // ----------------------------------------------------------------
-    // Usuários
+    // Usuários das Empresas (clientes — exclui roles administrativos)
     // ----------------------------------------------------------------
 
+    private static final List<String> ADMIN_ROLES = List.of("SUPER_ADMIN", "ADMIN", "SUPPORT", "FINANCE");
+
     @GET
-    @Path("/users")
+    @Path("/company-users")
     @SuppressWarnings("unchecked")
-    public Response listUsers() {
+    public Response listCompanyUsers() {
         ensureSuperAdmin();
         List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
                 "SELECT up.id::text, au.email, up.full_name, up.system_role, up.is_active, " +
-                "COUNT(ut.tenant_id) as tenant_count, up.created_at::text " +
+                "COUNT(ut.tenant_id) AS tenant_count, up.created_at::text " +
                 "FROM user_profiles up " +
                 "JOIN auth.users au ON au.id = up.id " +
                 "LEFT JOIN user_tenants ut ON ut.user_id = up.id AND ut.is_active = TRUE " +
+                "WHERE up.system_role NOT IN ('SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'FINANCE') " +
                 "GROUP BY up.id, au.email, up.full_name, up.system_role, up.is_active, up.created_at " +
                 "ORDER BY up.created_at DESC"
         ).getResultList();
@@ -204,6 +207,80 @@ public class AdminResource {
             return m;
         }).toList();
         return Response.ok(users).build();
+    }
+
+    // ----------------------------------------------------------------
+    // Administradores do Sistema (somente roles administrativos)
+    // ----------------------------------------------------------------
+
+    @GET
+    @Path("/system-admins")
+    @SuppressWarnings("unchecked")
+    public Response listSystemAdmins() {
+        ensureSuperAdmin();
+        List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
+                "SELECT up.id::text, au.email, up.full_name, up.system_role, up.is_active, " +
+                "up.created_at::text " +
+                "FROM user_profiles up " +
+                "JOIN auth.users au ON au.id = up.id " +
+                "WHERE up.system_role IN ('SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'FINANCE') " +
+                "ORDER BY up.system_role, up.created_at DESC"
+        ).getResultList();
+        var admins = rows.stream().map(row -> {
+            Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("id", row[0]);
+            m.put("email", row[1]);
+            m.put("full_name", row[2]);
+            m.put("system_role", row[3]);
+            m.put("is_active", row[4]);
+            m.put("created_at", row[5]);
+            return m;
+        }).toList();
+        return Response.ok(admins).build();
+    }
+
+    // ----------------------------------------------------------------
+    // Assinaturas
+    // ----------------------------------------------------------------
+
+    @GET
+    @Path("/subscriptions")
+    @SuppressWarnings("unchecked")
+    public Response listSubscriptions() {
+        ensureSuperAdmin();
+        List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
+                "SELECT ts.id::text, t.name AS tenant_name, t.slug, " +
+                "p.name AS plan_name, p.code AS plan_code, " +
+                "ts.status, ts.billing_type, ts.plan_version, " +
+                "ts.trial_start::text, ts.trial_end::text, " +
+                "ts.current_period_start::text, ts.current_period_end::text, " +
+                "ts.contracted_price_monthly, ts.contracted_price_annual, " +
+                "ts.created_at::text " +
+                "FROM tenant_subscriptions ts " +
+                "JOIN tenants t ON t.id = ts.tenant_id " +
+                "JOIN plans p ON p.id = ts.plan_id " +
+                "ORDER BY ts.created_at DESC"
+        ).getResultList();
+        var subs = rows.stream().map(row -> {
+            Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("id", row[0]);
+            m.put("tenant_name", row[1]);
+            m.put("slug", row[2]);
+            m.put("plan_name", row[3]);
+            m.put("plan_code", row[4]);
+            m.put("status", row[5]);
+            m.put("billing_type", row[6]);
+            m.put("plan_version", row[7]);
+            m.put("trial_start", row[8]);
+            m.put("trial_end", row[9]);
+            m.put("current_period_start", row[10]);
+            m.put("current_period_end", row[11]);
+            m.put("contracted_price_monthly", row[12]);
+            m.put("contracted_price_annual", row[13]);
+            m.put("created_at", row[14]);
+            return m;
+        }).toList();
+        return Response.ok(subs).build();
     }
 
     // ----------------------------------------------------------------
