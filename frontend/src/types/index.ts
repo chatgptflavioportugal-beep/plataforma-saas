@@ -25,14 +25,22 @@ export interface Tenant {
 export interface Plan {
   id: string
   name: string
-  code: 'free' | 'starter' | 'pro' | 'enterprise'
+  code: string
   description: string | null
   price_monthly: number
+  price_annual: number | null
+  discount_annual_percent: number
   max_users: number
   max_ai_requests_month: number
   features: PlanFeatures
   is_active: boolean
   sort_order: number
+  version: number
+  is_current_version: boolean
+  parent_plan_id: string | null
+  billing_type: 'monthly' | 'annual' | 'both'
+  created_at?: string
+  subscriber_count?: number
 }
 
 export interface PlanFeatures {
@@ -59,6 +67,10 @@ export interface TenantSubscription {
   current_period_start: string | null
   current_period_end: string | null
   cancelled_at: string | null
+  plan_version: number
+  contracted_price_monthly: number | null
+  contracted_price_annual: number | null
+  billing_type: 'monthly' | 'annual'
 }
 
 export interface UserTenant {
