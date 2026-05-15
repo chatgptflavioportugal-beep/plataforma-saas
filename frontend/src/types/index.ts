@@ -39,6 +39,7 @@ export interface Plan {
   is_current_version: boolean
   parent_plan_id: string | null
   billing_type: 'monthly' | 'annual' | 'both'
+  is_most_popular: boolean
   created_at?: string
   subscriber_count?: number
 }

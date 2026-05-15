@@ -80,7 +80,7 @@ public class AdminResource {
     }
 
     // ----------------------------------------------------------------
-    // Planos — CRUD completo
+    // Planos — listagem e histórico
     // ----------------------------------------------------------------
 
     @GET
@@ -97,46 +97,80 @@ public class AdminResource {
         return Response.ok(planService.getPlanVersionHistory(code)).build();
     }
 
+    // ----------------------------------------------------------------
+    // Planos — criar (v1)
+    // ----------------------------------------------------------------
+
     @POST
     @Path("/plans")
     public Response createPlan(Map<String, Object> body) {
         ensureSuperAdmin();
-        var req = mapToPlanRequest(body);
-        if (req.code() == null || req.code().isBlank()) {
+        var req = mapToRequest(body);
+        if (req.code() == null || req.code().isBlank())
             return Response.status(400).entity(Map.of("error", "code é obrigatório")).build();
-        }
-        if (req.name() == null || req.name().isBlank()) {
+        if (req.name() == null || req.name().isBlank())
             return Response.status(400).entity(Map.of("error", "name é obrigatório")).build();
-        }
-        if (req.priceMonthly() == null) {
+        if (req.priceMonthly() == null)
             return Response.status(400).entity(Map.of("error", "price_monthly é obrigatório")).build();
-        }
-        var result = planService.createPlan(req);
-        return Response.status(201).entity(result).build();
+        if (req.maxUsers() == null)
+            return Response.status(400).entity(Map.of("error", "max_users é obrigatório")).build();
+        if (req.maxAiRequestsMonth() == null)
+            return Response.status(400).entity(Map.of("error", "max_ai_requests_month é obrigatório")).build();
+        if (req.features() == null)
+            return Response.status(400).entity(Map.of("error", "features é obrigatório")).build();
+
+        return Response.status(201).entity(planService.createPlan(req)).build();
     }
 
-    @PUT
-    @Path("/plans/{id}")
-    public Response updatePlan(@PathParam("id") String id, Map<String, Object> body) {
+    // ----------------------------------------------------------------
+    // Planos — gerar nova versão (substitui edição direta)
+    // ----------------------------------------------------------------
+
+    @POST
+    @Path("/plans/{id}/new-version")
+    public Response createNewVersion(@PathParam("id") String id, Map<String, Object> body) {
         ensureSuperAdmin();
         try {
-            var req = mapToPlanRequest(body);
-            var result = planService.updatePlan(id, req);
-            return Response.ok(result).build();
-        } catch (jakarta.persistence.NoResultException e) {
-            return Response.status(404).entity(Map.of("error", "Plano não encontrado")).build();
+            var req = mapToRequest(body);
+            return Response.status(201).entity(planService.createNewVersion(id, req)).build();
+        } catch (NotFoundException e) {
+            return Response.status(404).entity(Map.of("error", e.getMessage())).build();
+        } catch (BadRequestException e) {
+            return Response.status(400).entity(Map.of("error", e.getMessage())).build();
         }
     }
+
+    // ----------------------------------------------------------------
+    // Planos — ativar / desativar
+    // ----------------------------------------------------------------
 
     @PATCH
     @Path("/plans/{id}/status")
+    @Consumes(MediaType.WILDCARD)
     public Response togglePlanStatus(@PathParam("id") String id) {
         ensureSuperAdmin();
         try {
-            var result = planService.togglePlanStatus(id);
-            return Response.ok(result).build();
+            return Response.ok(planService.togglePlanStatus(id)).build();
         } catch (NotFoundException e) {
-            return Response.status(404).entity(Map.of("error", "Plano não encontrado")).build();
+            return Response.status(404).entity(Map.of("error", e.getMessage())).build();
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // Planos — definir "Mais Popular"
+    // ----------------------------------------------------------------
+
+    @PATCH
+    @Path("/plans/{id}/popular")
+    @Consumes(MediaType.WILDCARD)
+    public Response setMostPopular(@PathParam("id") String id) {
+        ensureSuperAdmin();
+        try {
+            return Response.ok(planService.setMostPopular(id)).build();
+        } catch (NotFoundException e) {
+            return Response.status(404).entity(Map.of("error", e.getMessage())).build();
+        } catch (BadRequestException e) {
+            return Response.status(400).entity(Map.of("error", e.getMessage())).build();
         }
     }
 
@@ -181,7 +215,7 @@ public class AdminResource {
     }
 
     @SuppressWarnings("unchecked")
-    private PlanService.PlanRequest mapToPlanRequest(Map<String, Object> body) {
+    private PlanService.PlanRequest mapToRequest(Map<String, Object> body) {
         return new PlanService.PlanRequest(
             (String) body.get("name"),
             (String) body.get("code"),

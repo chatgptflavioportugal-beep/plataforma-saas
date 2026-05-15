@@ -95,7 +95,7 @@ export function PlansPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {plans.map((plan) => {
           const isCurrent = plan.code === currentPlanCode
-          const isPopular = plan.code === 'pro'
+          const isPopular = plan.is_most_popular
 
           const showAnnual  = isAnnual && plan.price_annual != null && plan.billing_type !== 'monthly'
           const displayPrice = showAnnual ? plan.price_annual! : plan.price_monthly
