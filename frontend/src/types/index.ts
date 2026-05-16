@@ -3,7 +3,7 @@ export interface UserProfile {
   full_name: string | null
   avatar_url: string | null
   phone: string | null
-  system_role: 'user' | 'SUPER_ADMIN' | 'ADMIN' | 'SUPPORT' | 'FINANCE'
+  system_role: 'user' | 'SUPER_ADMIN' | 'ADMIN' | 'SUPPORT' | 'FINANCE_ADMIN'
   is_active: boolean
   metadata: Record<string, unknown>
   created_at: string
@@ -14,6 +14,7 @@ export interface Tenant {
   id: string
   name: string
   slug: string
+  type: 'individual' | 'business'
   status: 'trial' | 'active' | 'suspended' | 'cancelled'
   plan_id: string | null
   trial_ends_at: string | null
@@ -40,6 +41,7 @@ export interface Plan {
   parent_plan_id: string | null
   billing_type: 'monthly' | 'annual' | 'both'
   is_most_popular: boolean
+  plan_type: 'individual' | 'business'
   created_at?: string
   subscriber_count?: number
 }
@@ -78,7 +80,7 @@ export interface UserTenant {
   id: string
   user_id: string
   tenant_id: string
-  role: 'owner' | 'admin' | 'member'
+  role: 'owner' | 'admin' | 'member' | 'finance'
   is_active: boolean
   tenant?: Tenant
 }
@@ -111,5 +113,5 @@ export interface TenantContext {
   tenant: Tenant
   subscription: TenantSubscription
   plan: Plan
-  role: 'owner' | 'admin' | 'member'
+  role: 'owner' | 'admin' | 'member' | 'finance'
 }

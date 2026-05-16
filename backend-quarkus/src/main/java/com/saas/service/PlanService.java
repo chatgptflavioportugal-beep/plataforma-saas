@@ -33,18 +33,27 @@ public class PlanService {
     }
 
     // ----------------------------------------------------------------
-    // Leitura pública: versões atuais ativas com flag is_most_popular
+    // Leitura pública: versões atuais ativas, com filtro opcional por tipo
     // ----------------------------------------------------------------
 
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> listActivePlans() {
+        return listActivePlans(null);
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> listActivePlans(String planType) {
+        String typeFilter = (planType != null && !planType.isBlank())
+                ? " AND plan_type = '" + planType.replace("'", "''") + "'"
+                : "";
+
         List<Object[]> rows = em.createNativeQuery(
                 "SELECT id::text, name, code, description, price_monthly, price_annual, " +
                 "discount_annual_percent, max_users, max_ai_requests_month, features::text, " +
-                "sort_order, version, billing_type, is_most_popular " +
+                "sort_order, version, billing_type, is_most_popular, plan_type " +
                 "FROM plans " +
-                "WHERE is_active = TRUE AND is_current_version = TRUE " +
-                "ORDER BY sort_order"
+                "WHERE is_active = TRUE AND is_current_version = TRUE" + typeFilter +
+                " ORDER BY sort_order"
         ).getResultList();
 
         return rows.stream().map(row -> {
@@ -63,6 +72,7 @@ public class PlanService {
             m.put("version", row[11]);
             m.put("billing_type", row[12]);
             m.put("is_most_popular", row[13]);
+            m.put("plan_type", row[14]);
             return m;
         }).collect(Collectors.toList());
     }
@@ -79,13 +89,13 @@ public class PlanService {
                 "p.max_users, p.max_ai_requests_month, p.features::text, " +
                 "p.is_active, p.sort_order, p.version, p.is_current_version, " +
                 "p.parent_plan_id::text, p.billing_type, p.created_at::text, " +
-                "p.is_most_popular, " +
+                "p.is_most_popular, p.plan_type, " +
                 "COUNT(ts.id) AS subscriber_count " +
                 "FROM plans p " +
                 "LEFT JOIN tenant_subscriptions ts " +
                 "  ON ts.plan_id = p.id AND ts.status IN ('trial', 'active', 'past_due') " +
                 "GROUP BY p.id " +
-                "ORDER BY p.code, p.version"
+                "ORDER BY p.plan_type, p.code, p.version"
         ).getResultList();
 
         return rows.stream().map(row -> {
@@ -108,7 +118,8 @@ public class PlanService {
             m.put("billing_type", row[15]);
             m.put("created_at", row[16]);
             m.put("is_most_popular", row[17]);
-            m.put("subscriber_count", ((Number) row[18]).longValue());
+            m.put("plan_type", row[18]);
+            m.put("subscriber_count", ((Number) row[19]).longValue());
             return m;
         }).collect(Collectors.toList());
     }
@@ -124,7 +135,8 @@ public class PlanService {
                 "p.price_monthly, p.price_annual, p.discount_annual_percent, " +
                 "p.max_users, p.max_ai_requests_month, p.features::text, " +
                 "p.is_active, p.sort_order, p.version, p.is_current_version, " +
-                "p.is_most_popular, p.created_at::text, COUNT(ts.id) AS subscriber_count " +
+                "p.is_most_popular, p.created_at::text, p.plan_type, " +
+                "COUNT(ts.id) AS subscriber_count " +
                 "FROM plans p " +
                 "LEFT JOIN tenant_subscriptions ts " +
                 "  ON ts.plan_id = p.id AND ts.status IN ('trial', 'active', 'past_due') " +
@@ -151,7 +163,8 @@ public class PlanService {
             m.put("is_current_version", row[13]);
             m.put("is_most_popular", row[14]);
             m.put("created_at", row[15]);
-            m.put("subscriber_count", ((Number) row[16]).longValue());
+            m.put("plan_type", row[16]);
+            m.put("subscriber_count", ((Number) row[17]).longValue());
             return m;
         }).collect(Collectors.toList());
     }
@@ -167,10 +180,10 @@ public class PlanService {
         em.createNativeQuery(
                 "INSERT INTO plans (id, code, name, description, price_monthly, price_annual, " +
                 "discount_annual_percent, max_users, max_ai_requests_month, features, " +
-                "is_active, sort_order, version, is_current_version, billing_type, is_most_popular) " +
+                "is_active, sort_order, version, is_current_version, billing_type, is_most_popular, plan_type) " +
                 "VALUES (:id, :code, :name, :description, :priceMonthly, :priceAnnual, " +
                 ":discountAnnualPercent, :maxUsers, :maxAiRequestsMonth, CAST(:features AS jsonb), " +
-                "TRUE, :sortOrder, 1, TRUE, :billingType, FALSE)"
+                "TRUE, :sortOrder, 1, TRUE, :billingType, FALSE, :planType)"
         )
         .setParameter("id", id)
         .setParameter("code", req.code())
@@ -184,14 +197,14 @@ public class PlanService {
         .setParameter("features", req.featuresJson())
         .setParameter("sortOrder", req.sortOrder() != null ? req.sortOrder() : 99)
         .setParameter("billingType", req.billingType() != null ? req.billingType() : "both")
+        .setParameter("planType", req.planType() != null ? req.planType() : "business")
         .executeUpdate();
 
         return Map.of("id", id.toString(), "version", 1, "created", true);
     }
 
     // ----------------------------------------------------------------
-    // Admin: gerar nova versão explicitamente (nunca edita a atual)
-    // Transfere a flag is_most_popular da versão anterior.
+    // Admin: gerar nova versão (preserva plan_type da versão anterior)
     // ----------------------------------------------------------------
 
     @Transactional
@@ -211,8 +224,8 @@ public class PlanService {
         String oldBilling    = (String)  current[10];
         int oldDiscount      = ((Number) current[11]).intValue();
         boolean wasMostPop   = (Boolean) current[12];
+        String oldPlanType   = (String)  current[13];
 
-        // Desativa versão anterior
         em.createNativeQuery(
                 "UPDATE plans SET is_current_version = FALSE, is_most_popular = FALSE, updated_at = NOW() " +
                 "WHERE id::text = :id"
@@ -224,10 +237,10 @@ public class PlanService {
         em.createNativeQuery(
                 "INSERT INTO plans (id, code, name, description, price_monthly, price_annual, " +
                 "discount_annual_percent, max_users, max_ai_requests_month, features, " +
-                "is_active, sort_order, version, is_current_version, parent_plan_id, billing_type, is_most_popular) " +
+                "is_active, sort_order, version, is_current_version, parent_plan_id, billing_type, is_most_popular, plan_type) " +
                 "VALUES (:id, :code, :name, :description, :priceMonthly, :priceAnnual, " +
                 ":discountAnnualPercent, :maxUsers, :maxAiRequestsMonth, CAST(:features AS jsonb), " +
-                "TRUE, :sortOrder, :version, TRUE, :parentId, :billingType, :isMostPopular)"
+                "TRUE, :sortOrder, :version, TRUE, :parentId, :billingType, :isMostPopular, :planType)"
         )
         .setParameter("id", newId)
         .setParameter("code", code)
@@ -244,18 +257,18 @@ public class PlanService {
         .setParameter("parentId",          UUID.fromString(currentPlanId))
         .setParameter("billingType",       req.billingType() != null ? req.billingType() : oldBilling)
         .setParameter("isMostPopular",     wasMostPop)
+        .setParameter("planType",          req.planType() != null ? req.planType() : oldPlanType)
         .executeUpdate();
 
         return Map.of("id", newId.toString(), "version", newVersion, "new_version_created", true);
     }
 
     // ----------------------------------------------------------------
-    // Admin: marcar como "Mais Popular" (limpa os demais)
+    // Admin: marcar como "Mais Popular"
     // ----------------------------------------------------------------
 
     @Transactional
     public Map<String, Object> setMostPopular(String planId) {
-        // Verifica se o plano é ativo e é versão atual
         Object[] plan;
         try {
             plan = (Object[]) em.createNativeQuery(
@@ -271,11 +284,9 @@ public class PlanService {
         if (!isActive)  throw new BadRequestException("Planos inativos não podem ser definidos como Mais Popular");
         if (!isCurrent) throw new BadRequestException("Apenas a versão atual do plano pode ser marcada como Mais Popular");
 
-        // Remove flag de todos os planos
         em.createNativeQuery("UPDATE plans SET is_most_popular = FALSE WHERE is_most_popular = TRUE")
           .executeUpdate();
 
-        // Define no plano selecionado
         em.createNativeQuery(
                 "UPDATE plans SET is_most_popular = TRUE, updated_at = NOW() WHERE id::text = :id"
         ).setParameter("id", planId).executeUpdate();
@@ -284,7 +295,7 @@ public class PlanService {
     }
 
     // ----------------------------------------------------------------
-    // Admin: ativar / desativar (desativar remove flag de mais popular)
+    // Admin: ativar / desativar
     // ----------------------------------------------------------------
 
     @Transactional
@@ -302,7 +313,6 @@ public class PlanService {
         Boolean nowActive   = (Boolean) result[0];
         Boolean mostPopular = (Boolean) result[1];
 
-        // Se desativou e era o mais popular, remove o flag
         if (!nowActive && mostPopular) {
             em.createNativeQuery("UPDATE plans SET is_most_popular = FALSE WHERE id::text = :id")
               .setParameter("id", planId).executeUpdate();
@@ -324,7 +334,7 @@ public class PlanService {
     }
 
     // ----------------------------------------------------------------
-    // Helper privado
+    // Helper privado — inclui plan_type no índice 13
     // ----------------------------------------------------------------
 
     @SuppressWarnings("unchecked")
@@ -333,7 +343,7 @@ public class PlanService {
             return (Object[]) em.createNativeQuery(
                     "SELECT code, price_monthly, price_annual, max_users, max_ai_requests_month, " +
                     "features::text, version, name, description, sort_order, billing_type, " +
-                    "discount_annual_percent, is_most_popular " +
+                    "discount_annual_percent, is_most_popular, plan_type " +
                     "FROM plans WHERE id::text = :id AND is_current_version = TRUE"
             ).setParameter("id", planId).getSingleResult();
         } catch (jakarta.persistence.NoResultException e) {
@@ -356,7 +366,8 @@ public class PlanService {
         Integer maxAiRequestsMonth,
         Map<String, Object> features,
         String billingType,
-        Integer sortOrder
+        Integer sortOrder,
+        String planType
     ) {
         public String featuresJson() {
             if (features == null) return null;

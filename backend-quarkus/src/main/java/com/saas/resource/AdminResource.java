@@ -178,7 +178,7 @@ public class AdminResource {
     // Usuários das Empresas (clientes — exclui roles administrativos)
     // ----------------------------------------------------------------
 
-    private static final List<String> ADMIN_ROLES = List.of("SUPER_ADMIN", "ADMIN", "SUPPORT", "FINANCE");
+    private static final List<String> ADMIN_ROLES = List.of("SUPER_ADMIN", "ADMIN", "SUPPORT", "FINANCE_ADMIN");
 
     @GET
     @Path("/company-users")
@@ -191,7 +191,7 @@ public class AdminResource {
                 "FROM user_profiles up " +
                 "JOIN auth.users au ON au.id = up.id " +
                 "LEFT JOIN user_tenants ut ON ut.user_id = up.id AND ut.is_active = TRUE " +
-                "WHERE up.system_role NOT IN ('SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'FINANCE') " +
+                "WHERE up.system_role NOT IN ('SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'FINANCE_ADMIN') " +
                 "GROUP BY up.id, au.email, up.full_name, up.system_role, up.is_active, up.created_at " +
                 "ORDER BY up.created_at DESC"
         ).getResultList();
@@ -223,7 +223,7 @@ public class AdminResource {
                 "up.created_at::text " +
                 "FROM user_profiles up " +
                 "JOIN auth.users au ON au.id = up.id " +
-                "WHERE up.system_role IN ('SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'FINANCE') " +
+                "WHERE up.system_role IN ('SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'FINANCE_ADMIN') " +
                 "ORDER BY up.system_role, up.created_at DESC"
         ).getResultList();
         var admins = rows.stream().map(row -> {
@@ -304,7 +304,8 @@ public class AdminResource {
             body.get("max_ai_requests_month") != null ? ((Number) body.get("max_ai_requests_month")).intValue() : null,
             body.get("features") instanceof Map<?, ?> f ? (Map<String, Object>) f : null,
             (String) body.get("billing_type"),
-            body.get("sort_order") != null ? ((Number) body.get("sort_order")).intValue() : null
+            body.get("sort_order") != null ? ((Number) body.get("sort_order")).intValue() : null,
+            (String) body.get("plan_type")
         );
     }
 }

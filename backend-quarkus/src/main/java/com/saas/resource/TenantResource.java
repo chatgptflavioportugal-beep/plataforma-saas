@@ -42,6 +42,7 @@ public class TenantResource {
             tenant.put("name", r.tenantName());
             tenant.put("slug", r.tenantSlug());
             tenant.put("status", r.tenantStatus());
+            tenant.put("type", r.tenantType());
             tenant.put("plan_id", r.planId());
             tenant.put("trial_ends_at", r.trialEndsAt());
             tenant.put("created_at", r.createdAt());

@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Read(//c/desenvolupament/sistema/saas-plataforma/backend-quarkus/src/main/java/com/saas/resource/**)"
+      "Read(//c/desenvolupament/sistema/saas-plataforma/backend-quarkus/src/main/java/com/saas/resource/**)",
+      "Read(//c/desenvolupament/sistema/saas-plataforma/database/migrations/**)"
     ]
   }
 }

@@ -2,6 +2,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTenant } from '@/contexts/TenantContext'
 import { TrialBanner } from '@/components/billing/TrialBanner'
+import { ContextSwitcher } from '@/components/context/ContextSwitcher'
 
 export function AppLayout() {
   const { profile, signOut } = useAuth()
@@ -27,11 +28,14 @@ export function AppLayout() {
 
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 flex h-16 items-center justify-between">
-          <div className="flex items-center gap-6">
+
+          {/* Logo + Seletor de contexto */}
+          <div className="flex items-center gap-4">
             <span className="text-lg font-bold text-primary-700">SaaS Platform</span>
-            <span className="text-sm text-gray-400">{currentTenant?.tenant?.name}</span>
+            <ContextSwitcher />
           </div>
 
+          {/* Navegação central */}
           <nav className="hidden md:flex items-center gap-1">
             {navItems.map((item) => (
               <Link
@@ -48,6 +52,7 @@ export function AppLayout() {
             ))}
           </nav>
 
+          {/* Usuário */}
           <div className="flex items-center gap-3">
             <span className="text-sm text-gray-600">{profile?.full_name}</span>
             <button
@@ -57,6 +62,7 @@ export function AppLayout() {
               Sair
             </button>
           </div>
+
         </div>
       </header>
 

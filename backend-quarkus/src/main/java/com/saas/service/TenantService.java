@@ -5,6 +5,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import jakarta.ws.rs.NotFoundException;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.time.OffsetDateTime;
@@ -21,15 +22,35 @@ public class TenantService {
     @ConfigProperty(name = "trial.duration.days", defaultValue = "14")
     int trialDurationDays;
 
+    // ----------------------------------------------------------------
+    // Criar tenant de empresa (chamado pelo onboarding)
+    // ----------------------------------------------------------------
+
     @Transactional
     public Tenant createTenant(String name, String slug, UUID ownerId) {
+        return createTenant(name, slug, ownerId, "business");
+    }
+
+    @Transactional
+    public Tenant createTenant(String name, String slug, UUID ownerId, String type) {
         if (Tenant.findBySlug(slug) != null) {
             throw new IllegalArgumentException("Slug já em uso: " + slug);
         }
 
-        UUID freePlanId = (UUID) em.createNativeQuery(
-                "SELECT id FROM plans WHERE code = 'free'"
-        ).getSingleResult();
+        // Para empresa: procura plano business free. Para individual: plano individual.
+        UUID freePlanId;
+        try {
+            freePlanId = (UUID) em.createNativeQuery(
+                    "SELECT id FROM plans WHERE plan_type = :planType AND is_active = TRUE " +
+                    "AND is_current_version = TRUE ORDER BY sort_order LIMIT 1"
+            ).setParameter("planType", type).getSingleResult();
+        } catch (jakarta.persistence.NoResultException e) {
+            // Fallback: qualquer plano ativo
+            freePlanId = (UUID) em.createNativeQuery(
+                    "SELECT id FROM plans WHERE is_active = TRUE AND is_current_version = TRUE " +
+                    "ORDER BY sort_order LIMIT 1"
+            ).getSingleResult();
+        }
 
         Tenant tenant = new Tenant();
         tenant.name = name;
@@ -38,6 +59,13 @@ public class TenantService {
         tenant.planId = freePlanId;
         tenant.trialEndsAt = OffsetDateTime.now().plusDays(trialDurationDays);
         tenant.persist();
+
+        em.createNativeQuery(
+                "UPDATE tenants SET type = :type WHERE id = :id"
+        )
+        .setParameter("type", type)
+        .setParameter("id", tenant.id)
+        .executeUpdate();
 
         em.createNativeQuery(
                 "INSERT INTO user_tenants (user_id, tenant_id, role) VALUES (:userId, :tenantId, 'owner')"
@@ -58,17 +86,25 @@ public class TenantService {
         return tenant;
     }
 
+    // ----------------------------------------------------------------
+    // Contexto do tenant: subscription + plano + papel do usuário
+    // Se o tenant individual não tiver subscription ainda, cria automaticamente.
+    // ----------------------------------------------------------------
+
     @SuppressWarnings("unchecked")
+    @Transactional
     public Map<String, Object> getTenantContext(UUID tenantId) {
         var rows = (java.util.List<Object[]>) em.createNativeQuery(
-                "SELECT t.id::text, t.name, t.slug, t.status, t.trial_ends_at::text, " +
-                "ts.status as sub_status, ts.trial_end::text, " +
-                "p.id::text as plan_id, p.name as plan_name, p.code as plan_code, " +
-                "p.price_monthly, p.max_users, p.max_ai_requests_month, p.features::text, " +
+                "SELECT t.id::text, t.name, t.slug, t.status, t.type, t.trial_ends_at::text, " +
+                "ts.id::text as sub_id, ts.status as sub_status, ts.trial_end::text, " +
+                "ts.current_period_start::text, ts.current_period_end::text, " +
+                "ts.billing_type, ts.plan_version, " +
+                "p.id::text as plan_id, p.name as plan_name, p.code as plan_code, p.plan_type, " +
+                "p.price_monthly, p.price_annual, p.max_users, p.max_ai_requests_month, p.features::text, " +
                 "ut.role " +
                 "FROM tenants t " +
-                "JOIN tenant_subscriptions ts ON ts.tenant_id = t.id " +
-                "JOIN plans p ON p.id = ts.plan_id " +
+                "LEFT JOIN tenant_subscriptions ts ON ts.tenant_id = t.id " +
+                "LEFT JOIN plans p ON p.id = ts.plan_id " +
                 "LEFT JOIN user_tenants ut ON ut.tenant_id = t.id " +
                 "WHERE t.id = :tenantId " +
                 "ORDER BY ts.created_at DESC LIMIT 1"
@@ -76,30 +112,137 @@ public class TenantService {
         .setParameter("tenantId", tenantId)
         .getResultList();
 
-        if (rows.isEmpty()) throw new jakarta.ws.rs.NotFoundException("Tenant não encontrado");
+        if (rows.isEmpty()) throw new NotFoundException("Tenant não encontrado");
 
-        Object[] row = (Object[]) rows.get(0);
+        Object[] row = rows.get(0);
+        String tenantType = (String) row[4];
+
+        // Se não há subscription (tenant individual criado pelo trigger antes de ter planos),
+        // cria automaticamente com o plano disponível de menor ordem.
+        if (row[6] == null) {
+            ensureSubscription(tenantId, tenantType);
+            // Recarrega após criação
+            return getTenantContext(tenantId);
+        }
+
+        Map<String, Object> tenantMap = new java.util.LinkedHashMap<>();
+        tenantMap.put("id", row[0]);
+        tenantMap.put("name", row[1]);
+        tenantMap.put("slug", row[2]);
+        tenantMap.put("status", row[3]);
+        tenantMap.put("type", row[4]);
+        tenantMap.put("trial_ends_at", row[5]);
+
+        Map<String, Object> subMap = new java.util.LinkedHashMap<>();
+        subMap.put("id", row[6]);
+        subMap.put("status", row[7]);
+        subMap.put("trial_end", row[8]);
+        subMap.put("current_period_start", row[9]);
+        subMap.put("current_period_end", row[10]);
+        subMap.put("billing_type", row[11] != null ? row[11] : "monthly");
+        subMap.put("plan_version", row[12]);
+
+        Map<String, Object> planMap = new java.util.LinkedHashMap<>();
+        planMap.put("id", row[13]);
+        planMap.put("name", row[14]);
+        planMap.put("code", row[15]);
+        planMap.put("plan_type", row[16]);
+        planMap.put("price_monthly", row[17]);
+        planMap.put("price_annual", row[18]);
+        planMap.put("max_users", row[19]);
+        planMap.put("max_ai_requests_month", row[20]);
+        planMap.put("features", row[21]);
+
         return Map.of(
-                "tenant", Map.of("id", row[0], "name", row[1], "slug", row[2], "status", row[3]),
-                "subscription", Map.of("status", row[5], "trial_end", row[6]),
-                "plan", Map.of("id", row[7], "name", row[8], "code", row[9],
-                               "price_monthly", row[10], "max_users", row[11]),
-                "role", row[14]
+                "tenant", tenantMap,
+                "subscription", subMap,
+                "plan", planMap,
+                "role", row[22] != null ? row[22] : "owner"
         );
     }
+
+    private void ensureSubscription(UUID tenantId, String tenantType) {
+        UUID planId;
+        try {
+            planId = (UUID) em.createNativeQuery(
+                    "SELECT id FROM plans WHERE plan_type = :planType AND is_active = TRUE " +
+                    "AND is_current_version = TRUE ORDER BY sort_order LIMIT 1"
+            ).setParameter("planType", tenantType).getSingleResult();
+        } catch (jakarta.persistence.NoResultException e) {
+            try {
+                planId = (UUID) em.createNativeQuery(
+                        "SELECT id FROM plans WHERE is_active = TRUE AND is_current_version = TRUE " +
+                        "ORDER BY sort_order LIMIT 1"
+                ).getSingleResult();
+            } catch (jakarta.persistence.NoResultException ex) {
+                return; // Sem planos cadastrados ainda — não faz nada
+            }
+        }
+
+        OffsetDateTime trialEnd = OffsetDateTime.now().plusDays(14);
+        em.createNativeQuery(
+                "INSERT INTO tenant_subscriptions (tenant_id, plan_id, status, trial_start, trial_end) " +
+                "VALUES (:tenantId, :planId, 'trial', NOW(), :trialEnd) ON CONFLICT DO NOTHING"
+        )
+        .setParameter("tenantId", tenantId)
+        .setParameter("planId", planId)
+        .setParameter("trialEnd", trialEnd)
+        .executeUpdate();
+    }
+
+    // ----------------------------------------------------------------
+    // Garante que o usuário tenha um tenant individual (backfill para usuários antigos)
+    // Idempotente: se já existe, retorna o existente sem criar novo.
+    // ----------------------------------------------------------------
+
+    @SuppressWarnings("unchecked")
+    @Transactional
+    public Map<String, Object> ensureIndividualTenant(UUID userId) {
+        List<Object[]> existing = (java.util.List<Object[]>) em.createNativeQuery(
+                "SELECT t.id::text, t.name, t.slug FROM tenants t " +
+                "JOIN user_tenants ut ON ut.tenant_id = t.id " +
+                "WHERE ut.user_id = :userId AND t.type = 'individual'"
+        ).setParameter("userId", userId).getResultList();
+
+        if (!existing.isEmpty()) {
+            Object[] row = existing.get(0);
+            return Map.of("id", row[0], "name", row[1], "slug", row[2],
+                    "type", "individual", "already_exists", true);
+        }
+
+        String fullName;
+        try {
+            fullName = (String) em.createNativeQuery(
+                    "SELECT full_name FROM user_profiles WHERE id = :userId"
+            ).setParameter("userId", userId).getSingleResult();
+        } catch (jakarta.persistence.NoResultException e) {
+            fullName = null;
+        }
+
+        String name = (fullName != null && !fullName.isBlank()) ? fullName.trim() : "Meu Plano";
+        String slug = "individual-" + userId.toString().replace("-", "");
+
+        Tenant tenant = createTenant(name, slug, userId, "individual");
+        return Map.of("id", tenant.id.toString(), "name", tenant.name, "slug", tenant.slug,
+                "type", "individual", "already_exists", false);
+    }
+
+    // ----------------------------------------------------------------
+    // Listagem admin de tenants
+    // ----------------------------------------------------------------
 
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> listAdminTenants() {
         List<Object[]> rows = (java.util.List<Object[]>) em.createNativeQuery(
-                "SELECT t.id::text, t.name, t.slug, t.status, t.created_at::text, " +
+                "SELECT t.id::text, t.name, t.slug, t.status, t.type, t.created_at::text, " +
                 "p.name as plan_name, ts.status as sub_status, " +
                 "COUNT(ut.user_id) as user_count " +
                 "FROM tenants t " +
                 "LEFT JOIN tenant_subscriptions ts ON ts.tenant_id = t.id " +
                 "LEFT JOIN plans p ON p.id = ts.plan_id " +
                 "LEFT JOIN user_tenants ut ON ut.tenant_id = t.id AND ut.is_active = TRUE " +
-                "GROUP BY t.id, t.name, t.slug, t.status, t.created_at, p.name, ts.status " +
-                "ORDER BY t.created_at DESC"
+                "GROUP BY t.id, t.name, t.slug, t.status, t.type, t.created_at, p.name, ts.status " +
+                "ORDER BY t.type ASC, t.created_at DESC"
         ).getResultList();
         return rows.stream().map(row -> {
             Map<String, Object> m = new java.util.LinkedHashMap<>();
@@ -107,10 +250,11 @@ public class TenantService {
             m.put("name", row[1]);
             m.put("slug", row[2]);
             m.put("status", row[3]);
-            m.put("created_at", row[4]);
-            m.put("plan_name", row[5]);
-            m.put("sub_status", row[6]);
-            m.put("user_count", row[7]);
+            m.put("type", row[4]);
+            m.put("created_at", row[5]);
+            m.put("plan_name", row[6]);
+            m.put("sub_status", row[7]);
+            m.put("user_count", row[8]);
             return m;
         }).collect(java.util.stream.Collectors.toList());
     }

@@ -13,6 +13,8 @@ interface TenantContextValue {
   switchTenant: (tenantId: string) => void
   isTrialExpiringSoon: boolean
   trialDaysRemaining: number | null
+  individualTenant: UserTenant | null
+  businessTenants: UserTenant[]
 }
 
 const TenantCtx = createContext<TenantContextValue | null>(null)
@@ -36,10 +38,15 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     retry: false,
   })
 
+  const individualTenant = userTenants.find((ut) => ut.tenant?.type === 'individual') ?? null
+  const businessTenants = userTenants.filter((ut) => ut.tenant?.type === 'business')
+
   useEffect(() => {
     if (tenantsLoading || tenantsFetching) return
     if (tenantsError) return
 
+    // Sem nenhum tenant: encaminha para onboarding (escolha de contexto)
+    // Ocorre em todo novo login — o trigger só cria user_profile, não tenants.
     if (userTenants.length === 0) {
       if (location.pathname !== '/onboarding') {
         navigate('/onboarding', { replace: true })
@@ -47,8 +54,24 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    if (!activeTenantId) {
+    // Já tem um tenant ativo salvo — valida se ainda pertence ao usuário
+    if (activeTenantId) {
+      const stillMember = userTenants.some((ut) => ut.tenant_id === activeTenantId)
+      if (stillMember) return
+      // Tenant salvo não existe mais — limpa e redireciona
+      sessionStorage.removeItem('active_tenant_id')
+      setActiveTenantIdState(null)
+    }
+
+    // Só 1 tenant (caso comum: apenas plano individual) → seleciona automaticamente
+    if (userTenants.length === 1) {
       switchTenant(userTenants[0].tenant_id)
+      return
+    }
+
+    // Vários tenants sem preferência salva → seletor de contexto
+    if (location.pathname !== '/select-context') {
+      navigate('/select-context', { replace: true })
     }
   }, [tenantsLoading, tenantsFetching, tenantsError, userTenants, activeTenantId])
 
@@ -83,6 +106,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       switchTenant,
       isTrialExpiringSoon: trialDaysRemaining !== null && trialDaysRemaining <= 7,
       trialDaysRemaining,
+      individualTenant,
+      businessTenants,
     }}>
       {children}
     </TenantCtx.Provider>

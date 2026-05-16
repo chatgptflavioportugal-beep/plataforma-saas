@@ -9,6 +9,7 @@ import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 import { AuthCallbackPage } from '@/pages/AuthCallbackPage'
 import { OnboardingPage } from '@/pages/OnboardingPage'
+import { ContextSelectorPage } from '@/pages/ContextSelectorPage'
 
 import { AppLayout } from '@/pages/app/AppLayout'
 import { DashboardPage } from '@/pages/app/DashboardPage'
@@ -36,7 +37,14 @@ export function AppRouter() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
-          {/* Onboarding (autenticado, sem tenant ainda) */}
+          {/* Seleção de contexto (autenticado, sem TenantProvider) */}
+          <Route path="/select-context" element={
+            <AuthGuard>
+              <ContextSelectorPage />
+            </AuthGuard>
+          } />
+
+          {/* Onboarding — criar empresa (tenant individual já existe pelo trigger) */}
           <Route path="/onboarding" element={
             <AuthGuard>
               <OnboardingPage />

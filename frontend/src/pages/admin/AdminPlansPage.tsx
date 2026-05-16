@@ -44,6 +44,7 @@ interface FormData {
   max_users: string
   max_ai_requests_month: string
   billing_type: 'monthly' | 'annual' | 'both'
+  plan_type: 'individual' | 'business'
   sort_order: string
   features: Record<string, boolean | number>
 }
@@ -59,6 +60,7 @@ function planToForm(p: Plan): FormData {
     max_users: String(p.max_users),
     max_ai_requests_month: String(p.max_ai_requests_month),
     billing_type: p.billing_type,
+    plan_type: p.plan_type ?? 'business',
     sort_order: String(p.sort_order),
     features: { ...(p.features as Record<string, boolean | number>) },
   }
@@ -69,7 +71,7 @@ const EMPTY_FORM: FormData = {
   price_monthly: '', price_annual: '',
   discount_annual_percent: '20',
   max_users: '5', max_ai_requests_month: '100',
-  billing_type: 'both', sort_order: '99',
+  billing_type: 'both', plan_type: 'business', sort_order: '99',
   features: { ...DEFAULT_FEATURES },
 }
 
@@ -170,6 +172,7 @@ function PlanForm({ mode, sourcePlan, onClose, onSaved }: PlanFormProps) {
         max_users: parseInt(form.max_users),
         max_ai_requests_month: parseInt(form.max_ai_requests_month),
         billing_type: form.billing_type,
+        plan_type: form.plan_type,
         sort_order: parseInt(form.sort_order) || 99,
         features: {
           ...form.features,
@@ -297,17 +300,34 @@ function PlanForm({ mode, sourcePlan, onClose, onSaved }: PlanFormProps) {
                 />
               </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">Tipo de cobrança disponível</label>
-              <select
-                value={form.billing_type}
-                onChange={(e) => field('billing_type', e.target.value as FormData['billing_type'])}
-                className="w-full rounded-lg bg-gray-800 border border-gray-600 px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-              >
-                <option value="both">Mensal e Anual</option>
-                <option value="monthly">Apenas Mensal</option>
-                <option value="annual">Apenas Anual</option>
-              </select>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">Tipo de cobrança disponível</label>
+                <select
+                  value={form.billing_type}
+                  onChange={(e) => field('billing_type', e.target.value as FormData['billing_type'])}
+                  className="w-full rounded-lg bg-gray-800 border border-gray-600 px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="both">Mensal e Anual</option>
+                  <option value="monthly">Apenas Mensal</option>
+                  <option value="annual">Apenas Anual</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">Tipo de plano *</label>
+                <select
+                  value={form.plan_type}
+                  onChange={(e) => field('plan_type', e.target.value as FormData['plan_type'])}
+                  disabled={mode === 'new-version'}
+                  className="w-full rounded-lg bg-gray-800 border border-gray-600 px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 disabled:opacity-50"
+                >
+                  <option value="business">Empresarial</option>
+                  <option value="individual">Individual</option>
+                </select>
+                {mode === 'new-version' && (
+                  <p className="mt-1 text-xs text-gray-500">Imutável na nova versão</p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -566,7 +586,7 @@ export function AdminPlansPage() {
           <table className="min-w-full divide-y divide-gray-700 text-sm">
             <thead>
               <tr className="bg-gray-800/80">
-                {['Popular', 'Plano', 'Código', 'Versão', 'Mensal', 'Anual/mês', 'Desc.%', 'Usuários', 'IA/mês', 'Cobrança', 'Assin.', 'Status', 'Ações'].map((h) => (
+                {['Popular', 'Plano', 'Código', 'Tipo', 'Versão', 'Mensal', 'Anual/mês', 'Desc.%', 'Usuários', 'IA/mês', 'Cobrança', 'Assin.', 'Status', 'Ações'].map((h) => (
                   <th key={h} className="px-3 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide whitespace-nowrap">
                     {h}
                   </th>
@@ -593,6 +613,12 @@ export function AdminPlansPage() {
                     </div>
                   </td>
                   <td className="px-3 py-3 font-mono text-gray-400 text-xs">{plan.code}</td>
+                  <td className="px-3 py-3">
+                    <Badge
+                      label={plan.plan_type === 'individual' ? 'Individual' : 'Empresarial'}
+                      variant={plan.plan_type === 'individual' ? 'blue' : 'green'}
+                    />
+                  </td>
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-1.5">
                       <span className="text-gray-300">v{plan.version}</span>

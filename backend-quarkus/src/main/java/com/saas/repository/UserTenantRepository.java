@@ -25,6 +25,7 @@ public class UserTenantRepository {
         String tenantName,
         String tenantSlug,
         String tenantStatus,
+        String tenantType,
         String planId,
         String trialEndsAt,
         String createdAt,
@@ -35,10 +36,11 @@ public class UserTenantRepository {
     public List<UserTenantRow> findAllByUser(UUID userId) {
         var rows = (java.util.List<Object[]>) em.createNativeQuery(
             "SELECT ut.id::text, ut.user_id::text, ut.tenant_id::text, ut.role, ut.is_active, " +
-            "t.name, t.slug, t.status, t.plan_id::text, t.trial_ends_at::text, ut.created_at::text, ut.updated_at::text " +
+            "t.name, t.slug, t.status, t.type, t.plan_id::text, t.trial_ends_at::text, " +
+            "ut.created_at::text, ut.updated_at::text " +
             "FROM user_tenants ut JOIN tenants t ON t.id = ut.tenant_id " +
             "WHERE ut.user_id = :userId AND ut.is_active = TRUE " +
-            "ORDER BY ut.created_at ASC"
+            "ORDER BY t.type ASC, ut.created_at ASC"
         )
         .setParameter("userId", userId)
         .getResultList();
@@ -54,10 +56,11 @@ public class UserTenantRepository {
                 (String) row[5],
                 (String) row[6],
                 (String) row[7],
-                row[8] != null ? row[8].toString() : null,
+                (String) row[8],
                 row[9] != null ? row[9].toString() : null,
-                row[10].toString(),
-                row[11].toString()
+                row[10] != null ? row[10].toString() : null,
+                row[11].toString(),
+                row[12].toString()
             );
         }).toList();
     }
