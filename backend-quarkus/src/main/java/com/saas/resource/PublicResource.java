@@ -1,16 +1,12 @@
 package com.saas.resource;
 
 import com.saas.entity.Tenant;
+import com.saas.service.InvitationService;
 import com.saas.service.PlanService;
 import com.saas.service.TenantService;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.jwt.JsonWebToken;
@@ -28,6 +24,9 @@ public class PublicResource {
 
     @Inject
     TenantService tenantService;
+
+    @Inject
+    InvitationService invitationService;
 
     @Inject
     JsonWebToken jwt;
@@ -87,6 +86,20 @@ public class PublicResource {
             return Response.ok(result).build();
         } catch (Exception e) {
             return Response.status(500).entity(Map.of("error", e.getMessage())).build();
+        }
+    }
+
+    /**
+     * Preview público de um convite (sem autenticação).
+     * Mostra nome da empresa, papel e status do convite.
+     */
+    @GET
+    @Path("/invitations/{token}")
+    public Response previewInvitation(@PathParam("token") String token) {
+        try {
+            return Response.ok(invitationService.getInvitationPreview(token)).build();
+        } catch (NotFoundException e) {
+            return Response.status(404).entity(Map.of("error", "Convite não encontrado")).build();
         }
     }
 }

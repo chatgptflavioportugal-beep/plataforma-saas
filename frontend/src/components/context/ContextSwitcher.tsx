@@ -36,8 +36,19 @@ function TenantIcon({ type, className }: { type?: string; className?: string }) 
     : <BuildingIcon className={className} />
 }
 
+const ROLE_LABELS: Record<string, string> = {
+  owner: 'Proprietário',
+  admin: 'Admin',
+  member: 'Membro',
+  finance: 'Financeiro',
+}
+
 function ContextItem({ ut, isActive, onSelect }: { ut: UserTenant; isActive: boolean; onSelect: () => void }) {
   const type = ut.tenant?.type
+  const sublabel = type === 'individual'
+    ? 'Plano Individual'
+    : ROLE_LABELS[ut.role] ?? 'Empresa'
+
   return (
     <button
       onClick={onSelect}
@@ -58,9 +69,7 @@ function ContextItem({ ut, isActive, onSelect }: { ut: UserTenant; isActive: boo
         <p className={`text-sm font-medium truncate ${isActive ? 'text-primary-700' : 'text-gray-800'}`}>
           {ut.tenant?.name}
         </p>
-        <p className="text-xs text-gray-400 truncate">
-          {type === 'individual' ? 'Plano Individual' : 'Empresa'}
-        </p>
+        <p className="text-xs text-gray-400 truncate">{sublabel}</p>
       </div>
       {isActive && (
         <svg className="h-4 w-4 text-primary-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>

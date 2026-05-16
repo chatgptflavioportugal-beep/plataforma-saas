@@ -18,6 +18,8 @@ import { PlansPage } from '@/pages/app/billing/PlansPage'
 import { TrialExpiredPage } from '@/pages/app/billing/TrialExpiredPage'
 import { FeatureLockedPage } from '@/pages/app/billing/FeatureLockedPage'
 import { SettingsPage } from '@/pages/app/SettingsPage'
+import { CompanyMembersPage } from '@/pages/app/settings/CompanyMembersPage'
+import { AcceptInvitePage } from '@/pages/AcceptInvitePage'
 
 import { AdminLayout } from '@/pages/admin/AdminLayout'
 import { AdminDashboardPage } from '@/pages/admin/AdminDashboardPage'
@@ -51,6 +53,11 @@ export function AppRouter() {
             </AuthGuard>
           } />
 
+          {/* Aceitar convite — autenticado, sem TenantProvider */}
+          <Route path="/invite/accept" element={
+            <AcceptInvitePage />
+          } />
+
           {/* /app — área das empresas */}
           <Route path="/app/*" element={
             <AuthGuard>
@@ -68,6 +75,7 @@ export function AppRouter() {
             <Route path="billing/trial-expired" element={<TrialExpiredPage />} />
             <Route path="billing/feature-locked" element={<FeatureLockedPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="settings/members" element={<CompanyMembersPage />} />
           </Route>
 
           {/* /admin — área administrativa (SUPER_ADMIN) */}

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { api, setActiveTenant } from '@/lib/api'
@@ -41,12 +41,18 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const individualTenant = userTenants.find((ut) => ut.tenant?.type === 'individual') ?? null
   const businessTenants = userTenants.filter((ut) => ut.tenant?.type === 'business')
 
+  // Definido antes do useEffect para evitar TDZ nas deps do effect
+  const switchTenant = useCallback((tenantId: string) => {
+    setActiveTenantIdState(tenantId)
+    setActiveTenant(tenantId)
+  }, [])
+
   useEffect(() => {
     if (tenantsLoading || tenantsFetching) return
     if (tenantsError) return
 
-    // Sem nenhum tenant: encaminha para onboarding (escolha de contexto)
-    // Ocorre em todo novo login — o trigger só cria user_profile, não tenants.
+    // Sem nenhum tenant → onboarding para escolher/criar perfil
+    // O trigger do banco cria user_profile mas não tenants.
     if (userTenants.length === 0) {
       if (location.pathname !== '/onboarding') {
         navigate('/onboarding', { replace: true })
@@ -58,9 +64,10 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     if (activeTenantId) {
       const stillMember = userTenants.some((ut) => ut.tenant_id === activeTenantId)
       if (stillMember) return
-      // Tenant salvo não existe mais — limpa e redireciona
+      // Tenant salvo não existe mais — limpa e deixa re-render rotear
       sessionStorage.removeItem('active_tenant_id')
       setActiveTenantIdState(null)
+      return
     }
 
     // Só 1 tenant (caso comum: apenas plano individual) → seleciona automaticamente
@@ -73,7 +80,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     if (location.pathname !== '/select-context') {
       navigate('/select-context', { replace: true })
     }
-  }, [tenantsLoading, tenantsFetching, tenantsError, userTenants, activeTenantId])
+  }, [tenantsLoading, tenantsFetching, tenantsError, userTenants, activeTenantId, navigate, location.pathname, switchTenant])
 
   const { data: currentTenant, isLoading: tenantLoading } = useQuery({
     queryKey: ['tenant-context', activeTenantId],
@@ -84,11 +91,6 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     enabled: !!activeTenantId,
     retry: false,
   })
-
-  function switchTenant(tenantId: string) {
-    setActiveTenantIdState(tenantId)
-    setActiveTenant(tenantId)
-  }
 
   const trialDaysRemaining = (() => {
     if (!currentTenant?.subscription?.trial_end) return null

@@ -15,11 +15,15 @@ export function AppLayout() {
     navigate('/login', { replace: true })
   }
 
+  const isBusiness = currentTenant?.tenant?.type === 'business'
+  const canManageMembers = isBusiness && (currentTenant?.role === 'owner' || currentTenant?.role === 'admin')
+
   const navItems = [
     { path: '/app/dashboard', label: 'Dashboard' },
     { path: '/app/pdf/merge', label: 'Merge de PDFs' },
     { path: '/app/billing/plans', label: 'Planos' },
-    { path: '/app/settings', label: 'Configurações' },
+    ...(canManageMembers ? [{ path: '/app/settings/members', label: 'Membros', exact: true }] : []),
+    { path: '/app/settings', label: 'Configurações', exact: true },
   ]
 
   return (
@@ -37,19 +41,24 @@ export function AppLayout() {
 
           {/* Navegação central */}
           <nav className="hidden md:flex items-center gap-1">
-            {navItems.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  location.pathname.startsWith(item.path)
-                    ? 'bg-primary-50 text-primary-700'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                {item.label}
-              </Link>
-            ))}
+            {navItems.map((item) => {
+              const isActive = item.exact
+                ? location.pathname === item.path
+                : location.pathname.startsWith(item.path)
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-primary-50 text-primary-700'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              )
+            })}
           </nav>
 
           {/* Usuário */}

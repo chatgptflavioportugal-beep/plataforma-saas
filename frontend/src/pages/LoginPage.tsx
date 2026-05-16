@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/Button'
@@ -32,6 +32,8 @@ async function resolveDestination(userId: string): Promise<string> {
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const returnUrl = searchParams.get('returnUrl')
   const [serverError, setServerError] = useState<string | null>(null)
   const [googleLoading, setGoogleLoading] = useState(false)
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginForm>()
@@ -43,11 +45,13 @@ export function LoginPage() {
       setServerError('Email ou senha inválidos.')
       return
     }
-    navigate(await resolveDestination(authData.user!.id), { replace: true })
+    const destination = returnUrl ?? await resolveDestination(authData.user!.id)
+    navigate(destination, { replace: true })
   }
 
   async function signInWithGoogle() {
     setGoogleLoading(true)
+    if (returnUrl) sessionStorage.setItem('auth_return_url', returnUrl)
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: `${window.location.origin}/auth/callback` },

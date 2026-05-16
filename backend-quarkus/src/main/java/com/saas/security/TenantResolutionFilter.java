@@ -41,7 +41,9 @@ public class TenantResolutionFilter implements ContainerRequestFilter {
         if (path.startsWith("/q/")
                 || path.startsWith("/api/v1/public/")
                 || path.equals("/api/v1/tenants/mine")
-                || path.startsWith("/api/v1/admin/")) {
+                || path.startsWith("/api/v1/admin/")
+                || path.startsWith("/api/v1/invitations/")) {
+            // /api/v1/invitations/{token}/accept requer apenas JWT, sem X-Tenant-ID
             return;
         }
 

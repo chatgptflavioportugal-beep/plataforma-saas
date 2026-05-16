@@ -73,6 +73,12 @@
         </dependency>
 
 
+        <!-- Mailer (convites por e-mail) -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-mailer</artifactId>
+        </dependency>
+
         <!-- Testes -->
         <dependency>
             <groupId>io.quarkus</groupId>

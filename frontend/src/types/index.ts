@@ -115,3 +115,28 @@ export interface TenantContext {
   plan: Plan
   role: 'owner' | 'admin' | 'member' | 'finance'
 }
+
+export interface CompanyMember {
+  user_id: string
+  full_name: string | null
+  email: string | null
+  role: 'owner' | 'admin' | 'member' | 'finance'
+  joined_at: string
+}
+
+export interface Invitation {
+  id: string
+  email: string
+  role: 'admin' | 'member' | 'finance'
+  status: 'pending' | 'accepted' | 'expired' | 'cancelled'
+  expires_at: string
+  created_at: string
+}
+
+export interface InvitationPreview {
+  email: string
+  role: string
+  status: 'pending' | 'accepted' | 'expired' | 'cancelled'
+  expires_at: string
+  tenant_name: string
+}

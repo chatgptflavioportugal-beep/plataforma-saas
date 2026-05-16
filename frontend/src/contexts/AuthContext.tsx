@@ -21,12 +21,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      if (session?.user) loadProfile(session.user.id)
-      else setIsLoading(false)
-    })
-
+    // onAuthStateChange dispara INITIAL_SESSION imediatamente com a sessão
+    // atual, cobrindo tanto a hidratação inicial quanto sign-in/sign-out.
+    // Usar getSession() em paralelo causava dupla chamada a loadProfile().
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       if (session?.user) {
@@ -53,6 +50,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
+    sessionStorage.removeItem('active_tenant_id')
+    sessionStorage.removeItem('auth_return_url')
     await supabase.auth.signOut()
   }
 
