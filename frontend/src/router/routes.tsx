@@ -24,7 +24,7 @@ import { CompanyMembersPage } from '@/app/client/settings/CompanyMembersPage'
 import { AdminLayout } from '@/shared/layouts/AdminLayout'
 import { AdminDashboardPage } from '@/app/admin/AdminDashboardPage'
 import { AdminTenantsPage } from '@/app/admin/AdminTenantsPage'
-import { AdminCompanyUsersPage } from '@/app/admin/AdminCompanyUsersPage'
+import { AdminCustomersPage } from '@/app/admin/AdminCustomersPage'
 import { AdminSystemAdminsPage } from '@/app/admin/AdminSystemAdminsPage'
 import { AdminPlansPage } from '@/app/admin/AdminPlansPage'
 import { AdminSubscriptionsPage } from '@/app/admin/AdminSubscriptionsPage'
@@ -89,12 +89,13 @@ export function AppRouter() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<AdminDashboardPage />} />
             <Route path="tenants" element={<AdminTenantsPage />} />
-            <Route path="company-users" element={<AdminCompanyUsersPage />} />
+            <Route path="customers" element={<AdminCustomersPage />} />
             <Route path="system-admins" element={<AdminSystemAdminsPage />} />
             <Route path="plans" element={<AdminPlansPage />} />
             <Route path="subscriptions" element={<AdminSubscriptionsPage />} />
-            {/* Redireciona rota legada */}
-            <Route path="users" element={<Navigate to="/admin/company-users" replace />} />
+            {/* Redirecionamentos de rotas legadas */}
+            <Route path="company-users" element={<Navigate to="/admin/customers" replace />} />
+            <Route path="users" element={<Navigate to="/admin/customers" replace />} />
           </Route>
 
           {/* Default */}
