@@ -106,12 +106,14 @@ export function AdminCustomerDetailModal({ customerId, onClose }: Props) {
     <>
       {/* Overlay */}
       <div
-        className="fixed inset-0 bg-black/60 z-40"
+        className="fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4"
         onClick={onClose}
-      />
-
-      {/* Panel */}
-      <aside className="fixed right-0 top-0 h-full w-[560px] max-w-full bg-gray-900 border-l border-gray-700 z-50 flex flex-col shadow-2xl">
+      >
+        {/* Modal */}
+        <div
+          className="w-full max-w-2xl max-h-[90vh] bg-gray-900 border border-gray-700 rounded-2xl z-50 flex flex-col shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
           <h2 className="text-lg font-semibold text-white">Detalhe do Cliente</h2>
@@ -289,7 +291,8 @@ export function AdminCustomerDetailModal({ customerId, onClose }: Props) {
             </>
           )}
         </div>
-      </aside>
+        </div>
+      </div>
     </>
   )
 }
