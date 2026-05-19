@@ -3,7 +3,14 @@
     "allow": [
       "Read(//c/desenvolupament/sistema/saas-plataforma/backend-quarkus/src/main/java/com/saas/resource/**)",
       "Read(//c/desenvolupament/sistema/saas-plataforma/database/migrations/**)",
-      "Read(//c/desenvolupament/sistema/saas-plataforma/frontend/src/app/admin/**)"
+      "Read(//c/desenvolupament/sistema/saas-plataforma/frontend/src/app/admin/**)",
+      "Bash(xargs grep *)",
+      "Read(//c/desenvolupament/sistema/saas-plataforma/frontend/src/shared/layouts/**)",
+      "Read(//c/desenvolup/sistema/saas-plataforma/backend-quarkus/src/main/java/com/saas/**)",
+      "Bash(npx tsc *)",
+      "PowerShell(& \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\frontend\\\\node_modules\\\\.bin\\\\tsc.cmd\" --noEmit --project \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\frontend\\\\tsconfig.json\" 2>&1)",
+      "Read(//mnt/c/desenvolvimento/sistema/saas-plataforma/database/**)",
+      "Bash(grep -E \"\\\\.\\(java|ts|tsx\\)$\")"
     ]
   }
 }
