@@ -20,18 +20,6 @@ public class PlanService {
     @Inject
     EntityManager em;
 
-    private static final Map<String, String> FEATURE_MIN_PLAN = Map.of(
-            "pdf.merge", "free",
-            "ai.agents", "starter",
-            "reports.export", "pro",
-            "api.access", "pro",
-            "white_label", "enterprise"
-    );
-
-    public String getMinPlanCodeForFeature(String featureKey) {
-        return FEATURE_MIN_PLAN.getOrDefault(featureKey, "enterprise");
-    }
-
     // ----------------------------------------------------------------
     // Expressões SQL reutilizáveis para cálculo de totais pelos módulos
     // total_monthly_price        = soma dos preços mensais dos módulos ativos
@@ -68,7 +56,7 @@ public class PlanService {
 
         List<Object[]> rows = em.createNativeQuery(
                 "SELECT id::text, name, code, description, price_monthly, price_annual, " +
-                "discount_annual_percent, max_users, max_ai_requests_month, features::text, " +
+                "discount_annual_percent, max_users, max_ai_requests_month, " +
                 "sort_order, version, billing_type, is_most_popular, plan_type, " +
                 TOTAL_MONTHLY_EXPR + " AS total_monthly_price, " +
                 TOTAL_ANNUAL_MONTHLY_EXPR + " AS total_annual_monthly_price, " +
@@ -90,16 +78,15 @@ public class PlanService {
             m.put("discount_annual_percent", row[6]);
             m.put("max_users", row[7]);
             m.put("max_ai_requests_month", row[8]);
-            m.put("features", row[9]);
-            m.put("sort_order", row[10]);
-            m.put("version", row[11]);
-            m.put("billing_type", row[12]);
-            m.put("is_most_popular", row[13]);
-            m.put("plan_type", row[14]);
-            m.put("total_monthly_price", row[15]);
-            m.put("total_annual_monthly_price", row[16]);
-            m.put("total_annual_price", row[17]);
-            m.put("module_count", row[18]);
+            m.put("sort_order", row[9]);
+            m.put("version", row[10]);
+            m.put("billing_type", row[11]);
+            m.put("is_most_popular", row[12]);
+            m.put("plan_type", row[13]);
+            m.put("total_monthly_price", row[14]);
+            m.put("total_annual_monthly_price", row[15]);
+            m.put("total_annual_price", row[16]);
+            m.put("module_count", row[17]);
             return m;
         }).collect(Collectors.toList());
     }
@@ -113,7 +100,7 @@ public class PlanService {
         List<Object[]> rows = em.createNativeQuery(
                 "SELECT p.id::text, p.name, p.code, p.description, " +
                 "p.price_monthly, p.price_annual, p.discount_annual_percent, " +
-                "p.max_users, p.max_ai_requests_month, p.features::text, " +
+                "p.max_users, p.max_ai_requests_month, " +
                 "p.is_active, p.sort_order, p.version, p.is_current_version, " +
                 "p.parent_plan_id::text, p.billing_type, p.created_at::text, " +
                 "p.is_most_popular, p.plan_type, " +
@@ -140,21 +127,20 @@ public class PlanService {
             m.put("discount_annual_percent", row[6]);
             m.put("max_users", row[7]);
             m.put("max_ai_requests_month", row[8]);
-            m.put("features", row[9]);
-            m.put("is_active", row[10]);
-            m.put("sort_order", row[11]);
-            m.put("version", row[12]);
-            m.put("is_current_version", row[13]);
-            m.put("parent_plan_id", row[14]);
-            m.put("billing_type", row[15]);
-            m.put("created_at", row[16]);
-            m.put("is_most_popular", row[17]);
-            m.put("plan_type", row[18]);
-            m.put("subscriber_count", ((Number) row[19]).longValue());
-            m.put("total_monthly_price", row[20]);
-            m.put("total_annual_monthly_price", row[21]);
-            m.put("total_annual_price", row[22]);
-            m.put("module_count", ((Number) row[23]).intValue());
+            m.put("is_active", row[9]);
+            m.put("sort_order", row[10]);
+            m.put("version", row[11]);
+            m.put("is_current_version", row[12]);
+            m.put("parent_plan_id", row[13]);
+            m.put("billing_type", row[14]);
+            m.put("created_at", row[15]);
+            m.put("is_most_popular", row[16]);
+            m.put("plan_type", row[17]);
+            m.put("subscriber_count", ((Number) row[18]).longValue());
+            m.put("total_monthly_price", row[19]);
+            m.put("total_annual_monthly_price", row[20]);
+            m.put("total_annual_price", row[21]);
+            m.put("module_count", ((Number) row[22]).intValue());
             return m;
         }).collect(Collectors.toList());
     }
@@ -168,7 +154,7 @@ public class PlanService {
         List<Object[]> rows = em.createNativeQuery(
                 "SELECT p.id::text, p.name, p.code, p.description, " +
                 "p.price_monthly, p.price_annual, p.discount_annual_percent, " +
-                "p.max_users, p.max_ai_requests_month, p.features::text, " +
+                "p.max_users, p.max_ai_requests_month, " +
                 "p.is_active, p.sort_order, p.version, p.is_current_version, " +
                 "p.is_most_popular, p.created_at::text, p.plan_type, " +
                 "COUNT(ts.id) AS subscriber_count, " +
@@ -195,19 +181,18 @@ public class PlanService {
             m.put("discount_annual_percent", row[6]);
             m.put("max_users", row[7]);
             m.put("max_ai_requests_month", row[8]);
-            m.put("features", row[9]);
-            m.put("is_active", row[10]);
-            m.put("sort_order", row[11]);
-            m.put("version", row[12]);
-            m.put("is_current_version", row[13]);
-            m.put("is_most_popular", row[14]);
-            m.put("created_at", row[15]);
-            m.put("plan_type", row[16]);
-            m.put("subscriber_count", ((Number) row[17]).longValue());
-            m.put("total_monthly_price", row[18]);
-            m.put("total_annual_monthly_price", row[19]);
-            m.put("total_annual_price", row[20]);
-            m.put("module_count", ((Number) row[21]).intValue());
+            m.put("is_active", row[9]);
+            m.put("sort_order", row[10]);
+            m.put("version", row[11]);
+            m.put("is_current_version", row[12]);
+            m.put("is_most_popular", row[13]);
+            m.put("created_at", row[14]);
+            m.put("plan_type", row[15]);
+            m.put("subscriber_count", ((Number) row[16]).longValue());
+            m.put("total_monthly_price", row[17]);
+            m.put("total_annual_monthly_price", row[18]);
+            m.put("total_annual_price", row[19]);
+            m.put("module_count", ((Number) row[20]).intValue());
             return m;
         }).collect(Collectors.toList());
     }
@@ -222,10 +207,10 @@ public class PlanService {
 
         em.createNativeQuery(
                 "INSERT INTO plans (id, code, name, description, price_monthly, price_annual, " +
-                "discount_annual_percent, max_users, max_ai_requests_month, features, " +
+                "discount_annual_percent, max_users, max_ai_requests_month, " +
                 "is_active, sort_order, version, is_current_version, billing_type, is_most_popular, plan_type) " +
                 "VALUES (:id, :code, :name, :description, :priceMonthly, :priceAnnual, " +
-                ":discountAnnualPercent, :maxUsers, :maxAiRequestsMonth, CAST(:features AS jsonb), " +
+                ":discountAnnualPercent, :maxUsers, :maxAiRequestsMonth, " +
                 "TRUE, :sortOrder, 1, TRUE, :billingType, FALSE, :planType)"
         )
         .setParameter("id", id)
@@ -237,7 +222,6 @@ public class PlanService {
         .setParameter("discountAnnualPercent", req.discountAnnualPercent() != null ? req.discountAnnualPercent() : 0)
         .setParameter("maxUsers", req.maxUsers() != null ? req.maxUsers() : 5)
         .setParameter("maxAiRequestsMonth", req.maxAiRequestsMonth() != null ? req.maxAiRequestsMonth() : 100)
-        .setParameter("features", req.featuresJson() != null ? req.featuresJson() : "{}")
         .setParameter("sortOrder", req.sortOrder() != null ? req.sortOrder() : 99)
         .setParameter("billingType", req.billingType() != null ? req.billingType() : "both")
         .setParameter("planType", req.planType() != null ? req.planType() : "business")
@@ -257,15 +241,14 @@ public class PlanService {
         String code          = (String)     current[0];
         int oldMaxUsers      = ((Number)    current[1]).intValue();
         int oldMaxAi         = ((Number)    current[2]).intValue();
-        String oldFeatures   = (String)     current[3];
-        int oldVersion       = ((Number)    current[4]).intValue();
-        String oldName       = (String)     current[5];
-        String oldDesc       = (String)     current[6];
-        int oldSortOrder     = ((Number)    current[7]).intValue();
-        String oldBilling    = (String)     current[8];
-        int oldDiscount      = ((Number)    current[9]).intValue();
-        boolean wasMostPop   = (Boolean)    current[10];
-        String oldPlanType   = (String)     current[11];
+        int oldVersion       = ((Number)    current[3]).intValue();
+        String oldName       = (String)     current[4];
+        String oldDesc       = (String)     current[5];
+        int oldSortOrder     = ((Number)    current[6]).intValue();
+        String oldBilling    = (String)     current[7];
+        int oldDiscount      = ((Number)    current[8]).intValue();
+        boolean wasMostPop   = (Boolean)    current[9];
+        String oldPlanType   = (String)     current[10];
 
         em.createNativeQuery(
                 "UPDATE plans SET is_current_version = FALSE, is_most_popular = FALSE, updated_at = NOW() " +
@@ -277,10 +260,10 @@ public class PlanService {
 
         em.createNativeQuery(
                 "INSERT INTO plans (id, code, name, description, price_monthly, price_annual, " +
-                "discount_annual_percent, max_users, max_ai_requests_month, features, " +
+                "discount_annual_percent, max_users, max_ai_requests_month, " +
                 "is_active, sort_order, version, is_current_version, parent_plan_id, billing_type, is_most_popular, plan_type) " +
                 "VALUES (:id, :code, :name, :description, 0, 0, " +
-                ":discountAnnualPercent, :maxUsers, :maxAiRequestsMonth, CAST(:features AS jsonb), " +
+                ":discountAnnualPercent, :maxUsers, :maxAiRequestsMonth, " +
                 "TRUE, :sortOrder, :version, TRUE, :parentId, :billingType, :isMostPopular, :planType)"
         )
         .setParameter("id", newId)
@@ -290,7 +273,6 @@ public class PlanService {
         .setParameter("discountAnnualPercent", req.discountAnnualPercent() != null ? req.discountAnnualPercent() : oldDiscount)
         .setParameter("maxUsers",          req.maxUsers() != null ? req.maxUsers() : oldMaxUsers)
         .setParameter("maxAiRequestsMonth",req.maxAiRequestsMonth() != null ? req.maxAiRequestsMonth() : oldMaxAi)
-        .setParameter("features",          req.featuresJson() != null ? req.featuresJson() : oldFeatures)
         .setParameter("sortOrder",         req.sortOrder() != null ? req.sortOrder() : oldSortOrder)
         .setParameter("version",           newVersion)
         .setParameter("parentId",          UUID.fromString(currentPlanId))
@@ -632,7 +614,7 @@ public class PlanService {
         try {
             return (Object[]) em.createNativeQuery(
                     "SELECT code, max_users, max_ai_requests_month, " +
-                    "features::text, version, name, description, sort_order, billing_type, " +
+                    "version, name, description, sort_order, billing_type, " +
                     "discount_annual_percent, is_most_popular, plan_type " +
                     "FROM plans WHERE id::text = :id AND is_current_version = TRUE"
             ).setParameter("id", planId).getSingleResult();
@@ -654,20 +636,10 @@ public class PlanService {
         Integer discountAnnualPercent,
         Integer maxUsers,
         Integer maxAiRequestsMonth,
-        Map<String, Object> features,
         String billingType,
         Integer sortOrder,
         String planType
-    ) {
-        public String featuresJson() {
-            if (features == null) return null;
-            try {
-                return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(features);
-            } catch (Exception e) {
-                throw new IllegalArgumentException("Features JSON inválido");
-            }
-        }
-    }
+    ) {}
 
     public record PlanVersionModuleRequest(
         String moduleId,
@@ -685,4 +657,112 @@ public class PlanService {
         String unit,
         Integer sortOrder
     ) {}
+
+    public record PlanModuleWithLimitsRequest(
+        String moduleId,
+        BigDecimal monthlyPrice,
+        BigDecimal annualMonthlyPrice,
+        String status,
+        Integer sortOrder,
+        List<PlanVersionModuleLimitRequest> limits
+    ) {}
+
+    // ----------------------------------------------------------------
+    // Admin: gerar nova versão com módulos completos (edição unificada)
+    // ----------------------------------------------------------------
+
+    @Transactional
+    public Map<String, Object> createNewVersionWithModules(
+            String currentPlanId,
+            PlanRequest req,
+            List<PlanModuleWithLimitsRequest> modules) {
+
+        Object[] current = fetchCurrentPlan(currentPlanId);
+
+        String code        = (String)  current[0];
+        int oldMaxUsers    = ((Number) current[1]).intValue();
+        int oldMaxAi       = ((Number) current[2]).intValue();
+        int oldVersion     = ((Number) current[3]).intValue();
+        String oldName     = (String)  current[4];
+        String oldDesc     = (String)  current[5];
+        int oldSortOrder   = ((Number) current[6]).intValue();
+        String oldBilling  = (String)  current[7];
+        int oldDiscount    = ((Number) current[8]).intValue();
+        boolean wasMostPop = (Boolean) current[9];
+        String oldPlanType = (String)  current[10];
+
+        em.createNativeQuery(
+                "UPDATE plans SET is_current_version = FALSE, is_most_popular = FALSE, updated_at = NOW() " +
+                "WHERE id::text = :id"
+        ).setParameter("id", currentPlanId).executeUpdate();
+
+        UUID newId = UUID.randomUUID();
+        int newVersion = oldVersion + 1;
+
+        em.createNativeQuery(
+                "INSERT INTO plans (id, code, name, description, price_monthly, price_annual, " +
+                "discount_annual_percent, max_users, max_ai_requests_month, " +
+                "is_active, sort_order, version, is_current_version, parent_plan_id, billing_type, is_most_popular, plan_type) " +
+                "VALUES (:id, :code, :name, :description, 0, 0, " +
+                ":discountAnnualPercent, :maxUsers, :maxAiRequestsMonth, " +
+                "TRUE, :sortOrder, :version, TRUE, :parentId, :billingType, :isMostPopular, :planType)"
+        )
+        .setParameter("id", newId)
+        .setParameter("code", code)
+        .setParameter("name",               req.name()                 != null ? req.name()                 : oldName)
+        .setParameter("description",        req.description()           != null ? req.description()           : oldDesc)
+        .setParameter("discountAnnualPercent", req.discountAnnualPercent() != null ? req.discountAnnualPercent() : oldDiscount)
+        .setParameter("maxUsers",           req.maxUsers()             != null ? req.maxUsers()             : oldMaxUsers)
+        .setParameter("maxAiRequestsMonth", req.maxAiRequestsMonth()   != null ? req.maxAiRequestsMonth()   : oldMaxAi)
+        .setParameter("sortOrder",          req.sortOrder()            != null ? req.sortOrder()            : oldSortOrder)
+        .setParameter("version",            newVersion)
+        .setParameter("parentId",           UUID.fromString(currentPlanId))
+        .setParameter("billingType",        req.billingType()          != null ? req.billingType()          : oldBilling)
+        .setParameter("isMostPopular",      wasMostPop)
+        .setParameter("planType",           req.planType()             != null ? req.planType()             : oldPlanType)
+        .executeUpdate();
+
+        if (modules != null) {
+            for (PlanModuleWithLimitsRequest mod : modules) {
+                UUID pvmId = UUID.randomUUID();
+                em.createNativeQuery(
+                        "INSERT INTO plan_version_modules " +
+                        "(id, plan_id, module_id, monthly_price, annual_monthly_price, status, sort_order) " +
+                        "VALUES (:id, CAST(:planId AS uuid), CAST(:moduleId AS uuid), " +
+                        ":monthlyPrice, :annualMonthlyPrice, :status, :sortOrder)"
+                )
+                .setParameter("id", pvmId)
+                .setParameter("planId", newId.toString())
+                .setParameter("moduleId", mod.moduleId())
+                .setParameter("monthlyPrice", mod.monthlyPrice() != null ? mod.monthlyPrice() : BigDecimal.ZERO)
+                .setParameter("annualMonthlyPrice", mod.annualMonthlyPrice() != null ? mod.annualMonthlyPrice() : BigDecimal.ZERO)
+                .setParameter("status", mod.status() != null ? mod.status() : "active")
+                .setParameter("sortOrder", mod.sortOrder() != null ? mod.sortOrder() : 99)
+                .executeUpdate();
+
+                if (mod.limits() != null) {
+                    for (PlanVersionModuleLimitRequest lim : mod.limits()) {
+                        em.createNativeQuery(
+                                "INSERT INTO plan_version_module_limits " +
+                                "(id, plan_version_module_id, title, description, limit_key, limit_value, unit, sort_order) " +
+                                "VALUES (:id, :pvmId, :title, :description, :limitKey, :limitValue, :unit, :sortOrder)"
+                        )
+                        .setParameter("id", UUID.randomUUID())
+                        .setParameter("pvmId", pvmId)
+                        .setParameter("title", lim.title())
+                        .setParameter("description", lim.description())
+                        .setParameter("limitKey", lim.limitKey())
+                        .setParameter("limitValue", lim.limitValue())
+                        .setParameter("unit", lim.unit())
+                        .setParameter("sortOrder", lim.sortOrder() != null ? lim.sortOrder() : 99)
+                        .executeUpdate();
+                    }
+                }
+            }
+        } else {
+            copyModulesToNewVersion(currentPlanId, newId);
+        }
+
+        return Map.of("id", newId.toString(), "version", newVersion, "new_version_created", true);
+    }
 }

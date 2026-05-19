@@ -1,9 +1,7 @@
 package com.saas.security;
 
 import com.saas.exception.PlanFeatureNotAvailableException;
-import com.saas.service.PlanService;
 import jakarta.annotation.Priority;
-import jakarta.inject.Inject;
 import jakarta.interceptor.AroundInvoke;
 import jakarta.interceptor.Interceptor;
 import jakarta.interceptor.InvocationContext;
@@ -14,9 +12,6 @@ import jakarta.ws.rs.core.SecurityContext;
 @Interceptor
 @Priority(Interceptor.Priority.APPLICATION)
 public class PlanFeatureInterceptor {
-
-    @Inject
-    PlanService planService;
 
     @Context
     SecurityContext securityContext;
@@ -36,8 +31,7 @@ public class PlanFeatureInterceptor {
         TenantContext tenantCtx = TenantContext.from(securityContext);
 
         if (!tenantCtx.hasFeature(featureKey)) {
-            String requiredPlan = planService.getMinPlanCodeForFeature(featureKey);
-            throw new PlanFeatureNotAvailableException(featureKey, tenantCtx.getPlanCode(), requiredPlan);
+            throw new PlanFeatureNotAvailableException(featureKey, tenantCtx.getPlanCode(), "");
         }
 
         return ctx.proceed();

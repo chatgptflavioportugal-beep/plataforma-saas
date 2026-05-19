@@ -178,6 +178,25 @@ public class AdminResource {
     }
 
     // ----------------------------------------------------------------
+    // Planos — edição unificada (dados + módulos + limitações → nova versão)
+    // ----------------------------------------------------------------
+
+    @POST
+    @Path("/plans/{id}/edit")
+    public Response editPlanWithNewVersion(@PathParam("id") String id, Map<String, Object> body) {
+        ensureSuperAdmin();
+        try {
+            var req = mapToRequest(body);
+            var modules = mapToPlanModuleWithLimitsRequests(body);
+            return Response.status(201).entity(planService.createNewVersionWithModules(id, req, modules)).build();
+        } catch (NotFoundException e) {
+            return Response.status(404).entity(Map.of("error", e.getMessage())).build();
+        } catch (BadRequestException e) {
+            return Response.status(400).entity(Map.of("error", e.getMessage())).build();
+        }
+    }
+
+    // ----------------------------------------------------------------
     // Planos — ativar / desativar
     // ----------------------------------------------------------------
 
@@ -898,7 +917,6 @@ public class AdminResource {
         return ((Number) em.createNativeQuery(sql).getSingleResult()).longValue();
     }
 
-    @SuppressWarnings("unchecked")
     private PlanService.PlanRequest mapToRequest(Map<String, Object> body) {
         return new PlanService.PlanRequest(
             (String) body.get("name"),
@@ -909,7 +927,6 @@ public class AdminResource {
             body.get("discount_annual_percent") != null ? ((Number) body.get("discount_annual_percent")).intValue() : null,
             body.get("max_users") != null ? ((Number) body.get("max_users")).intValue() : null,
             body.get("max_ai_requests_month") != null ? ((Number) body.get("max_ai_requests_month")).intValue() : null,
-            body.get("features") instanceof Map<?, ?> f ? (Map<String, Object>) f : null,
             (String) body.get("billing_type"),
             body.get("sort_order") != null ? ((Number) body.get("sort_order")).intValue() : null,
             (String) body.get("plan_type")
@@ -935,5 +952,36 @@ public class AdminResource {
             (String) body.get("unit"),
             body.get("sort_order") != null ? ((Number) body.get("sort_order")).intValue() : null
         );
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<PlanService.PlanModuleWithLimitsRequest> mapToPlanModuleWithLimitsRequests(Map<String, Object> body) {
+        Object raw = body.get("modules");
+        if (!(raw instanceof List<?> list)) return null;
+        return list.stream().map(item -> {
+            Map<String, Object> m = (Map<String, Object>) item;
+            List<PlanService.PlanVersionModuleLimitRequest> limits = null;
+            if (m.get("limits") instanceof List<?> ll) {
+                limits = ll.stream().map(li -> {
+                    Map<String, Object> l = (Map<String, Object>) li;
+                    return new PlanService.PlanVersionModuleLimitRequest(
+                        (String) l.get("title"),
+                        (String) l.get("description"),
+                        (String) l.get("limit_key"),
+                        (String) l.get("limit_value"),
+                        (String) l.get("unit"),
+                        l.get("sort_order") != null ? ((Number) l.get("sort_order")).intValue() : null
+                    );
+                }).collect(java.util.stream.Collectors.toList());
+            }
+            return new PlanService.PlanModuleWithLimitsRequest(
+                (String) m.get("module_id"),
+                m.get("monthly_price")        != null ? new BigDecimal(m.get("monthly_price").toString())        : null,
+                m.get("annual_monthly_price") != null ? new BigDecimal(m.get("annual_monthly_price").toString()) : null,
+                (String) m.get("status"),
+                m.get("sort_order") != null ? ((Number) m.get("sort_order")).intValue() : null,
+                limits
+            );
+        }).collect(java.util.stream.Collectors.toList());
     }
 }

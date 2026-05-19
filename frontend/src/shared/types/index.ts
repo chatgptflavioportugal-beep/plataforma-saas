@@ -33,7 +33,6 @@ export interface Plan {
   discount_annual_percent: number
   max_users: number
   max_ai_requests_month: number
-  features: PlanFeatures
   is_active: boolean
   sort_order: number
   version: number
@@ -89,19 +88,6 @@ export interface PlatformModule {
   service_count?: number
 }
 
-export interface PlanFeatures {
-  'pdf.merge': boolean
-  'reports.view': boolean
-  'reports.export': boolean
-  'ai.agents': boolean
-  'api.access': boolean
-  white_label: boolean
-  priority_support: boolean
-  max_users: number
-  max_ai_requests_month: number
-  max_pdf_merges_month: number
-  [key: string]: boolean | number
-}
 
 export interface TenantSubscription {
   id: string

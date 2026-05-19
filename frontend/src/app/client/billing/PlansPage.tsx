@@ -10,34 +10,6 @@ function brl(value: number) {
   return `R$ ${value.toFixed(2).replace('.', ',')}`
 }
 
-function CheckIcon({ active }: { active: boolean }) {
-  return (
-    <svg
-      className={`h-4 w-4 flex-shrink-0 ${active ? 'text-green-400' : 'text-gray-600'}`}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2.5}
-    >
-      {active ? (
-        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-      ) : (
-        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-      )}
-    </svg>
-  )
-}
-
-const FEATURE_LABELS: Record<string, string> = {
-  'pdf.merge':        'Merge de PDFs',
-  'ai.agents':        'Agentes de IA',
-  'reports.export':   'Exportação de relatórios',
-  'api.access':       'Acesso à API',
-  white_label:        'White-label',
-  priority_support:   'Suporte prioritário',
-}
-
-const DISPLAY_FEATURES = ['pdf.merge', 'ai.agents', 'reports.export', 'api.access', 'white_label', 'priority_support']
 
 type PlanTypeFilter = 'individual' | 'business'
 
@@ -201,20 +173,7 @@ export function PlansPage() {
                     )}
                   </p>
 
-                  {/* Features */}
-                  <ul className="mt-5 space-y-2.5 flex-1">
-                    {DISPLAY_FEATURES.map((key) => {
-                      const active = !!(plan.features as Record<string, boolean | number>)[key]
-                      return (
-                        <li key={key} className="flex items-center gap-2 text-sm">
-                          <CheckIcon active={active} />
-                          <span className={active ? 'text-gray-700' : 'text-gray-400'}>
-                            {FEATURE_LABELS[key] ?? key}
-                          </span>
-                        </li>
-                      )
-                    })}
-                  </ul>
+                  <div className="flex-1" />
 
                   <Button
                     className="mt-6 w-full"

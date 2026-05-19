@@ -10,7 +10,11 @@
       "Bash(npx tsc *)",
       "PowerShell(& \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\frontend\\\\node_modules\\\\.bin\\\\tsc.cmd\" --noEmit --project \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\frontend\\\\tsconfig.json\" 2>&1)",
       "Read(//mnt/c/desenvolvimento/sistema/saas-plataforma/database/**)",
-      "Bash(grep -E \"\\\\.\\(java|ts|tsx\\)$\")"
+      "Bash(grep -E \"\\\\.\\(java|ts|tsx\\)$\")",
+      "Bash(grep -E \"\\\\.\\(tsx?|jsx?|java|sql\\)$\")",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Read(//c/desenvolupament/sistema/saas-plataforma/frontend/src/shared/services/**)",
+      "Read(//c/desenvolup/sistema/saas-plataforma/database/migrations/**)"
     ]
   }
 }
