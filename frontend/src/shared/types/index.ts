@@ -44,9 +44,10 @@ export interface Plan {
   plan_type: 'individual' | 'business'
   created_at?: string
   subscriber_count?: number
-  // calculados a partir dos módulos
+  // calculados a partir dos módulos (sem fallback a preços fixos)
   total_monthly_price?: number
-  total_annual_price?: number
+  total_annual_monthly_price?: number  // soma dos preços anual/mês dos módulos ativos
+  total_annual_price?: number          // total_annual_monthly_price * 12
   module_count?: number
 }
 
@@ -58,7 +59,7 @@ export interface PlanVersionModule {
   module_slug: string
   module_icon_path: string | null
   monthly_price: number
-  annual_price: number
+  annual_monthly_price: number
   status: 'active' | 'inactive'
   sort_order: number
   limits_json?: string

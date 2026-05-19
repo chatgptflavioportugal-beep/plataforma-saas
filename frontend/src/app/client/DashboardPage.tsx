@@ -46,7 +46,7 @@ export function DashboardPage() {
           <h3 className="text-sm font-medium text-gray-500">Plano atual</h3>
           <p className="mt-2 text-2xl font-bold text-gray-900">{plan?.name ?? '—'}</p>
           <p className="text-sm text-gray-500 mt-1">
-            {plan?.price_monthly === 0 ? 'Gratuito' : `R$ ${plan?.price_monthly}/mês`}
+            {(plan?.total_monthly_price ?? 0) === 0 ? 'Gratuito' : `R$ ${(plan?.total_monthly_price ?? 0).toFixed(2).replace('.', ',')}/mês`}
           </p>
         </div>
 

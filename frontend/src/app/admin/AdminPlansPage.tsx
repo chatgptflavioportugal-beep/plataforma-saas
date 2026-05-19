@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/shared/services/api'
 import type { Plan, PlanVersionModule, PlanVersionModuleLimit, PlatformModule } from '@/shared/types'
@@ -75,13 +75,13 @@ const EMPTY_FORM: FormData = {
 interface ModuleForm {
   moduleId: string
   monthlyPrice: string
-  annualPrice: string
+  annualMonthlyPrice: string
   status: 'active' | 'inactive'
   sortOrder: string
 }
 
 const EMPTY_MODULE_FORM: ModuleForm = {
-  moduleId: '', monthlyPrice: '0', annualPrice: '0', status: 'active', sortOrder: '99',
+  moduleId: '', monthlyPrice: '0', annualMonthlyPrice: '0', status: 'active', sortOrder: '99',
 }
 
 interface LimitForm {
@@ -424,14 +424,20 @@ function VersionHistoryModal({ planCode, planName, onClose }: { planCode: string
               <div className="grid grid-cols-3 gap-3 text-sm">
                 <div>
                   <span className="text-gray-500 text-xs">Total Mensal</span>
-                  <p className="text-white font-medium">{brl(v.total_monthly_price ?? v.price_monthly)}</p>
+                  <p className="text-white font-medium">{brl(v.total_monthly_price)}</p>
                   {(v.module_count ?? 0) > 0 && (
                     <p className="text-xs text-indigo-400">{v.module_count} módulo(s)</p>
                   )}
+                  {(v.module_count ?? 0) === 0 && (
+                    <p className="text-xs text-amber-500/70">Nenhum módulo</p>
+                  )}
                 </div>
                 <div>
-                  <span className="text-gray-500 text-xs">Total Anual/mês</span>
-                  <p className="text-white font-medium">{brl(v.total_annual_price ?? v.price_annual)}</p>
+                  <span className="text-gray-500 text-xs">Total Anual</span>
+                  <p className="text-white font-medium">{brl(v.total_annual_price)}</p>
+                  {(v.module_count ?? 0) > 0 && (
+                    <p className="text-xs text-gray-500">{brl(v.total_annual_monthly_price)}/mês</p>
+                  )}
                 </div>
                 <div>
                   <span className="text-gray-500 text-xs">Usuários</span>
@@ -504,7 +510,7 @@ function PlanModulesModal({ plan, onClose }: PlanModulesModalProps) {
     mutationFn: (form: ModuleForm) => api.post(`/api/v1/admin/plans/${plan.id}/modules`, {
       module_id: form.moduleId,
       monthly_price: parseFloat(form.monthlyPrice) || 0,
-      annual_price: parseFloat(form.annualPrice) || 0,
+      annual_monthly_price: parseFloat(form.annualMonthlyPrice) || 0,
       status: form.status,
       sort_order: parseInt(form.sortOrder) || 99,
     }),
@@ -516,7 +522,7 @@ function PlanModulesModal({ plan, onClose }: PlanModulesModalProps) {
     mutationFn: ({ pvmId, form }: { pvmId: string; form: ModuleForm }) =>
       api.patch(`/api/v1/admin/plans/${plan.id}/modules/${pvmId}`, {
         monthly_price: parseFloat(form.monthlyPrice) || 0,
-        annual_price: parseFloat(form.annualPrice) || 0,
+        annual_monthly_price: parseFloat(form.annualMonthlyPrice) || 0,
         status: form.status,
         sort_order: parseInt(form.sortOrder) || 99,
       }),
@@ -568,15 +574,17 @@ function PlanModulesModal({ plan, onClose }: PlanModulesModalProps) {
   const usedModuleIds = new Set(modules.map((m) => m.module_id))
   const availableToAdd = allModules.filter((m) => !usedModuleIds.has(m.id))
 
-  const totalMonthly = modules.filter((m) => m.status === 'active').reduce((s, m) => s + (m.monthly_price ?? 0), 0)
-  const totalAnnual  = modules.filter((m) => m.status === 'active').reduce((s, m) => s + (m.annual_price ?? 0), 0)
+  const activeModules = modules.filter((m) => m.status === 'active')
+  const totalMonthly      = activeModules.reduce((s, m) => s + (m.monthly_price ?? 0), 0)
+  const totalAnnualMonthly = activeModules.reduce((s, m) => s + (m.annual_monthly_price ?? 0), 0)
+  const totalAnnual        = totalAnnualMonthly * 12
 
   function startEditModule(pvm: PlanVersionModule) {
     setEditModuleId(pvm.id)
     setEditModuleForm({
       moduleId: pvm.module_id,
       monthlyPrice: String(pvm.monthly_price),
-      annualPrice: String(pvm.annual_price),
+      annualMonthlyPrice: String(pvm.annual_monthly_price),
       status: pvm.status,
       sortOrder: String(pvm.sort_order),
     })
@@ -654,8 +662,8 @@ function PlanModulesModal({ plan, onClose }: PlanModulesModalProps) {
               <div>
                 <label className="block text-xs text-gray-400 mb-1">Preço Anual/mês (R$)</label>
                 <input type="number" min="0" step="0.01"
-                  value={addModuleForm.annualPrice}
-                  onChange={(e) => setAddModuleForm((f) => ({ ...f, annualPrice: e.target.value }))}
+                  value={addModuleForm.annualMonthlyPrice}
+                  onChange={(e) => setAddModuleForm((f) => ({ ...f, annualMonthlyPrice: e.target.value }))}
                   className="w-full rounded-lg bg-gray-700 border border-gray-600 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
@@ -730,8 +738,8 @@ function PlanModulesModal({ plan, onClose }: PlanModulesModalProps) {
                       <div>
                         <label className="block text-xs text-gray-400 mb-1">Preço Anual/mês (R$)</label>
                         <input type="number" min="0" step="0.01"
-                          value={editModuleForm.annualPrice}
-                          onChange={(e) => setEditModuleForm((f) => ({ ...f, annualPrice: e.target.value }))}
+                          value={editModuleForm.annualMonthlyPrice}
+                          onChange={(e) => setEditModuleForm((f) => ({ ...f, annualMonthlyPrice: e.target.value }))}
                           className="w-full rounded-lg bg-gray-700 border border-gray-600 px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
                         />
                       </div>
@@ -784,7 +792,7 @@ function PlanModulesModal({ plan, onClose }: PlanModulesModalProps) {
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-gray-500">Anual/mês</p>
-                        <p className="text-sm text-white font-medium">{brl(pvm.annual_price)}</p>
+                        <p className="text-sm text-white font-medium">{brl(pvm.annual_monthly_price)}</p>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <button
@@ -1017,19 +1025,27 @@ function PlanModulesModal({ plan, onClose }: PlanModulesModalProps) {
           })}
         </div>
 
-        {/* Footer — totais */}
+        {/* Footer — totais calculados pelos módulos ativos */}
         <div className="border-t border-gray-700 px-6 py-3 flex items-center justify-between bg-gray-900/80 rounded-b-2xl shrink-0">
-          <span className="text-xs text-gray-500">{modules.filter((m) => m.status === 'active').length} módulo(s) ativo(s)</span>
-          <div className="flex items-center gap-6">
-            <div className="text-right">
-              <p className="text-xs text-gray-500">Total Mensal</p>
-              <p className="text-white font-semibold">{brl(totalMonthly)}</p>
+          <span className="text-xs text-gray-500">{activeModules.length} módulo(s) ativo(s)</span>
+          {activeModules.length === 0 ? (
+            <span className="text-xs text-amber-500/80">Nenhum módulo configurado</span>
+          ) : (
+            <div className="flex items-center gap-6">
+              <div className="text-right">
+                <p className="text-xs text-gray-500">Total Mensal</p>
+                <p className="text-white font-semibold">{brl(totalMonthly)}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-gray-500">Anual/mês</p>
+                <p className="text-white font-semibold">{brl(totalAnnualMonthly)}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-gray-500">Total Anual</p>
+                <p className="text-white font-semibold">{brl(totalAnnual)}</p>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-xs text-gray-500">Total Anual/mês</p>
-              <p className="text-white font-semibold">{brl(totalAnnual)}</p>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
@@ -1041,11 +1057,12 @@ function PlanModulesModal({ plan, onClose }: PlanModulesModalProps) {
 export function AdminPlansPage() {
   const qc = useQueryClient()
 
-  const [showCreate, setShowCreate]       = useState(false)
-  const [newVersionOf, setNewVersionOf]   = useState<Plan | null>(null)
-  const [historyPlan, setHistoryPlan]     = useState<{ code: string; name: string } | null>(null)
-  const [modulePlan, setModulePlan]       = useState<Plan | null>(null)
-  const [filterCurrent, setFilterCurrent] = useState(true)
+  const [showCreate, setShowCreate]             = useState(false)
+  const [newVersionOf, setNewVersionOf]         = useState<Plan | null>(null)
+  const [historyPlan, setHistoryPlan]           = useState<{ code: string; name: string } | null>(null)
+  const [modulePlan, setModulePlan]             = useState<Plan | null>(null)
+  const [filterCurrent, setFilterCurrent]       = useState(true)
+  const [pendingModulePlanId, setPendingModulePlanId] = useState<string | null>(null)
 
   const { data: plans = [], isLoading } = useQuery({
     queryKey: ['admin-plans'],
@@ -1056,6 +1073,16 @@ export function AdminPlansPage() {
     staleTime: 15_000,
     retry: false,
   })
+
+  // Abre modal de módulos assim que o plano recém-criado aparecer na lista
+  useEffect(() => {
+    if (!pendingModulePlanId || plans.length === 0) return
+    const plan = plans.find((p) => p.id === pendingModulePlanId)
+    if (plan) {
+      setModulePlan(plan)
+      setPendingModulePlanId(null)
+    }
+  }, [plans, pendingModulePlanId])
 
   const toggleStatus = useMutation({
     mutationFn: (id: string) => api.patch(`/api/v1/admin/plans/${id}/status`, {}),
@@ -1076,8 +1103,7 @@ export function AdminPlansPage() {
     setShowCreate(false)
     setNewVersionOf(null)
     qc.invalidateQueries({ queryKey: ['admin-plans'] })
-    const plan = plans.find((p) => p.id === planId)
-    if (plan) setModulePlan(plan)
+    setPendingModulePlanId(planId)
   }
 
   const displayed = filterCurrent ? plans.filter((p) => p.is_current_version) : plans
@@ -1139,7 +1165,9 @@ export function AdminPlansPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-700/60">
-              {displayed.map((plan) => (
+              {displayed.map((plan) => {
+                const hasModules = (plan.module_count ?? 0) > 0
+                return (
                 <tr key={plan.id} className={`transition-colors ${plan.is_most_popular ? 'bg-yellow-900/10 hover:bg-yellow-900/20' : 'hover:bg-gray-700/30'}`}>
 
                   <td className="px-3 py-3 text-center">
@@ -1174,7 +1202,7 @@ export function AdminPlansPage() {
                   </td>
 
                   <td className="px-3 py-3 text-center">
-                    {(plan.module_count ?? 0) > 0 ? (
+                    {hasModules ? (
                       <span className="inline-flex items-center justify-center rounded-full bg-indigo-900/50 border border-indigo-700 text-indigo-300 text-xs font-medium px-2 py-0.5">
                         {plan.module_count}
                       </span>
@@ -1183,15 +1211,26 @@ export function AdminPlansPage() {
                     )}
                   </td>
 
-                  <td className="px-3 py-3 text-gray-300 whitespace-nowrap font-medium">
-                    {brl(plan.total_monthly_price ?? plan.price_monthly)}
-                    {(plan.module_count ?? 0) > 0 && (
-                      <span className="block text-xs text-indigo-400 font-normal">por módulos</span>
+                  {/* Total Mensal */}
+                  <td className="px-3 py-3 whitespace-nowrap">
+                    <p className="text-gray-300 font-medium">{brl(plan.total_monthly_price)}</p>
+                    {hasModules ? (
+                      <p className="text-xs text-indigo-400 font-normal">por módulos</p>
+                    ) : (
+                      <p className="text-xs text-amber-500/70 font-normal">Nenhum módulo</p>
                     )}
                   </td>
 
-                  <td className="px-3 py-3 text-gray-300 whitespace-nowrap">
-                    {brl(plan.total_annual_price ?? plan.price_annual)}
+                  {/* Total Anual — mostra total (×12) + equivalente mensal */}
+                  <td className="px-3 py-3 whitespace-nowrap">
+                    {hasModules ? (
+                      <div>
+                        <p className="text-gray-300 font-medium">{brl(plan.total_annual_price)}</p>
+                        <p className="text-xs text-gray-500">{brl(plan.total_annual_monthly_price)}/mês no anual</p>
+                      </div>
+                    ) : (
+                      <span className="text-gray-600 text-xs">—</span>
+                    )}
                   </td>
 
                   <td className="px-3 py-3 text-gray-400 text-xs whitespace-nowrap">
@@ -1243,7 +1282,7 @@ export function AdminPlansPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         )}

@@ -131,8 +131,10 @@ export function PlansPage() {
             const isCurrent = plan.code === currentPlanCode
             const isPopular = plan.is_most_popular
 
-            const showAnnual  = isAnnual && plan.price_annual != null && plan.billing_type !== 'monthly'
-            const displayPrice = showAnnual ? plan.price_annual! : plan.price_monthly
+            const monthlyPrice       = plan.total_monthly_price ?? 0
+            const annualMonthlyPrice = plan.total_annual_monthly_price ?? 0
+            const showAnnual  = isAnnual && plan.billing_type !== 'monthly'
+            const displayPrice = showAnnual ? annualMonthlyPrice : monthlyPrice
             const savings = plan.discount_annual_percent > 0 ? plan.discount_annual_percent : null
 
             return (
@@ -168,10 +170,10 @@ export function PlansPage() {
                         </p>
                         {showAnnual && (
                           <p className="mt-1 text-xs text-gray-500">
-                            Cobrado anualmente — {brl(displayPrice * 12)}/ano
+                            Cobrado anualmente — {brl((plan.total_annual_price ?? annualMonthlyPrice * 12))}/ano
                           </p>
                         )}
-                        {isAnnual && savings && !showAnnual && plan.billing_type === 'monthly' && (
+                        {isAnnual && !showAnnual && plan.billing_type === 'monthly' && (
                           <p className="mt-1 text-xs text-gray-400">Disponível apenas mensal</p>
                         )}
                       </>
@@ -183,10 +185,10 @@ export function PlansPage() {
                       </span>
                     )}
 
-                    {showAnnual && plan.price_monthly > 0 && (
+                    {showAnnual && monthlyPrice > 0 && monthlyPrice !== annualMonthlyPrice && (
                       <p className="mt-1 text-xs text-gray-400">
                         Era{' '}
-                        <span className="line-through">{brl(plan.price_monthly)}/mês</span>
+                        <span className="line-through">{brl(monthlyPrice)}/mês</span>
                       </p>
                     )}
                   </div>
