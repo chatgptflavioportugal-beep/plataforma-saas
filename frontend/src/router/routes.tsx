@@ -28,6 +28,7 @@ import { AdminCustomersPage } from '@/app/admin/AdminCustomersPage'
 import { AdminSystemAdminsPage } from '@/app/admin/AdminSystemAdminsPage'
 import { AdminPlansPage } from '@/app/admin/AdminPlansPage'
 import { AdminSubscriptionsPage } from '@/app/admin/AdminSubscriptionsPage'
+import { AdminModulesPage } from '@/app/admin/AdminModulesPage'
 
 export function AppRouter() {
   return (
@@ -93,6 +94,7 @@ export function AppRouter() {
             <Route path="system-admins" element={<AdminSystemAdminsPage />} />
             <Route path="plans" element={<AdminPlansPage />} />
             <Route path="subscriptions" element={<AdminSubscriptionsPage />} />
+            <Route path="modules" element={<AdminModulesPage />} />
             {/* Redirecionamentos de rotas legadas */}
             <Route path="company-users" element={<Navigate to="/admin/customers" replace />} />
             <Route path="users" element={<Navigate to="/admin/customers" replace />} />
