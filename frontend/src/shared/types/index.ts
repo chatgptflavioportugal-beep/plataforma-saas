@@ -44,6 +44,48 @@ export interface Plan {
   plan_type: 'individual' | 'business'
   created_at?: string
   subscriber_count?: number
+  // calculados a partir dos módulos
+  total_monthly_price?: number
+  total_annual_price?: number
+  module_count?: number
+}
+
+export interface PlanVersionModule {
+  id: string
+  plan_id: string
+  module_id: string
+  module_name: string
+  module_slug: string
+  module_icon_path: string | null
+  monthly_price: number
+  annual_price: number
+  status: 'active' | 'inactive'
+  sort_order: number
+  limits_json?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface PlanVersionModuleLimit {
+  id: string
+  title: string
+  description: string | null
+  limit_key: string | null
+  limit_value: string | null
+  unit: string | null
+  sort_order: number
+}
+
+export interface PlatformModule {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  module_url: string
+  icon_path: string | null
+  is_active: boolean
+  sort_order: number
+  service_count?: number
 }
 
 export interface PlanFeatures {
