@@ -8,7 +8,10 @@
       "Bash(docker run *)",
       "Bash(grep -v \"^$\")",
       "Read(//c/desenvolup/sistema/saas-plataforma/frontend/**)",
-      "Bash(Get-ChildItem -Path \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\" -Directory -Force)"
+      "Bash(Get-ChildItem -Path \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\" -Directory -Force)",
+      "Bash(Get-ChildItem -Path \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\" -Directory)",
+      "Bash(Select-Object -ExpandProperty Name)",
+      "PowerShell(Set-Location \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\frontend\"; $tsc = Get-ChildItem -Path \"node_modules\" -Filter \"tsc.cmd\" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1; if \\($tsc\\) { & $tsc.FullName --noEmit 2>&1 | Select-Object -First 40 } else { \"tsc not found\" })"
     ]
   }
 }

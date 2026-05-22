@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/shared/services/api'
 import { Button } from '@/shared/components/Button'
-import type { ModuleBillingOption, ModulePlan, ModuleService, ModulePlanLimit } from '@/shared/types'
+import type { ModuleBillingOption, ModulePlan, ModuleService } from '@/shared/types'
 
 // Raw shape returned by the API (JSON strings not yet parsed)
 type ModuleBillingOptionRaw = {
@@ -28,6 +28,7 @@ function brl(value: number) {
 type SelectedConfig = {
   module: ModuleBillingOption
   plan: ModulePlan
+  isAnnual: boolean
 }
 
 // ─── Module Card ──────────────────────────────────────────────────────────────
@@ -35,16 +36,16 @@ type SelectedConfig = {
 type ModuleCardProps = {
   module: ModuleBillingOption
   selected: SelectedConfig | undefined
-  isAnnual: boolean
   onChoose: () => void
 }
 
-function ModuleCard({ module, selected, isAnnual, onChoose }: ModuleCardProps) {
+function ModuleCard({ module, selected, onChoose }: ModuleCardProps) {
   const plans = module.available_plans
   const hasPlans = plans.length > 0
 
+  const displayIsAnnual = selected?.isAnnual ?? false
   const minPrice = hasPlans
-    ? Math.min(...plans.map(p => (isAnnual ? p.annual_monthly_price : p.monthly_price)))
+    ? Math.min(...plans.map(p => (displayIsAnnual ? p.annual_monthly_price : p.monthly_price)))
     : null
 
   const planNames = plans.map(p => p.plan_name).join(', ')
@@ -58,9 +59,16 @@ function ModuleCard({ module, selected, isAnnual, onChoose }: ModuleCardProps) {
       }`}
     >
       {selected && (
-        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 whitespace-nowrap">
+        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 whitespace-nowrap flex items-center gap-1.5">
           <span className="rounded-full bg-primary-600 px-3 py-1 text-xs font-semibold text-white shadow">
             {selected.plan.plan_name}
+          </span>
+          <span className={`rounded-full px-2 py-1 text-xs font-semibold shadow ${
+            selected.isAnnual
+              ? 'bg-green-600 text-white'
+              : 'bg-gray-600 text-white'
+          }`}>
+            {selected.isAnnual ? 'Anual' : 'Mensal'}
           </span>
         </div>
       )}
@@ -138,13 +146,15 @@ function ModuleCard({ module, selected, isAnnual, onChoose }: ModuleCardProps) {
 
 type PlanModalProps = {
   module: ModuleBillingOption
-  isAnnual: boolean
+  initialIsAnnual: boolean
   currentPlanId: string | undefined
-  onSelect: (plan: ModulePlan) => void
+  onSelect: (plan: ModulePlan, isAnnual: boolean) => void
   onClose: () => void
 }
 
-function PlanModal({ module, isAnnual, currentPlanId, onSelect, onClose }: PlanModalProps) {
+function PlanModal({ module, initialIsAnnual, currentPlanId, onSelect, onClose }: PlanModalProps) {
+  const [isAnnual, setIsAnnual] = useState(initialIsAnnual)
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -153,7 +163,7 @@ function PlanModal({ module, isAnnual, currentPlanId, onSelect, onClose }: PlanM
         <div className="border-b border-gray-100 px-6 py-4 flex items-start justify-between gap-4 shrink-0">
           <div>
             <h2 className="text-lg font-bold text-gray-900">{module.module_name}</h2>
-            <p className="text-sm text-gray-500">Escolha o plano para este módulo</p>
+            <p className="text-sm text-gray-500">Escolha o plano e o ciclo de cobrança</p>
           </div>
           <button
             type="button"
@@ -162,6 +172,30 @@ function PlanModal({ module, isAnnual, currentPlanId, onSelect, onClose }: PlanM
           >
             ✕
           </button>
+        </div>
+
+        {/* Billing cycle toggle */}
+        <div className="px-6 pt-4 pb-2 flex items-center justify-center gap-4">
+          <span className={`text-sm font-medium ${!isAnnual ? 'text-gray-900' : 'text-gray-400'}`}>Mensal</span>
+          <button
+            type="button"
+            onClick={() => setIsAnnual(v => !v)}
+            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${
+              isAnnual ? 'bg-primary-600' : 'bg-gray-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform ${
+                isAnnual ? 'translate-x-8' : 'translate-x-1'
+              }`}
+            />
+          </button>
+          <div className="flex items-center gap-2">
+            <span className={`text-sm font-medium ${isAnnual ? 'text-gray-900' : 'text-gray-400'}`}>Anual</span>
+            <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">
+              Economize até 20%
+            </span>
+          </div>
         </div>
 
         {/* Plans list */}
@@ -225,7 +259,7 @@ function PlanModal({ module, isAnnual, currentPlanId, onSelect, onClose }: PlanM
                   <Button
                     variant={isCurrent ? 'secondary' : 'primary'}
                     size="sm"
-                    onClick={() => onSelect(plan)}
+                    onClick={() => onSelect(plan, isAnnual)}
                     className="shrink-0 mt-1"
                   >
                     {isCurrent ? 'Selecionado' : 'Selecionar'}
@@ -244,27 +278,41 @@ function PlanModal({ module, isAnnual, currentPlanId, onSelect, onClose }: PlanM
 
 type ConfigPanelProps = {
   selected: SelectedConfig[]
-  isAnnual: boolean
   onRemove: (moduleId: string) => void
 }
 
-function ConfigPanel({ selected, isAnnual, onRemove }: ConfigPanelProps) {
-  const totalMonthly = selected.reduce((s, c) => s + c.plan.monthly_price, 0)
-  const totalAnnualMonthly = selected.reduce((s, c) => s + c.plan.annual_monthly_price, 0)
-  const totalAnnual = totalAnnualMonthly * 12
+function ConfigPanel({ selected, onRemove }: ConfigPanelProps) {
+  const monthlyItems = selected.filter(c => !c.isAnnual)
+  const annualItems = selected.filter(c => c.isAnnual)
+
+  const totalMonthly = monthlyItems.reduce((s, c) => s + c.plan.monthly_price, 0)
+  const totalAnnualMonthly = annualItems.reduce((s, c) => s + c.plan.annual_monthly_price, 0)
+  const totalAnnualPerYear = totalAnnualMonthly * 12
+
+  const hasMonthly = monthlyItems.length > 0
+  const hasAnnual = annualItems.length > 0
 
   return (
     <div className="lg:w-80 shrink-0 rounded-2xl border border-gray-200 bg-white shadow-sm p-6 lg:sticky lg:top-6">
       <h2 className="text-base font-bold text-gray-900 mb-4">Minha configuração</h2>
 
       <ul className="divide-y divide-gray-100">
-        {selected.map(({ module, plan }) => {
+        {selected.map(({ module, plan, isAnnual }) => {
           const price = isAnnual ? plan.annual_monthly_price : plan.monthly_price
           return (
             <li key={module.module_id} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-gray-800 truncate">{module.module_name}</p>
-                <p className="text-xs text-gray-500">Plano {plan.plan_name}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <p className="text-xs text-gray-500">Plano {plan.plan_name}</p>
+                  <span className={`rounded-full px-1.5 py-0.5 text-xs font-medium ${
+                    isAnnual
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {isAnnual ? 'Anual' : 'Mensal'}
+                  </span>
+                </div>
                 <p className="text-xs font-semibold text-primary-600 mt-0.5">
                   {price === 0 ? 'Grátis' : `${brl(price)}/mês`}
                 </p>
@@ -282,25 +330,30 @@ function ConfigPanel({ selected, isAnnual, onRemove }: ConfigPanelProps) {
         })}
       </ul>
 
-      <div className="mt-4 pt-4 border-t border-gray-100 space-y-1.5">
-        {isAnnual ? (
+      <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+        {hasMonthly && (
+          <div className="flex justify-between text-sm text-gray-600">
+            <span>Cobranças mensais</span>
+            <span className="font-semibold">
+              {totalMonthly === 0 ? 'Grátis' : `${brl(totalMonthly)}/mês`}
+            </span>
+          </div>
+        )}
+        {hasAnnual && (
           <>
             <div className="flex justify-between text-sm text-gray-600">
-              <span>Mensal no anual</span>
+              <span>Cobranças anuais</span>
               <span className="font-semibold">
                 {totalAnnualMonthly === 0 ? 'Grátis' : `${brl(totalAnnualMonthly)}/mês`}
               </span>
             </div>
-            <div className="flex justify-between text-sm font-bold text-gray-900">
-              <span>Total anual</span>
-              <span>{totalAnnual === 0 ? 'Grátis' : `${brl(totalAnnual)}/ano`}</span>
-            </div>
+            {totalAnnualPerYear > 0 && (
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>Total anual</span>
+                <span>{brl(totalAnnualPerYear)}/ano</span>
+              </div>
+            )}
           </>
-        ) : (
-          <div className="flex justify-between text-sm font-bold text-gray-900">
-            <span>Total mensal</span>
-            <span>{totalMonthly === 0 ? 'Grátis' : `${brl(totalMonthly)}/mês`}</span>
-          </div>
         )}
       </div>
 
@@ -314,7 +367,6 @@ function ConfigPanel({ selected, isAnnual, onRemove }: ConfigPanelProps) {
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export function PlansPage() {
-  const [isAnnual, setIsAnnual] = useState(false)
   const [modalModule, setModalModule] = useState<ModuleBillingOption | null>(null)
   const [configuration, setConfiguration] = useState<Record<string, SelectedConfig>>({})
 
@@ -334,8 +386,8 @@ export function PlansPage() {
     },
   })
 
-  function selectPlan(module: ModuleBillingOption, plan: ModulePlan) {
-    setConfiguration(prev => ({ ...prev, [module.module_id]: { module, plan } }))
+  function selectPlan(module: ModuleBillingOption, plan: ModulePlan, isAnnual: boolean) {
+    setConfiguration(prev => ({ ...prev, [module.module_id]: { module, plan, isAnnual } }))
     setModalModule(null)
   }
 
@@ -355,31 +407,7 @@ export function PlansPage() {
       {/* Header */}
       <div className="text-center space-y-2">
         <h1 className="text-2xl font-bold text-gray-900">Escolha seus módulos</h1>
-        <p className="text-gray-500">Monte sua assinatura com os módulos que você precisa, cada um no plano ideal.</p>
-      </div>
-
-      {/* Toggle Mensal / Anual */}
-      <div className="flex justify-center items-center gap-4">
-        <span className={`text-sm font-medium ${!isAnnual ? 'text-gray-900' : 'text-gray-400'}`}>Mensal</span>
-        <button
-          type="button"
-          onClick={() => setIsAnnual(v => !v)}
-          className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${
-            isAnnual ? 'bg-primary-600' : 'bg-gray-300'
-          }`}
-        >
-          <span
-            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform ${
-              isAnnual ? 'translate-x-8' : 'translate-x-1'
-            }`}
-          />
-        </button>
-        <div className="flex items-center gap-2">
-          <span className={`text-sm font-medium ${isAnnual ? 'text-gray-900' : 'text-gray-400'}`}>Anual</span>
-          <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">
-            Economize até 20%
-          </span>
-        </div>
+        <p className="text-gray-500">Monte sua assinatura com os módulos que você precisa, cada um no plano e ciclo ideal.</p>
       </div>
 
       {/* Main layout */}
@@ -399,7 +427,6 @@ export function PlansPage() {
                   key={module.module_id}
                   module={module}
                   selected={configuration[module.module_id]}
-                  isAnnual={isAnnual}
                   onChoose={() => setModalModule(module)}
                 />
               ))}
@@ -411,7 +438,6 @@ export function PlansPage() {
         {hasConfig && (
           <ConfigPanel
             selected={selectedList}
-            isAnnual={isAnnual}
             onRemove={removeModule}
           />
         )}
@@ -426,9 +452,9 @@ export function PlansPage() {
       {modalModule && (
         <PlanModal
           module={modalModule}
-          isAnnual={isAnnual}
+          initialIsAnnual={configuration[modalModule.module_id]?.isAnnual ?? false}
           currentPlanId={configuration[modalModule.module_id]?.plan.plan_id}
-          onSelect={plan => selectPlan(modalModule, plan)}
+          onSelect={(plan, isAnnual) => selectPlan(modalModule, plan, isAnnual)}
           onClose={() => setModalModule(null)}
         />
       )}
