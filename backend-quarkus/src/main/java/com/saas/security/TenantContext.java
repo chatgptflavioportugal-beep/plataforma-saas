@@ -8,17 +8,17 @@ public class TenantContext {
     private final UUID tenantId;
     private final String userRole;
     private final String planCode;
-    private final java.util.Map<String, Object> planFeatures;
+    private final java.util.Set<String> moduleSlugSet;
     private final String subscriptionStatus;
 
     public TenantContext(UUID userId, UUID tenantId, String userRole,
-                         String planCode, java.util.Map<String, Object> planFeatures,
+                         String planCode, java.util.Set<String> moduleSlugSet,
                          String subscriptionStatus) {
         this.userId = userId;
         this.tenantId = tenantId;
         this.userRole = userRole;
         this.planCode = planCode;
-        this.planFeatures = planFeatures;
+        this.moduleSlugSet = moduleSlugSet;
         this.subscriptionStatus = subscriptionStatus;
     }
 
@@ -28,18 +28,11 @@ public class TenantContext {
     public String getPlanCode() { return planCode; }
     public String getSubscriptionStatus() { return subscriptionStatus; }
 
-    public boolean hasFeature(String featureKey) {
-        Object value = planFeatures.get(featureKey);
-        if (value instanceof Boolean b) return b;
-        if (value instanceof Number n) return n.intValue() != 0;
-        return false;
+    public boolean hasFeature(String moduleSlug) {
+        return moduleSlugSet.contains(moduleSlug);
     }
 
-    public int getFeatureLimit(String featureKey) {
-        Object value = planFeatures.get(featureKey);
-        if (value instanceof Number n) return n.intValue();
-        return 0;
-    }
+    public java.util.Set<String> getModuleSlugSet() { return moduleSlugSet; }
 
     public static TenantContext from(jakarta.ws.rs.core.SecurityContext ctx) {
         if (ctx.getUserPrincipal() instanceof TenantContextPrincipal p) {

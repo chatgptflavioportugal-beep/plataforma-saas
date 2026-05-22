@@ -100,7 +100,11 @@ public class TenantService {
                 "ts.current_period_start::text, ts.current_period_end::text, " +
                 "ts.billing_type, ts.plan_version, " +
                 "p.id::text as plan_id, p.name as plan_name, p.code as plan_code, p.plan_type, " +
-                "p.price_monthly, p.price_annual, p.max_users, p.max_ai_requests_month, p.features::text, " +
+                "p.price_monthly, p.price_annual, p.max_users, p.max_ai_requests_month, " +
+                "(SELECT COALESCE(json_object_agg(pm.slug, true), '{}'::json) " +
+                " FROM plan_version_modules pvm " +
+                " JOIN platform_modules pm ON pm.id = pvm.module_id AND pm.is_active = true " +
+                " WHERE pvm.plan_id = p.id AND pvm.status = 'active')::text AS features, " +
                 "ut.role, " +
                 "COALESCE((SELECT SUM(pvm.monthly_price) FROM plan_version_modules pvm WHERE pvm.plan_id = p.id AND pvm.status = 'active'), 0) AS total_monthly_price, " +
                 "COALESCE((SELECT SUM(pvm.annual_monthly_price) FROM plan_version_modules pvm WHERE pvm.plan_id = p.id AND pvm.status = 'active'), 0) AS total_annual_monthly_price, " +

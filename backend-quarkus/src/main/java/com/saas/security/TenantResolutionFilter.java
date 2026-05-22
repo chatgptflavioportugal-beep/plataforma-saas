@@ -67,7 +67,7 @@ public class TenantResolutionFilter implements ContainerRequestFilter {
                 userTenant.tenantId(),
                 userTenant.role(),
                 subscription.planCode(),
-                subscription.planFeatures(),
+                subscription.moduleSlugSet(),
                 subscription.status()
         );
 
