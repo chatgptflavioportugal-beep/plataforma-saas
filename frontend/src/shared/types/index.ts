@@ -128,6 +128,43 @@ export interface PdfJob {
   updated_at: string
 }
 
+export interface ModulePlanLimit {
+  title: string
+  description: string | null
+  limit_value: string | null
+  unit: string | null
+  sort_order: number
+}
+
+export interface ModulePlan {
+  plan_id: string
+  plan_name: string
+  plan_slug: string
+  plan_version_id: string
+  plan_version: number
+  monthly_price: number
+  annual_monthly_price: number
+  annual_total_price: number
+  limits: ModulePlanLimit[]
+}
+
+export interface ModuleService {
+  id: string
+  name: string
+  description: string | null
+  icon_path: string | null
+}
+
+export interface ModuleBillingOption {
+  module_id: string
+  module_name: string
+  module_slug: string
+  module_description: string | null
+  icon_path: string | null
+  services: ModuleService[]
+  available_plans: ModulePlan[]
+}
+
 export interface ApiError {
   error: string
   message?: string

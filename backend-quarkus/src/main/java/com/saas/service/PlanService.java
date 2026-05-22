@@ -774,4 +774,46 @@ public class PlanService {
 
         return Map.of("id", newId.toString(), "version", newVersion, "new_version_created", true);
     }
+
+    // ----------------------------------------------------------------
+    // Leitura pública: módulos com planos disponíveis (tela de contratação)
+    // ----------------------------------------------------------------
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> listModuleBillingOptions() {
+        List<Object[]> rows = em.createNativeQuery(
+            "SELECT pm.id::text, pm.name, pm.slug, pm.description, pm.icon_path, " +
+            "COALESCE((SELECT json_agg(json_build_object(" +
+            "  'id', pms.id::text, 'name', pms.name, 'description', pms.description, 'icon_path', pms.icon_path" +
+            ") ORDER BY pms.sort_order, pms.name) FROM platform_module_services pms" +
+            " WHERE pms.module_id = pm.id AND pms.is_active = TRUE), '[]'::json)::text AS services_json, " +
+            "COALESCE((SELECT json_agg(json_build_object(" +
+            "  'plan_id', p.id::text, 'plan_name', p.name, 'plan_slug', p.code," +
+            "  'plan_version_id', pvm.id::text, 'plan_version', p.version," +
+            "  'monthly_price', pvm.monthly_price, 'annual_monthly_price', pvm.annual_monthly_price," +
+            "  'annual_total_price', pvm.annual_monthly_price * 12," +
+            "  'limits', COALESCE((SELECT json_agg(json_build_object(" +
+            "    'title', pvml.title, 'description', pvml.description," +
+            "    'limit_value', pvml.limit_value, 'unit', pvml.unit, 'sort_order', pvml.sort_order" +
+            "  ) ORDER BY pvml.sort_order) FROM plan_version_module_limits pvml" +
+            "  WHERE pvml.plan_version_module_id = pvm.id), '[]'::json)" +
+            ") ORDER BY pvm.monthly_price, p.sort_order) FROM plan_version_modules pvm" +
+            " JOIN plans p ON p.id = pvm.plan_id" +
+            " WHERE pvm.module_id = pm.id AND pvm.status = 'active'" +
+            " AND p.is_active = TRUE AND p.is_current_version = TRUE), '[]'::json)::text AS available_plans_json " +
+            "FROM platform_modules pm WHERE pm.is_active = TRUE ORDER BY pm.sort_order, pm.name"
+        ).getResultList();
+
+        return rows.stream().map(row -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("module_id", row[0]);
+            m.put("module_name", row[1]);
+            m.put("module_slug", row[2]);
+            m.put("module_description", row[3]);
+            m.put("icon_path", row[4]);
+            m.put("services_json", row[5]);
+            m.put("available_plans_json", row[6]);
+            return m;
+        }).collect(Collectors.toList());
+    }
 }

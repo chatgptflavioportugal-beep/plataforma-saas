@@ -7,7 +7,8 @@
       "Bash(docker-compose build *)",
       "Bash(docker run *)",
       "Bash(grep -v \"^$\")",
-      "Read(//c/desenvolup/sistema/saas-plataforma/frontend/**)"
+      "Read(//c/desenvolup/sistema/saas-plataforma/frontend/**)",
+      "Bash(Get-ChildItem -Path \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\" -Directory -Force)"
     ]
   }
 }

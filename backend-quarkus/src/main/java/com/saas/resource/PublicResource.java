@@ -48,6 +48,16 @@ public class PublicResource {
     }
 
     /**
+     * Lista módulos ativos com os planos disponíveis para contratação.
+     * Usado na tela de contratação orientada por módulos.
+     */
+    @GET
+    @Path("/modules/billing-options")
+    public Response listModuleBillingOptions() {
+        return Response.ok(planService.listModuleBillingOptions()).build();
+    }
+
+    /**
      * Onboarding: cria um tenant do tipo BUSINESS.
      * Requer usuário autenticado — não exige tenant ativo (sem X-Tenant-ID).
      */
