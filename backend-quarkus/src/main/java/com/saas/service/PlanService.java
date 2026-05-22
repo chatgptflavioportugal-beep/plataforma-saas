@@ -39,6 +39,13 @@ public class PlanService {
         "(SELECT COUNT(*) FROM plan_version_modules pvm " +
         " WHERE pvm.plan_id = p.id AND pvm.status = 'active')::int";
 
+    private static final String MODULES_JSON_EXPR =
+        "COALESCE((SELECT json_agg(json_build_object(" +
+        "  'module_name', pm.name, 'module_slug', pm.slug, 'module_icon_path', pm.icon_path" +
+        ") ORDER BY pvm.sort_order) FROM plan_version_modules pvm " +
+        " JOIN platform_modules pm ON pm.id = pvm.module_id" +
+        " WHERE pvm.plan_id = p.id AND pvm.status = 'active'), '[]'::json)::text";
+
     // ----------------------------------------------------------------
     // Leitura pública: versões atuais ativas, com filtro opcional por tipo
     // ----------------------------------------------------------------
@@ -61,7 +68,8 @@ public class PlanService {
                 TOTAL_MONTHLY_EXPR + " AS total_monthly_price, " +
                 TOTAL_ANNUAL_MONTHLY_EXPR + " AS total_annual_monthly_price, " +
                 TOTAL_ANNUAL_MONTHLY_EXPR + " * 12 AS total_annual_price, " +
-                MODULE_COUNT_EXPR + " AS module_count " +
+                MODULE_COUNT_EXPR + " AS module_count, " +
+                MODULES_JSON_EXPR + " AS modules_json " +
                 "FROM plans p " +
                 "WHERE is_active = TRUE AND is_current_version = TRUE" + typeFilter +
                 " ORDER BY sort_order"
@@ -87,6 +95,7 @@ public class PlanService {
             m.put("total_annual_monthly_price", row[15]);
             m.put("total_annual_price", row[16]);
             m.put("module_count", row[17]);
+            m.put("modules_json", row[18]);
             return m;
         }).collect(Collectors.toList());
     }

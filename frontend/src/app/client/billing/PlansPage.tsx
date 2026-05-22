@@ -5,6 +5,17 @@ import { useTenant } from '@/core/workspaces/TenantContext'
 import { Button } from '@/shared/components/Button'
 import type { Plan } from '@/shared/types'
 
+type PlanModule = { module_name: string; module_slug: string; module_icon_path: string | null }
+
+function parsePlanModules(modulesJson?: string): PlanModule[] {
+  if (!modulesJson) return []
+  try {
+    return JSON.parse(modulesJson) as PlanModule[]
+  } catch {
+    return []
+  }
+}
+
 function brl(value: number) {
   if (value === 0) return 'Grátis'
   return `R$ ${value.toFixed(2).replace('.', ',')}`
@@ -109,6 +120,8 @@ export function PlansPage() {
             const displayPrice = showAnnual ? annualMonthlyPrice : monthlyPrice
             const savings = plan.discount_annual_percent > 0 ? plan.discount_annual_percent : null
 
+            const modules = parsePlanModules(plan.modules_json)
+
             return (
               <div
                 key={plan.id}
@@ -172,6 +185,33 @@ export function PlansPage() {
                       <> · {plan.max_ai_requests_month} req. IA/mês</>
                     )}
                   </p>
+
+                  {/* Módulos */}
+                  {modules.length > 0 && (
+                    <div className="mt-5">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                        Módulos incluídos
+                      </p>
+                      <ul className="space-y-1.5">
+                        {modules.map((mod) => (
+                          <li key={mod.module_slug} className="flex items-center gap-2 text-sm text-gray-700">
+                            {mod.module_icon_path ? (
+                              <img
+                                src={mod.module_icon_path}
+                                alt=""
+                                className="h-4 w-4 shrink-0 object-contain"
+                              />
+                            ) : (
+                              <span className="h-4 w-4 shrink-0 rounded-sm bg-primary-100 flex items-center justify-center">
+                                <span className="block h-2 w-2 rounded-sm bg-primary-400" />
+                              </span>
+                            )}
+                            {mod.module_name}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
                   <div className="flex-1" />
 

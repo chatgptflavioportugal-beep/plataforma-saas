@@ -48,6 +48,7 @@ export interface Plan {
   total_annual_monthly_price?: number  // soma dos preços anual/mês dos módulos ativos
   total_annual_price?: number          // total_annual_monthly_price * 12
   module_count?: number
+  modules_json?: string
 }
 
 export interface PlanVersionModule {
