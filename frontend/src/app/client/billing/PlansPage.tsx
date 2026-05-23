@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '@/shared/services/api'
 import { Button } from '@/shared/components/Button'
+import { useTenant } from '@/core/workspaces/TenantContext'
 import type { ModuleBillingOption, ModulePlan, ModuleService } from '@/shared/types'
 
 // Raw shape returned by the API (JSON strings not yet parsed)
@@ -35,6 +36,39 @@ type SelectedConfig = {
   isAnnual: boolean
 }
 
+// ─── Profile Banner ───────────────────────────────────────────────────────────
+
+type ProfileBannerProps = {
+  profileName: string
+  profileType: 'individual' | 'business'
+}
+
+function ProfileBanner({ profileName, profileType }: ProfileBannerProps) {
+  const typeLabel = profileType === 'individual' ? 'Individual' : 'Empresarial'
+  const typeColor = profileType === 'individual'
+    ? 'bg-blue-50 border-blue-200 text-blue-800'
+    : 'bg-amber-50 border-amber-200 text-amber-800'
+
+  return (
+    <div className={`rounded-xl border px-5 py-3.5 flex items-center gap-3 ${typeColor}`}>
+      <div className="h-8 w-8 rounded-full bg-white/70 flex items-center justify-center shrink-0 shadow-sm">
+        <span className="text-sm font-bold">
+          {profileName.charAt(0).toUpperCase()}
+        </span>
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-semibold uppercase tracking-wide opacity-70">
+          Você está configurando módulos para
+        </p>
+        <p className="font-bold text-base leading-tight truncate">{profileName}</p>
+      </div>
+      <span className="ml-auto shrink-0 rounded-full bg-white/60 border border-current/20 px-2.5 py-0.5 text-xs font-semibold">
+        Tipo: {typeLabel}
+      </span>
+    </div>
+  )
+}
+
 // ─── Module Card ──────────────────────────────────────────────────────────────
 
 type ModuleCardProps = {
@@ -48,8 +82,6 @@ function ModuleCard({ module, selected, onChoose }: ModuleCardProps) {
   const hasPlans = plans.length > 0
   const planNames = plans.map(p => p.plan_name).join(', ')
 
-  // When selected: show actual selected plan price in correct cycle format
-  // When not selected: show minimum monthly price as teaser
   let mainPrice: string | null = null
   let subPrice: string | null = null
 
@@ -88,7 +120,6 @@ function ModuleCard({ module, selected, onChoose }: ModuleCardProps) {
       )}
 
       <div className="p-6 flex-1 flex flex-col">
-        {/* Icon + Name */}
         <div className="flex items-center gap-3">
           {module.icon_path ? (
             <img src={module.icon_path} alt="" className="h-8 w-8 object-contain shrink-0" />
@@ -100,12 +131,10 @@ function ModuleCard({ module, selected, onChoose }: ModuleCardProps) {
           <h3 className="text-lg font-bold text-gray-900">{module.module_name}</h3>
         </div>
 
-        {/* Description */}
         {module.module_description && (
           <p className="mt-2 text-sm text-gray-500 min-h-[2rem]">{module.module_description}</p>
         )}
 
-        {/* Services */}
         {module.services.length > 0 && (
           <div className="mt-4">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Serviços</p>
@@ -122,26 +151,25 @@ function ModuleCard({ module, selected, onChoose }: ModuleCardProps) {
 
         <div className="flex-1" />
 
-        {/* Price area */}
-        {hasPlans ? (
-          <div className="mt-4 pt-4 border-t border-gray-100 space-y-0.5">
-            {!selected && (
-              <p className="text-xs text-gray-400">
-                Disponível em: <span className="font-medium text-gray-600">{planNames}</span>
-              </p>
-            )}
-            {mainPrice && (
-              <p className={selected ? 'text-sm font-bold text-gray-900' : 'text-xs text-gray-400'}>
-                {mainPrice}
-              </p>
-            )}
-            {subPrice && <p className="text-xs text-gray-500">{subPrice}</p>}
-          </div>
-        ) : (
-          <div className="mt-4 pt-4 border-t border-gray-100">
+        <div className="mt-4 pt-4 border-t border-gray-100 space-y-0.5">
+          {hasPlans ? (
+            <>
+              {!selected && (
+                <p className="text-xs text-gray-400">
+                  Disponível em: <span className="font-medium text-gray-600">{planNames}</span>
+                </p>
+              )}
+              {mainPrice && (
+                <p className={selected ? 'text-sm font-bold text-gray-900' : 'text-xs text-gray-400'}>
+                  {mainPrice}
+                </p>
+              )}
+              {subPrice && <p className="text-xs text-gray-500">{subPrice}</p>}
+            </>
+          ) : (
             <p className="text-xs text-gray-400">Nenhum plano configurado</p>
-          </div>
-        )}
+          )}
+        </div>
 
         <Button
           className="mt-4 w-full"
@@ -173,7 +201,6 @@ function PlanModal({ module, initialIsAnnual, currentPlanId, onSelect, onClose }
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
-        {/* Header */}
         <div className="border-b border-gray-100 px-6 py-4 flex items-start justify-between gap-4 shrink-0">
           <div>
             <h2 className="text-lg font-bold text-gray-900">{module.module_name}</h2>
@@ -188,7 +215,6 @@ function PlanModal({ module, initialIsAnnual, currentPlanId, onSelect, onClose }
           </button>
         </div>
 
-        {/* Billing cycle toggle */}
         <div className="px-6 pt-4 pb-2 flex items-center justify-center gap-4">
           <span className={`text-sm font-medium ${!isAnnual ? 'text-gray-900' : 'text-gray-400'}`}>Mensal</span>
           <button
@@ -212,10 +238,8 @@ function PlanModal({ module, initialIsAnnual, currentPlanId, onSelect, onClose }
           </div>
         </div>
 
-        {/* Plans list */}
         <div className="overflow-y-auto p-6 space-y-4">
           {module.available_plans.map(plan => {
-            // "Selecionado" only when same plan AND same cycle as the saved config
             const isCurrent = plan.plan_id === currentPlanId && isAnnual === initialIsAnnual
             const total = planAnnualTotal(plan)
 
@@ -233,7 +257,6 @@ function PlanModal({ module, initialIsAnnual, currentPlanId, onSelect, onClose }
                     <p className="font-semibold text-gray-900">{plan.plan_name}</p>
 
                     {isAnnual ? (
-                      /* Annual: highlight total annual value */
                       <>
                         <p className="mt-1 text-2xl font-bold text-gray-900">
                           {total === 0
@@ -248,7 +271,6 @@ function PlanModal({ module, initialIsAnnual, currentPlanId, onSelect, onClose }
                         )}
                       </>
                     ) : (
-                      /* Monthly: show monthly value */
                       <>
                         <p className="mt-1 text-2xl font-bold text-gray-900">
                           {plan.monthly_price === 0
@@ -299,30 +321,171 @@ function PlanModal({ module, initialIsAnnual, currentPlanId, onSelect, onClose }
   )
 }
 
+// ─── Confirm Subscription Modal ───────────────────────────────────────────────
+
+type ConfirmModalProps = {
+  selected: SelectedConfig[]
+  profileName: string
+  profileType: 'individual' | 'business'
+  isLoading: boolean
+  onConfirm: () => void
+  onClose: () => void
+}
+
+function ConfirmSubscriptionModal({
+  selected,
+  profileName,
+  profileType,
+  isLoading,
+  onConfirm,
+  onClose,
+}: ConfirmModalProps) {
+  const monthlyItems = selected.filter(c => !c.isAnnual)
+  const annualItems  = selected.filter(c => c.isAnnual)
+  const monthlyTotal = monthlyItems.reduce((s, c) => s + c.plan.monthly_price, 0)
+  const annualTotal  = annualItems.reduce((s, c) => s + planAnnualTotal(c.plan), 0)
+  const annualInstallment = annualItems.reduce((s, c) => s + c.plan.annual_monthly_price, 0)
+
+  const isIndividual = profileType === 'individual'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={!isLoading ? onClose : undefined} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="border-b border-gray-100 px-6 py-5 shrink-0">
+          <h2 className="text-lg font-bold text-gray-900">Confirmar assinatura</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            {isIndividual
+              ? 'Você está prestes a adicionar os módulos selecionados ao seu Perfil Individual.'
+              : `Você está prestes a adicionar os módulos selecionados ao perfil:`}
+          </p>
+          {!isIndividual && (
+            <p className="mt-1 text-sm font-bold text-gray-800">{profileName}</p>
+          )}
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto px-6 py-5 space-y-5">
+          {/* Profile info */}
+          <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 space-y-1">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Perfil</span>
+              <span className="font-semibold text-gray-800">{profileName}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Tipo de perfil</span>
+              <span className="font-medium text-gray-700">
+                {isIndividual ? 'Individual' : 'Empresarial'}
+              </span>
+            </div>
+          </div>
+
+          {/* Modules summary */}
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+              Módulos selecionados
+            </p>
+            <ul className="space-y-2">
+              {selected.map(({ module, plan, isAnnual }) => {
+                const price = isAnnual
+                  ? `${brl(planAnnualTotal(plan))}/ano`
+                  : `${brl(plan.monthly_price)}/mês`
+                return (
+                  <li key={module.module_id} className="flex items-start justify-between gap-3 text-sm">
+                    <div>
+                      <p className="font-semibold text-gray-800">{module.module_name}</p>
+                      <p className="text-gray-500">
+                        Plano {plan.plan_name} · {isAnnual ? 'Anual' : 'Mensal'}
+                      </p>
+                    </div>
+                    <span className="font-bold text-gray-900 whitespace-nowrap">{price}</span>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+
+          {/* Financial summary */}
+          <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 space-y-2">
+            {monthlyItems.length > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Cobranças mensais</span>
+                <span className="font-bold text-gray-900">
+                  {monthlyTotal === 0 ? 'Grátis' : `${brl(monthlyTotal)}/mês`}
+                </span>
+              </div>
+            )}
+            {annualItems.length > 0 && (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Cobranças anuais</span>
+                  <span className="font-bold text-gray-900">
+                    {annualTotal === 0 ? 'Grátis' : `${brl(annualTotal)}/ano`}
+                  </span>
+                </div>
+                {annualInstallment > 0 && (
+                  <p className="text-xs text-gray-400 text-right">
+                    em até 12x de {brl(annualInstallment)}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+
+          <p className="text-xs text-gray-400 leading-relaxed">
+            {isIndividual
+              ? 'Esses módulos ficarão disponíveis apenas para o seu uso individual.'
+              : `Esses módulos ficarão disponíveis apenas para ${profileName} e seus usuários autorizados.`}
+          </p>
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-gray-100 px-6 py-4 flex gap-3 shrink-0">
+          <Button
+            variant="secondary"
+            className="flex-1"
+            onClick={onClose}
+            disabled={isLoading}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="primary"
+            className="flex-1"
+            onClick={onConfirm}
+            disabled={isLoading}
+          >
+            {isLoading ? 'Confirmando...' : 'Confirmar assinatura'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Configuration Panel ──────────────────────────────────────────────────────
 
 type ConfigPanelProps = {
   selected: SelectedConfig[]
   onRemove: (moduleId: string) => void
+  onConfirm: () => void
 }
 
-function ConfigPanel({ selected, onRemove }: ConfigPanelProps) {
+function ConfigPanel({ selected, onRemove, onConfirm }: ConfigPanelProps) {
   const monthlyItems = selected.filter(c => !c.isAnnual)
-  const annualItems = selected.filter(c => c.isAnnual)
-
+  const annualItems  = selected.filter(c => c.isAnnual)
   const monthlyTotal = monthlyItems.reduce((s, c) => s + c.plan.monthly_price, 0)
   const annualTotalSum = annualItems.reduce((s, c) => s + planAnnualTotal(c.plan), 0)
   const annualInstallmentTotal = annualItems.reduce((s, c) => s + c.plan.annual_monthly_price, 0)
-
   const hasMonthly = monthlyItems.length > 0
-  const hasAnnual = annualItems.length > 0
-  const hasBoth = hasMonthly && hasAnnual
+  const hasAnnual  = annualItems.length > 0
+  const hasBoth    = hasMonthly && hasAnnual
 
   return (
     <div className="lg:w-80 shrink-0 rounded-2xl border border-gray-200 bg-white shadow-sm p-6 lg:sticky lg:top-6 space-y-5">
       <h2 className="text-base font-bold text-gray-900">Minha configuração</h2>
 
-      {/* Monthly items */}
       {hasMonthly && (
         <div className="space-y-3">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cobranças mensais</p>
@@ -358,7 +521,6 @@ function ConfigPanel({ selected, onRemove }: ConfigPanelProps) {
 
       {hasBoth && <div className="border-t border-gray-100" />}
 
-      {/* Annual items */}
       {hasAnnual && (
         <div className="space-y-3">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cobranças anuais</p>
@@ -397,7 +559,6 @@ function ConfigPanel({ selected, onRemove }: ConfigPanelProps) {
         </div>
       )}
 
-      {/* Financial summary */}
       <div className="border-t border-gray-100 pt-4 space-y-2">
         {hasMonthly && (
           <div className="flex justify-between items-baseline">
@@ -407,7 +568,6 @@ function ConfigPanel({ selected, onRemove }: ConfigPanelProps) {
             </span>
           </div>
         )}
-
         {hasAnnual && (
           <div className="space-y-0.5">
             <div className="flex justify-between items-baseline">
@@ -423,7 +583,6 @@ function ConfigPanel({ selected, onRemove }: ConfigPanelProps) {
             )}
           </div>
         )}
-
         {hasAnnual && (
           <p className="text-xs text-gray-400 leading-relaxed">
             Módulos anuais podem ser pagos em até 12 vezes.
@@ -431,7 +590,7 @@ function ConfigPanel({ selected, onRemove }: ConfigPanelProps) {
         )}
       </div>
 
-      <Button className="w-full" variant="primary">
+      <Button className="w-full" variant="primary" onClick={onConfirm}>
         Confirmar assinatura
       </Button>
     </div>
@@ -441,8 +600,13 @@ function ConfigPanel({ selected, onRemove }: ConfigPanelProps) {
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export function PlansPage() {
+  const { currentTenant } = useTenant()
   const [modalModule, setModalModule] = useState<ModuleBillingOption | null>(null)
   const [configuration, setConfiguration] = useState<Record<string, SelectedConfig>>({})
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+
+  const profileName = currentTenant?.tenant.name ?? 'Seu perfil'
+  const profileType = currentTenant?.tenant.type ?? 'individual'
 
   const { data: modules = [], isLoading } = useQuery({
     queryKey: ['module-billing-options'],
@@ -457,6 +621,23 @@ export function PlansPage() {
         services: parseJson<ModuleService[]>(raw.services_json) ?? [],
         available_plans: parseJson<ModulePlan[]>(raw.available_plans_json) ?? [],
       })) as ModuleBillingOption[]
+    },
+  })
+
+  const confirmMutation = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        modules: selectedList.map(({ module, plan, isAnnual }) => ({
+          moduleId: module.module_id,
+          planVersionId: plan.plan_version_id,
+          billingCycle: isAnnual ? 'ANNUAL' : 'MONTHLY',
+        })),
+      }
+      await api.post('/api/v1/subscriptions/modules', payload)
+    },
+    onSuccess: () => {
+      setShowConfirmModal(false)
+      setConfiguration({})
     },
   })
 
@@ -477,16 +658,22 @@ export function PlansPage() {
   const hasConfig = selectedList.length > 0
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {/* Active profile banner */}
+      {currentTenant && (
+        <ProfileBanner profileName={profileName} profileType={profileType} />
+      )}
+
       {/* Header */}
       <div className="text-center space-y-2">
         <h1 className="text-2xl font-bold text-gray-900">Escolha seus módulos</h1>
-        <p className="text-gray-500">Monte sua assinatura com os módulos que você precisa, cada um no plano e ciclo ideal.</p>
+        <p className="text-gray-500">
+          Monte sua assinatura com os módulos que você precisa, cada um no plano e ciclo ideal.
+        </p>
       </div>
 
       {/* Main layout */}
       <div className={`flex gap-6 items-start ${hasConfig ? 'flex-col lg:flex-row' : ''}`}>
-        {/* Module cards grid */}
         <div className="flex-1 min-w-0">
           {isLoading ? (
             <div className="text-center py-16 text-gray-400 text-sm">Carregando módulos...</div>
@@ -508,11 +695,11 @@ export function PlansPage() {
           )}
         </div>
 
-        {/* Configuration panel */}
         {hasConfig && (
           <ConfigPanel
             selected={selectedList}
             onRemove={removeModule}
+            onConfirm={() => setShowConfirmModal(true)}
           />
         )}
       </div>
@@ -530,6 +717,18 @@ export function PlansPage() {
           currentPlanId={configuration[modalModule.module_id]?.plan.plan_id}
           onSelect={(plan, isAnnual) => selectPlan(modalModule, plan, isAnnual)}
           onClose={() => setModalModule(null)}
+        />
+      )}
+
+      {/* Confirmation modal */}
+      {showConfirmModal && (
+        <ConfirmSubscriptionModal
+          selected={selectedList}
+          profileName={profileName}
+          profileType={profileType}
+          isLoading={confirmMutation.isPending}
+          onConfirm={() => confirmMutation.mutate()}
+          onClose={() => setShowConfirmModal(false)}
         />
       )}
     </div>
