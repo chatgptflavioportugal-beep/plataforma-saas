@@ -22,7 +22,11 @@ function parseJson<T>(json?: string | null): T | null {
 
 function brl(value: number) {
   if (value === 0) return 'Grátis'
-  return `R$ ${value.toFixed(2).replace('.', ',')}`
+  return `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+function planAnnualTotal(plan: ModulePlan): number {
+  return plan.annual_total_price > 0 ? plan.annual_total_price : plan.annual_monthly_price * 12
 }
 
 type SelectedConfig = {
@@ -42,13 +46,25 @@ type ModuleCardProps = {
 function ModuleCard({ module, selected, onChoose }: ModuleCardProps) {
   const plans = module.available_plans
   const hasPlans = plans.length > 0
-
-  const displayIsAnnual = selected?.isAnnual ?? false
-  const minPrice = hasPlans
-    ? Math.min(...plans.map(p => (displayIsAnnual ? p.annual_monthly_price : p.monthly_price)))
-    : null
-
   const planNames = plans.map(p => p.plan_name).join(', ')
+
+  // When selected: show actual selected plan price in correct cycle format
+  // When not selected: show minimum monthly price as teaser
+  let mainPrice: string | null = null
+  let subPrice: string | null = null
+
+  if (selected) {
+    if (selected.isAnnual) {
+      const total = planAnnualTotal(selected.plan)
+      mainPrice = total === 0 ? 'Grátis' : `${brl(total)}/ano`
+      if (total > 0) subPrice = `em até 12x de ${brl(selected.plan.annual_monthly_price)}`
+    } else {
+      mainPrice = selected.plan.monthly_price === 0 ? 'Grátis' : `${brl(selected.plan.monthly_price)}/mês`
+    }
+  } else if (hasPlans) {
+    const minMonthly = Math.min(...plans.map(p => p.monthly_price))
+    if (minMonthly > 0) mainPrice = `A partir de ${brl(minMonthly)}/mês`
+  }
 
   return (
     <div
@@ -64,9 +80,7 @@ function ModuleCard({ module, selected, onChoose }: ModuleCardProps) {
             {selected.plan.plan_name}
           </span>
           <span className={`rounded-full px-2 py-1 text-xs font-semibold shadow ${
-            selected.isAnnual
-              ? 'bg-green-600 text-white'
-              : 'bg-gray-600 text-white'
+            selected.isAnnual ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
           }`}>
             {selected.isAnnual ? 'Anual' : 'Mensal'}
           </span>
@@ -108,20 +122,20 @@ function ModuleCard({ module, selected, onChoose }: ModuleCardProps) {
 
         <div className="flex-1" />
 
-        {/* Plans & price */}
+        {/* Price area */}
         {hasPlans ? (
           <div className="mt-4 pt-4 border-t border-gray-100 space-y-0.5">
-            <p className="text-xs text-gray-400">
-              Disponível em: <span className="font-medium text-gray-600">{planNames}</span>
-            </p>
-            {minPrice !== null && (
+            {!selected && (
               <p className="text-xs text-gray-400">
-                A partir de{' '}
-                <span className="font-semibold text-gray-700">
-                  {minPrice === 0 ? 'Grátis' : `${brl(minPrice)}/mês`}
-                </span>
+                Disponível em: <span className="font-medium text-gray-600">{planNames}</span>
               </p>
             )}
+            {mainPrice && (
+              <p className={selected ? 'text-sm font-bold text-gray-900' : 'text-xs text-gray-400'}>
+                {mainPrice}
+              </p>
+            )}
+            {subPrice && <p className="text-xs text-gray-500">{subPrice}</p>}
           </div>
         ) : (
           <div className="mt-4 pt-4 border-t border-gray-100">
@@ -201,9 +215,9 @@ function PlanModal({ module, initialIsAnnual, currentPlanId, onSelect, onClose }
         {/* Plans list */}
         <div className="overflow-y-auto p-6 space-y-4">
           {module.available_plans.map(plan => {
-            const isCurrent = plan.plan_id === currentPlanId
-            const displayPrice = isAnnual ? plan.annual_monthly_price : plan.monthly_price
-            const showAnnualTotal = isAnnual && plan.annual_total_price > 0
+            // "Selecionado" only when same plan AND same cycle as the saved config
+            const isCurrent = plan.plan_id === currentPlanId && isAnnual === initialIsAnnual
+            const total = planAnnualTotal(plan)
 
             return (
               <div
@@ -218,23 +232,34 @@ function PlanModal({ module, initialIsAnnual, currentPlanId, onSelect, onClose }
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900">{plan.plan_name}</p>
 
-                    <p className="mt-1 text-2xl font-bold text-gray-900">
-                      {displayPrice === 0
-                        ? 'Grátis'
-                        : <>{brl(displayPrice)}<span className="text-sm font-normal text-gray-400">/mês</span></>
-                      }
-                    </p>
-
-                    {showAnnualTotal && (
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {brl(plan.annual_total_price)}/ano
-                      </p>
-                    )}
-
-                    {isAnnual && plan.monthly_price > 0 && plan.monthly_price !== plan.annual_monthly_price && (
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        Era <span className="line-through">{brl(plan.monthly_price)}/mês</span>
-                      </p>
+                    {isAnnual ? (
+                      /* Annual: highlight total annual value */
+                      <>
+                        <p className="mt-1 text-2xl font-bold text-gray-900">
+                          {total === 0
+                            ? 'Grátis'
+                            : <>{brl(total)}<span className="text-sm font-normal text-gray-400">/ano</span></>
+                          }
+                        </p>
+                        {total > 0 && (
+                          <p className="text-sm text-gray-500 mt-0.5">
+                            em até 12x de {brl(plan.annual_monthly_price)}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      /* Monthly: show monthly value */
+                      <>
+                        <p className="mt-1 text-2xl font-bold text-gray-900">
+                          {plan.monthly_price === 0
+                            ? 'Grátis'
+                            : <>{brl(plan.monthly_price)}<span className="text-sm font-normal text-gray-400">/mês</span></>
+                          }
+                        </p>
+                        {plan.monthly_price > 0 && (
+                          <p className="text-xs text-gray-400 mt-0.5">cobrança mensal</p>
+                        )}
+                      </>
                     )}
 
                     {plan.limits.length > 0 && (
@@ -285,79 +310,128 @@ function ConfigPanel({ selected, onRemove }: ConfigPanelProps) {
   const monthlyItems = selected.filter(c => !c.isAnnual)
   const annualItems = selected.filter(c => c.isAnnual)
 
-  const totalMonthly = monthlyItems.reduce((s, c) => s + c.plan.monthly_price, 0)
-  const totalAnnualMonthly = annualItems.reduce((s, c) => s + c.plan.annual_monthly_price, 0)
-  const totalAnnualPerYear = totalAnnualMonthly * 12
+  const monthlyTotal = monthlyItems.reduce((s, c) => s + c.plan.monthly_price, 0)
+  const annualTotalSum = annualItems.reduce((s, c) => s + planAnnualTotal(c.plan), 0)
+  const annualInstallmentTotal = annualItems.reduce((s, c) => s + c.plan.annual_monthly_price, 0)
 
   const hasMonthly = monthlyItems.length > 0
   const hasAnnual = annualItems.length > 0
+  const hasBoth = hasMonthly && hasAnnual
 
   return (
-    <div className="lg:w-80 shrink-0 rounded-2xl border border-gray-200 bg-white shadow-sm p-6 lg:sticky lg:top-6">
-      <h2 className="text-base font-bold text-gray-900 mb-4">Minha configuração</h2>
+    <div className="lg:w-80 shrink-0 rounded-2xl border border-gray-200 bg-white shadow-sm p-6 lg:sticky lg:top-6 space-y-5">
+      <h2 className="text-base font-bold text-gray-900">Minha configuração</h2>
 
-      <ul className="divide-y divide-gray-100">
-        {selected.map(({ module, plan, isAnnual }) => {
-          const price = isAnnual ? plan.annual_monthly_price : plan.monthly_price
-          return (
-            <li key={module.module_id} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-gray-800 truncate">{module.module_name}</p>
-                <div className="flex items-center gap-1.5 mt-0.5">
+      {/* Monthly items */}
+      {hasMonthly && (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cobranças mensais</p>
+          <ul className="space-y-4">
+            {monthlyItems.map(({ module, plan }) => (
+              <li key={module.module_id} className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-gray-800 truncate">{module.module_name}</p>
                   <p className="text-xs text-gray-500">Plano {plan.plan_name}</p>
-                  <span className={`rounded-full px-1.5 py-0.5 text-xs font-medium ${
-                    isAnnual
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-gray-100 text-gray-500'
-                  }`}>
-                    {isAnnual ? 'Anual' : 'Mensal'}
+                  <p className="text-sm font-bold text-gray-900 mt-1">
+                    {plan.monthly_price === 0 ? 'Grátis' : `${brl(plan.monthly_price)}/mês`}
+                  </p>
+                  {plan.monthly_price > 0 && (
+                    <p className="text-xs text-gray-400">cobrança mensal</p>
+                  )}
+                  <span className="inline-block mt-1.5 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+                    Mensal
                   </span>
                 </div>
-                <p className="text-xs font-semibold text-primary-600 mt-0.5">
-                  {price === 0 ? 'Grátis' : `${brl(price)}/mês`}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => onRemove(module.module_id)}
-                className="text-gray-300 hover:text-red-400 transition-colors shrink-0 mt-0.5 text-sm leading-none"
-                title="Remover módulo"
-              >
-                ✕
-              </button>
-            </li>
-          )
-        })}
-      </ul>
+                <button
+                  type="button"
+                  onClick={() => onRemove(module.module_id)}
+                  className="text-gray-300 hover:text-red-400 transition-colors shrink-0 mt-0.5 text-sm leading-none"
+                  title="Remover módulo"
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
-      <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+      {hasBoth && <div className="border-t border-gray-100" />}
+
+      {/* Annual items */}
+      {hasAnnual && (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cobranças anuais</p>
+          <ul className="space-y-4">
+            {annualItems.map(({ module, plan }) => {
+              const total = planAnnualTotal(plan)
+              return (
+                <li key={module.module_id} className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-gray-800 truncate">{module.module_name}</p>
+                    <p className="text-xs text-gray-500">Plano {plan.plan_name}</p>
+                    {total === 0 ? (
+                      <p className="text-sm font-bold text-gray-900 mt-1">Grátis</p>
+                    ) : (
+                      <>
+                        <p className="text-sm font-bold text-gray-900 mt-1">{brl(total)}/ano</p>
+                        <p className="text-xs text-gray-500">em até 12x de {brl(plan.annual_monthly_price)}</p>
+                      </>
+                    )}
+                    <span className="inline-block mt-1.5 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                      Anual
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onRemove(module.module_id)}
+                    className="text-gray-300 hover:text-red-400 transition-colors shrink-0 mt-0.5 text-sm leading-none"
+                    title="Remover módulo"
+                  >
+                    ✕
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+
+      {/* Financial summary */}
+      <div className="border-t border-gray-100 pt-4 space-y-2">
         {hasMonthly && (
-          <div className="flex justify-between text-sm text-gray-600">
-            <span>Cobranças mensais</span>
-            <span className="font-semibold">
-              {totalMonthly === 0 ? 'Grátis' : `${brl(totalMonthly)}/mês`}
+          <div className="flex justify-between items-baseline">
+            <span className="text-xs text-gray-500">Cobranças mensais</span>
+            <span className="text-sm font-semibold text-gray-900">
+              {monthlyTotal === 0 ? 'Grátis' : `${brl(monthlyTotal)}/mês`}
             </span>
           </div>
         )}
+
         {hasAnnual && (
-          <>
-            <div className="flex justify-between text-sm text-gray-600">
-              <span>Cobranças anuais</span>
-              <span className="font-semibold">
-                {totalAnnualMonthly === 0 ? 'Grátis' : `${brl(totalAnnualMonthly)}/mês`}
+          <div className="space-y-0.5">
+            <div className="flex justify-between items-baseline">
+              <span className="text-xs text-gray-500">Cobranças anuais</span>
+              <span className="text-sm font-semibold text-gray-900">
+                {annualTotalSum === 0 ? 'Grátis' : `${brl(annualTotalSum)}/ano`}
               </span>
             </div>
-            {totalAnnualPerYear > 0 && (
-              <div className="flex justify-between text-xs text-gray-400">
-                <span>Total anual</span>
-                <span>{brl(totalAnnualPerYear)}/ano</span>
+            {annualInstallmentTotal > 0 && (
+              <div className="flex justify-end">
+                <span className="text-xs text-gray-400">em até 12x de {brl(annualInstallmentTotal)}</span>
               </div>
             )}
-          </>
+          </div>
+        )}
+
+        {hasAnnual && (
+          <p className="text-xs text-gray-400 leading-relaxed">
+            Módulos anuais podem ser pagos em até 12 vezes.
+          </p>
         )}
       </div>
 
-      <Button className="mt-5 w-full" variant="primary">
+      <Button className="w-full" variant="primary">
         Confirmar assinatura
       </Button>
     </div>
