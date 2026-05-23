@@ -9,7 +9,7 @@ import { LoginPage } from '@/app/public/LoginPage'
 import { RegisterPage } from '@/app/public/RegisterPage'
 import { AuthCallbackPage } from '@/app/auth/AuthCallbackPage'
 import { OnboardingPage } from '@/app/auth/OnboardingPage'
-import { ContextSelectorPage } from '@/app/auth/ContextSelectorPage'
+import { ProfileSelectorPage } from '@/app/auth/ProfileSelectorPage'
 import { AcceptInvitePage } from '@/app/auth/AcceptInvitePage'
 
 import { AppLayout } from '@/shared/layouts/AppLayout'
@@ -40,10 +40,10 @@ export function AppRouter() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
-          {/* Seleção de contexto (autenticado, sem TenantProvider) */}
-          <Route path="/select-context" element={
+          {/* Seleção de perfil (autenticado, sem TenantProvider) */}
+          <Route path="/select-profile" element={
             <AuthGuard>
-              <ContextSelectorPage />
+              <ProfileSelectorPage />
             </AuthGuard>
           } />
 

@@ -2,11 +2,11 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { api, setActiveTenant } from '@/shared/services/api'
-import type { TenantContext as TenantContextType, UserTenant } from '@/shared/types'
+import type { TenantProfile, UserTenant } from '@/shared/types'
 import { useAuth } from '@/core/auth/AuthContext'
 
 interface TenantContextValue {
-  currentTenant: TenantContextType | null
+  currentTenant: TenantProfile | null
   userTenants: UserTenant[]
   activeTenantId: string | null
   isLoading: boolean
@@ -76,16 +76,16 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    // Vários tenants sem preferência salva → seletor de contexto
-    if (location.pathname !== '/select-context') {
-      navigate('/select-context', { replace: true })
+    // Vários tenants sem preferência salva → seletor de perfil
+    if (location.pathname !== '/select-profile') {
+      navigate('/select-profile', { replace: true })
     }
   }, [tenantsLoading, tenantsFetching, tenantsError, userTenants, activeTenantId, navigate, location.pathname, switchTenant])
 
   const { data: currentTenant, isLoading: tenantLoading } = useQuery({
-    queryKey: ['tenant-context', activeTenantId],
+    queryKey: ['tenant-profile', activeTenantId],
     queryFn: async () => {
-      const { data } = await api.get<TenantContextType>(`/api/v1/tenants/${activeTenantId}/context`)
+      const { data } = await api.get<TenantProfile>(`/api/v1/tenants/${activeTenantId}/profile`)
       return data
     },
     enabled: !!activeTenantId,

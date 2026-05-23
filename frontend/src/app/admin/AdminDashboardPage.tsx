@@ -76,9 +76,9 @@ export function AdminDashboardPage() {
         </div>
       </section>
 
-      {/* Membros e contextos */}
+      {/* Membros e perfis */}
       <section>
-        <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">Membros e Contextos</p>
+        <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">Membros e Perfis</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <StatCard
             label="Vínculos de membros"

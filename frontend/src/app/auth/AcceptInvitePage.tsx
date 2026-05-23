@@ -106,7 +106,7 @@ export function AcceptInvitePage() {
           </div>
           <h2 className="text-lg font-semibold text-gray-900">Convite aceito!</h2>
           <p className="text-sm text-gray-500">
-            Você agora é membro de <strong>{preview?.tenant_name}</strong>. A empresa aparecerá no seu seletor de contextos.
+            Você agora é membro de <strong>{preview?.tenant_name}</strong>. A empresa aparecerá no seu seletor de perfis.
           </p>
           <button
             onClick={handleGoToDashboard}

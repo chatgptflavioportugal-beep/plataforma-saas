@@ -13,7 +13,7 @@ interface Customer {
   has_individual_profile: boolean
   owned_companies_count: number
   member_companies_count: number
-  total_contexts: number
+  total_profiles: number
 }
 
 function fmt(date: string | null | undefined) {
@@ -38,7 +38,7 @@ export function AdminCustomersPage() {
   const [hasOwnedCompany, setHasOwnedCompany] = useState<BoolFilter>('')
   const [isMember, setIsMember] = useState<BoolFilter>('')
   const [isActive, setIsActive] = useState<BoolFilter>('')
-  const [contextType, setContextType] = useState('')
+  const [profileType, setProfileType] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const debouncedSearch = useDebounce(search, 350)
@@ -49,7 +49,7 @@ export function AdminCustomersPage() {
   if (hasOwnedCompany) params.set('has_owned_company', hasOwnedCompany)
   if (isMember)        params.set('is_member', isMember)
   if (isActive)        params.set('is_active', isActive)
-  if (contextType)     params.set('context_type', contextType)
+  if (profileType)     params.set('profile_type', profileType)
 
   const { data: customers = [], isLoading } = useQuery({
     queryKey: ['admin-customers', params.toString()],
@@ -68,17 +68,17 @@ export function AdminCustomersPage() {
     setHasOwnedCompany('')
     setIsMember('')
     setIsActive('')
-    setContextType('')
+    setProfileType('')
   }
 
-  const hasFilters = search || hasIndividual || hasOwnedCompany || isMember || isActive || contextType
+  const hasFilters = search || hasIndividual || hasOwnedCompany || isMember || isActive || profileType
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-white">Clientes</h1>
         <p className="mt-1 text-sm text-gray-400">
-          Usuários cadastrados na plataforma — perfis, empresas e contextos.
+          Usuários cadastrados na plataforma — perfis, empresas e membros.
         </p>
       </div>
 
@@ -145,9 +145,9 @@ export function AdminCustomersPage() {
           />
         </div>
 
-        {/* Filtro por tipo de contexto */}
+        {/* Filtro por tipo de perfil */}
         <div className="flex flex-wrap items-center gap-2 pt-1">
-          <span className="text-xs text-gray-500 mr-1">Contexto:</span>
+          <span className="text-xs text-gray-500 mr-1">Perfil:</span>
           {[
             { value: '', label: 'Todos' },
             { value: 'individual', label: 'Individual' },
@@ -156,9 +156,9 @@ export function AdminCustomersPage() {
           ].map((opt) => (
             <button
               key={opt.value}
-              onClick={() => setContextType(opt.value)}
+              onClick={() => setProfileType(opt.value)}
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                contextType === opt.value
+                profileType === opt.value
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
@@ -201,7 +201,7 @@ export function AdminCustomersPage() {
                     'Perfil Individual',
                     'Emp. Criadas',
                     'Membro em',
-                    'Contextos',
+                    'Perfis',
                     'Cadastro',
                     'Último acesso',
                     '',
@@ -264,7 +264,7 @@ export function AdminCustomersPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm text-center text-gray-300 font-medium">
-                        {c.total_contexts}
+                        {c.total_profiles}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-400 whitespace-nowrap">
                         {fmt(c.created_at)}

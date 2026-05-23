@@ -98,7 +98,7 @@ export function OnboardingPage() {
   function handleBack() {
     setError(null)
     if (cameFromSelector) {
-      navigate('/select-context', { replace: true })
+      navigate('/select-profile', { replace: true })
     } else {
       setStep('choose')
     }

@@ -176,7 +176,7 @@ export interface ApiError {
   used?: number
 }
 
-export interface TenantContext {
+export interface TenantProfile {
   tenant: Tenant
   subscription: TenantSubscription
   plan: Plan

@@ -27,17 +27,17 @@ public class InvitationResource {
     @Inject
     TenantService tenantService;
 
-    // ─── Contexto do tenant ───────────────────────────────────────────────────
+    // ─── Perfil do tenant ────────────────────────────────────────────────────
 
     @GET
-    @Path("/context")
-    public Response tenantContext(@PathParam("tenantId") UUID tenantId,
+    @Path("/profile")
+    public Response tenantProfile(@PathParam("tenantId") UUID tenantId,
                                   @Context SecurityContext ctx) {
         TenantContext tenantCtx = TenantContext.from(ctx);
         if (!tenantCtx.getTenantId().equals(tenantId)) {
             return Response.status(403).build();
         }
-        return Response.ok(tenantService.getTenantContext(tenantId)).build();
+        return Response.ok(tenantService.getTenantProfile(tenantId)).build();
     }
 
     // ─── Membros ──────────────────────────────────────────────────────────────

@@ -87,13 +87,13 @@ public class TenantService {
     }
 
     // ----------------------------------------------------------------
-    // Contexto do tenant: subscription + plano + papel do usuário
+    // Perfil do tenant: subscription + plano + papel do usuário
     // Se o tenant individual não tiver subscription ainda, cria automaticamente.
     // ----------------------------------------------------------------
 
     @SuppressWarnings("unchecked")
     @Transactional
-    public Map<String, Object> getTenantContext(UUID tenantId) {
+    public Map<String, Object> getTenantProfile(UUID tenantId) {
         var rows = (java.util.List<Object[]>) em.createNativeQuery(
                 "SELECT t.id::text, t.name, t.slug, t.status, t.type, t.trial_ends_at::text, " +
                 "ts.id::text as sub_id, ts.status as sub_status, ts.trial_end::text, " +
@@ -129,7 +129,7 @@ public class TenantService {
         if (row[6] == null) {
             ensureSubscription(tenantId, tenantType);
             // Recarrega após criação
-            return getTenantContext(tenantId);
+            return getTenantProfile(tenantId);
         }
 
         Map<String, Object> tenantMap = new java.util.LinkedHashMap<>();

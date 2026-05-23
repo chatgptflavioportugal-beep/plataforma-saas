@@ -11,9 +11,9 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
 
   if (isLoading) return <Spinner fullscreen />
 
-  // Sem contexto de tenant carregado: TenantProvider está redirecionando
-  // (p/ /onboarding se sem tenants, p/ /select-context se múltiplos sem seleção,
-  // ou aguardando o tenant-context após auto-seleção). Bloqueia o render do
+  // Sem perfil de tenant carregado: TenantProvider está redirecionando
+  // (p/ /onboarding se sem tenants, p/ /select-profile se múltiplos sem seleção,
+  // ou aguardando o tenant-profile após auto-seleção). Bloqueia o render do
   // dashboard para que o usuário nunca veja o layout sem perfil ativo.
   if (!currentTenant) return <Spinner fullscreen />
 

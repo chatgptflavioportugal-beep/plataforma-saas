@@ -97,7 +97,7 @@ export function AdminCustomerDetailModal({ customerId, onClose }: Props) {
 
   if (!customerId) return null
 
-  const totalContexts =
+  const totalProfiles =
     (data?.individual_profile ? 1 : 0) +
     (data?.owned_companies.length ?? 0) +
     (data?.member_companies.length ?? 0)
@@ -159,9 +159,9 @@ export function AdminCustomerDetailModal({ customerId, onClose }: Props) {
                   <Row label="Cadastro" value={fmt(data.created_at)} />
                   <Row label="Último acesso" value={fmt(data.last_sign_in_at)} />
                   <Row
-                    label="Total de contextos"
+                    label="Total de perfis"
                     value={
-                      <span className="font-semibold text-white">{totalContexts}</span>
+                      <span className="font-semibold text-white">{totalProfiles}</span>
                     }
                   />
                 </div>
@@ -250,14 +250,14 @@ export function AdminCustomerDetailModal({ customerId, onClose }: Props) {
                 )}
               </section>
 
-              {/* Resumo de contextos */}
+              {/* Resumo de perfis */}
               <section>
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">
-                  Contextos Disponíveis ({totalContexts})
+                  Perfis Disponíveis ({totalProfiles})
                 </h3>
                 <div className="rounded-xl bg-gray-800 border border-gray-700 p-4 space-y-2 text-sm">
-                  {totalContexts === 0 ? (
-                    <p className="text-gray-500 italic">Nenhum contexto disponível.</p>
+                  {totalProfiles === 0 ? (
+                    <p className="text-gray-500 italic">Nenhum perfil disponível.</p>
                   ) : (
                     <>
                       {data.individual_profile && (

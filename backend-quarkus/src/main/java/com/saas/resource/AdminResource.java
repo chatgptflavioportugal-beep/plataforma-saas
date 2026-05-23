@@ -231,7 +231,7 @@ public class AdminResource {
     }
 
     // ----------------------------------------------------------------
-    // Clientes — listagem com estrutura completa de perfis/contextos
+    // Clientes — listagem com estrutura completa de perfis
     // ----------------------------------------------------------------
 
     @GET
@@ -243,7 +243,7 @@ public class AdminResource {
             @QueryParam("has_owned_company") Boolean hasOwnedCompany,
             @QueryParam("is_member") Boolean isMember,
             @QueryParam("is_active") Boolean isActive,
-            @QueryParam("context_type") String contextType) {
+            @QueryParam("profile_type") String profileType) {
         ensureSuperAdmin();
 
         StringBuilder sql = new StringBuilder(
@@ -291,11 +291,11 @@ public class AdminResource {
         if (isActive != null) {
             sql.append(isActive ? " AND is_active = TRUE" : " AND is_active = FALSE");
         }
-        if ("individual".equals(contextType)) {
+        if ("individual".equals(profileType)) {
             sql.append(" AND has_individual_profile = TRUE");
-        } else if ("owned_company".equals(contextType)) {
+        } else if ("owned_company".equals(profileType)) {
             sql.append(" AND owned_companies_count > 0");
-        } else if ("member_company".equals(contextType)) {
+        } else if ("member_company".equals(profileType)) {
             sql.append(" AND member_companies_count > 0");
         }
         sql.append(" ORDER BY created_at DESC");
@@ -318,7 +318,7 @@ public class AdminResource {
             int owned  = row[7] instanceof Number n1 ? n1.intValue() : 0;
             int member = row[8] instanceof Number n2 ? n2.intValue() : 0;
             boolean hasInd = Boolean.TRUE.equals(row[6]);
-            m.put("total_contexts", (hasInd ? 1 : 0) + owned + member);
+            m.put("total_profiles", (hasInd ? 1 : 0) + owned + member);
             return m;
         }).toList();
         return Response.ok(customers).build();
