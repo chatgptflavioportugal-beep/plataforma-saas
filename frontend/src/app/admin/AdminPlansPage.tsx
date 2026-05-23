@@ -316,6 +316,104 @@ function PlanCreateForm({ onClose, onSaved }: PlanCreateFormProps) {
   )
 }
 
+// ─── tipos internos do histórico de versões ──────────────────────────────────
+
+interface HistoryModule {
+  id: string
+  module_id: string
+  module_name: string
+  module_slug: string
+  module_icon_path: string | null
+  monthly_price: number
+  annual_monthly_price: number
+  status: 'active' | 'inactive'
+  sort_order: number
+  limits: PlanVersionModuleLimit[]
+}
+
+function parseHistoryModules(modulesJson: string | undefined): HistoryModule[] {
+  if (!modulesJson) return []
+  try { return JSON.parse(modulesJson) ?? [] } catch { return [] }
+}
+
+function buildVersionChanges(current: Plan, prev: Plan): string[] {
+  const currMods = parseHistoryModules(current.modules_json)
+  const prevMods = parseHistoryModules(prev.modules_json)
+  const changes: string[] = []
+
+  for (const mod of currMods) {
+    const old = prevMods.find(p => p.module_id === mod.module_id)
+    if (!old) {
+      changes.push(`Módulo adicionado: ${mod.module_name}`)
+    } else {
+      if (Number(old.monthly_price) !== Number(mod.monthly_price))
+        changes.push(`${mod.module_name} — mensal: ${brl(old.monthly_price)} → ${brl(mod.monthly_price)}`)
+      if (Number(old.annual_monthly_price) !== Number(mod.annual_monthly_price))
+        changes.push(`${mod.module_name} — anual/mês: ${brl(old.annual_monthly_price)} → ${brl(mod.annual_monthly_price)}`)
+      if (old.status !== mod.status)
+        changes.push(`${mod.module_name} — status: ${old.status} → ${mod.status}`)
+    }
+  }
+
+  for (const mod of prevMods) {
+    if (!currMods.find(c => c.module_id === mod.module_id))
+      changes.push(`Módulo removido: ${mod.module_name}`)
+  }
+
+  return changes
+}
+
+// ─── card de módulo no histórico ──────────────────────────────────────────────
+
+function HistoryModuleCard({ mod }: { mod: HistoryModule }) {
+  const annualTotal = Number(mod.annual_monthly_price) * 12
+  const isActive = mod.status === 'active'
+
+  return (
+    <div className={`rounded-lg border p-3 ${isActive ? 'border-gray-600 bg-gray-800/60' : 'border-gray-700/50 bg-gray-800/20 opacity-60'}`}>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          {mod.module_icon_path && (
+            <img src={mod.module_icon_path} alt="" className="w-4 h-4 object-contain opacity-80" />
+          )}
+          <span className="text-sm font-medium text-white">{mod.module_name}</span>
+        </div>
+        <Badge label={isActive ? 'Ativo' : 'Inativo'} variant={isActive ? 'green' : 'gray'} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div>
+          <span className="text-gray-500">Mensal</span>
+          <p className="text-gray-200 font-medium">{brl(mod.monthly_price)}</p>
+        </div>
+        <div>
+          <span className="text-gray-500">Anual</span>
+          <p className="text-gray-200 font-medium">{brl(annualTotal)}/ano</p>
+          {Number(mod.annual_monthly_price) > 0 && (
+            <p className="text-gray-500">em 12x de {brl(mod.annual_monthly_price)}</p>
+          )}
+        </div>
+      </div>
+
+      {mod.limits && mod.limits.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-gray-700/60">
+          <p className="text-xs text-gray-500 mb-1">Limitações:</p>
+          <ul className="space-y-0.5">
+            {mod.limits.map((l) => (
+              <li key={l.id} className="text-xs text-gray-400">
+                {'• '}
+                {l.title}
+                {l.limit_value ? `: ${l.limit_value}${l.unit ? ` ${l.unit}` : ''}` : ''}
+                {l.description ? <span className="text-gray-500"> — {l.description}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── modal histórico de versões ───────────────────────────────────────────────
 
 function VersionHistoryModal({ planCode, planName, onClose }: { planCode: string; planName: string; onClose: () => void }) {
@@ -327,9 +425,11 @@ function VersionHistoryModal({ planCode, planName, onClose }: { planCode: string
     },
   })
 
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-2xl bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl max-h-[80vh] overflow-y-auto">
+      <div className="w-full max-w-2xl bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl max-h-[85vh] overflow-y-auto">
         <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 bg-gray-900 border-b border-gray-700">
           <div>
             <h2 className="text-lg font-semibold text-white">Histórico de versões</h2>
@@ -337,57 +437,89 @@ function VersionHistoryModal({ planCode, planName, onClose }: { planCode: string
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none">✕</button>
         </div>
-        <div className="p-6 space-y-3">
+
+        <div className="p-6 space-y-4">
           {isLoading ? (
             <p className="text-sm text-gray-400">Carregando…</p>
-          ) : versions.map((v) => (
-            <div key={v.id}
-              className={`rounded-xl border p-4 ${v.is_current_version ? 'border-blue-600 bg-blue-900/10' : 'border-gray-700 bg-gray-800/40'}`}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-white font-semibold">v{v.version}</span>
-                  {v.is_current_version && <Badge label="versão atual" variant="blue" />}
-                  {v.is_most_popular && <Badge label="★ mais popular" variant="yellow" />}
+          ) : versions.map((v, idx) => {
+            const modules = parseHistoryModules(v.modules_json)
+            const prevVersion = versions[idx + 1]
+            const changes = prevVersion ? buildVersionChanges(v, prevVersion) : []
+            const isExpanded = expandedId === v.id
+            const activeCount = modules.filter(m => m.status === 'active').length
+
+            return (
+              <div key={v.id}
+                className={`rounded-xl border p-4 ${v.is_current_version ? 'border-blue-600 bg-blue-900/10' : 'border-gray-700 bg-gray-800/40'}`}>
+
+                {/* cabeçalho da versão */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-white font-semibold">v{v.version} — {v.name}</span>
+                    {v.is_current_version && <Badge label="versão atual" variant="blue" />}
+                    {v.is_most_popular && <Badge label="★ mais popular" variant="yellow" />}
+                    <Badge label={v.is_active ? 'Ativo' : 'Inativo'} variant={v.is_active ? 'green' : 'gray'} />
+                  </div>
+                  <div className="text-right text-xs text-gray-400 shrink-0">
+                    <p>{v.created_at ? new Date(v.created_at).toLocaleDateString('pt-BR') : '—'}</p>
+                    <p>{v.subscriber_count ?? 0} assinante(s)</p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3 text-sm text-gray-400">
-                  <span>{v.subscriber_count ?? 0} assinante(s)</span>
-                  <span>{v.created_at ? new Date(v.created_at).toLocaleDateString('pt-BR') : '—'}</span>
+
+                {/* totais */}
+                <div className="grid grid-cols-2 gap-3 text-sm mb-3">
+                  <div>
+                    <span className="text-gray-500 text-xs">Total Mensal</span>
+                    <p className="text-white font-medium">{brl(v.total_monthly_price)}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 text-xs">Total Anual</span>
+                    <p className="text-white font-medium">{brl(v.total_annual_price)}/ano</p>
+                    {(v.total_annual_monthly_price ?? 0) > 0 && (
+                      <p className="text-xs text-gray-500">em 12x de {brl(v.total_annual_monthly_price)}</p>
+                    )}
+                  </div>
                 </div>
+
+                {/* alterações em relação à versão anterior */}
+                {changes.length > 0 && (
+                  <div className="mb-3 rounded-lg bg-amber-900/20 border border-amber-800/40 p-3">
+                    <p className="text-xs font-medium text-amber-400 mb-1.5">Alterações em relação à v{prevVersion!.version}:</p>
+                    <ul className="space-y-0.5">
+                      {changes.map((c, i) => (
+                        <li key={i} className="text-xs text-amber-300/80">• {c}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* módulos */}
+                {modules.length > 0 ? (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedId(isExpanded ? null : v.id)}
+                      className="flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                    >
+                      <span className="text-[10px]">{isExpanded ? '▲' : '▼'}</span>
+                      {isExpanded ? 'Ocultar' : 'Ver'} módulos desta versão
+                      <span className="text-gray-500">({activeCount} ativo{activeCount !== 1 ? 's' : ''}{modules.length > activeCount ? `, ${modules.length - activeCount} inativo${modules.length - activeCount !== 1 ? 's' : ''}` : ''})</span>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="mt-3 space-y-2">
+                        {modules.map((mod) => (
+                          <HistoryModuleCard key={mod.id} mod={mod} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-amber-500/70">Nenhum módulo nesta versão</p>
+                )}
               </div>
-              <div className="grid grid-cols-3 gap-3 text-sm">
-                <div>
-                  <span className="text-gray-500 text-xs">Total Mensal</span>
-                  <p className="text-white font-medium">{brl(v.total_monthly_price)}</p>
-                  {(v.module_count ?? 0) > 0
-                    ? <p className="text-xs text-indigo-400">{v.module_count} módulo(s)</p>
-                    : <p className="text-xs text-amber-500/70">Nenhum módulo</p>}
-                </div>
-                <div>
-                  <span className="text-gray-500 text-xs">Total Anual</span>
-                  <p className="text-white font-medium">{brl(v.total_annual_price)}</p>
-                  {(v.module_count ?? 0) > 0 && (
-                    <p className="text-xs text-gray-500">{brl(v.total_annual_monthly_price)}/mês</p>
-                  )}
-                </div>
-                <div>
-                  <span className="text-gray-500 text-xs">Usuários</span>
-                  <p className="text-white font-medium">{userLabel(v.max_users)}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500 text-xs">IA/mês</span>
-                  <p className="text-white font-medium">{userLabel(v.max_ai_requests_month)}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500 text-xs">Cobrança</span>
-                  <p className="text-gray-300 text-xs">{BILLING_LABELS[v.billing_type] ?? v.billing_type}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500 text-xs">Status</span>
-                  <p><Badge label={v.is_active ? 'Ativo' : 'Inativo'} variant={v.is_active ? 'green' : 'gray'} /></p>
-                </div>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>

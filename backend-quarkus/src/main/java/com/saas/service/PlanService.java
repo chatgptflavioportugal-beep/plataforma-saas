@@ -46,6 +46,36 @@ public class PlanService {
         " JOIN platform_modules pm ON pm.id = pvm.module_id" +
         " WHERE pvm.plan_id = p.id AND pvm.status = 'active'), '[]'::json)::text";
 
+    // Usado no histórico de versões — inclui preços, status e limitações de cada módulo
+    private static final String MODULES_DETAIL_JSON_EXPR =
+        "COALESCE((SELECT json_agg(json_build_object(" +
+        "  'id', pvm.id::text," +
+        "  'module_id', pvm.module_id::text," +
+        "  'module_name', pm.name," +
+        "  'module_slug', pm.slug," +
+        "  'module_icon_path', pm.icon_path," +
+        "  'monthly_price', pvm.monthly_price," +
+        "  'annual_monthly_price', pvm.annual_monthly_price," +
+        "  'status', pvm.status," +
+        "  'sort_order', pvm.sort_order," +
+        "  'limits', COALESCE((" +
+        "    SELECT json_agg(json_build_object(" +
+        "      'id', pvml.id::text," +
+        "      'title', pvml.title," +
+        "      'description', pvml.description," +
+        "      'limit_key', pvml.limit_key," +
+        "      'limit_value', pvml.limit_value," +
+        "      'unit', pvml.unit," +
+        "      'sort_order', pvml.sort_order" +
+        "    ) ORDER BY pvml.sort_order)" +
+        "    FROM plan_version_module_limits pvml" +
+        "    WHERE pvml.plan_version_module_id = pvm.id" +
+        "  ), '[]'::json)" +
+        ") ORDER BY pvm.sort_order, pm.name)" +
+        " FROM plan_version_modules pvm" +
+        " JOIN platform_modules pm ON pm.id = pvm.module_id" +
+        " WHERE pvm.plan_id = p.id), '[]'::json)::text";
+
     // ----------------------------------------------------------------
     // Leitura pública: versões atuais ativas, com filtro opcional por tipo
     // ----------------------------------------------------------------
@@ -170,7 +200,9 @@ public class PlanService {
                 TOTAL_MONTHLY_EXPR + " AS total_monthly_price, " +
                 TOTAL_ANNUAL_MONTHLY_EXPR + " AS total_annual_monthly_price, " +
                 TOTAL_ANNUAL_MONTHLY_EXPR + " * 12 AS total_annual_price, " +
-                MODULE_COUNT_EXPR + " AS module_count " +
+                MODULE_COUNT_EXPR + " AS module_count, " +
+                "p.billing_type, " +
+                MODULES_DETAIL_JSON_EXPR + " AS modules_json " +
                 "FROM plans p " +
                 "LEFT JOIN tenant_subscriptions ts " +
                 "  ON ts.plan_id = p.id AND ts.status IN ('trial', 'active', 'past_due') " +
@@ -202,6 +234,8 @@ public class PlanService {
             m.put("total_annual_monthly_price", row[18]);
             m.put("total_annual_price", row[19]);
             m.put("module_count", ((Number) row[20]).intValue());
+            m.put("billing_type", row[21]);
+            m.put("modules_json", row[22]);
             return m;
         }).collect(Collectors.toList());
     }
