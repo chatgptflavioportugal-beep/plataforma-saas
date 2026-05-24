@@ -628,9 +628,9 @@ export function PlansPage() {
     mutationFn: async () => {
       const payload = {
         modules: selectedList.map(({ module, plan, isAnnual }) => ({
-          moduleId: module.module_id,
-          planVersionId: plan.plan_version_id,
-          billingCycle: isAnnual ? 'ANNUAL' : 'MONTHLY',
+          module_id: module.module_id,
+          plan_version_id: plan.plan_version_id,
+          billing_cycle: isAnnual ? 'ANNUAL' : 'MONTHLY',
         })),
       }
       await api.post('/api/v1/subscriptions/modules', payload)
