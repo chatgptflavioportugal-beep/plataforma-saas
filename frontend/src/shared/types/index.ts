@@ -207,3 +207,25 @@ export interface InvitationPreview {
   expires_at: string
   tenant_name: string
 }
+
+export interface ProfileModuleSubscription {
+  id: string
+  profileId: string
+  profileType: 'INDIVIDUAL' | 'COMPANY'
+  moduleId: string
+  moduleName: string
+  moduleIconPath: string | null
+  planVersionId: string
+  planId: string
+  planName: string
+  planVersion: number
+  billingCycle: 'MONTHLY' | 'ANNUAL'
+  /** Preço mensal do plano para este módulo */
+  monthlyPrice: number
+  /** Preço mensal equivalente no ciclo anual (total anual = annualMonthlyPrice × 12) */
+  annualMonthlyPrice: number
+  status: 'ACTIVE' | 'PENDING_PAYMENT' | 'CANCELED' | 'EXPIRED'
+  startedAt: string
+  expiresAt: string | null
+  canceledAt: string | null
+}

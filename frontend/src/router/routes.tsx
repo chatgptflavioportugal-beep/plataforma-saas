@@ -16,6 +16,7 @@ import { AppLayout } from '@/shared/layouts/AppLayout'
 import { DashboardPage } from '@/app/client/DashboardPage'
 import { PdfMergePage } from '@/modules/pdf/PdfMergePage'
 import { PlansPage } from '@/app/client/billing/PlansPage'
+import { SubscriptionsPage } from '@/app/client/billing/SubscriptionsPage'
 import { TrialExpiredPage } from '@/app/client/billing/TrialExpiredPage'
 import { FeatureLockedPage } from '@/app/client/billing/FeatureLockedPage'
 import { SettingsPage } from '@/app/client/SettingsPage'
@@ -73,6 +74,7 @@ export function AppRouter() {
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="pdf/merge" element={<PdfMergePage />} />
             <Route path="billing/plans" element={<PlansPage />} />
+            <Route path="billing/subscriptions" element={<SubscriptionsPage />} />
             <Route path="billing/trial-expired" element={<TrialExpiredPage />} />
             <Route path="billing/feature-locked" element={<FeatureLockedPage />} />
             <Route path="settings" element={<SettingsPage />} />

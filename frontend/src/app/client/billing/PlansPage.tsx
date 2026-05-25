@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { api } from '@/shared/services/api'
 import { Button } from '@/shared/components/Button'
+import { Spinner } from '@/shared/components/Spinner'
 import { useTenant } from '@/core/workspaces/TenantContext'
 import type { ModuleBillingOption, ModulePlan, ModuleService } from '@/shared/types'
 
@@ -29,6 +31,8 @@ function brl(value: number) {
 function planAnnualTotal(plan: ModulePlan): number {
   return plan.annual_total_price > 0 ? plan.annual_total_price : plan.annual_monthly_price * 12
 }
+
+type SubscribeState = 'idle' | 'success' | 'error'
 
 type SelectedConfig = {
   module: ModuleBillingOption
@@ -327,7 +331,6 @@ type ConfirmModalProps = {
   selected: SelectedConfig[]
   profileName: string
   profileType: 'individual' | 'business'
-  isLoading: boolean
   onConfirm: () => void
   onClose: () => void
 }
@@ -336,7 +339,6 @@ function ConfirmSubscriptionModal({
   selected,
   profileName,
   profileType,
-  isLoading,
   onConfirm,
   onClose,
 }: ConfirmModalProps) {
@@ -350,7 +352,7 @@ function ConfirmSubscriptionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={!isLoading ? onClose : undefined} />
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="border-b border-gray-100 px-6 py-5 shrink-0">
@@ -442,21 +444,106 @@ function ConfirmSubscriptionModal({
 
         {/* Footer */}
         <div className="border-t border-gray-100 px-6 py-4 flex gap-3 shrink-0">
-          <Button
-            variant="secondary"
-            className="flex-1"
-            onClick={onClose}
-            disabled={isLoading}
-          >
+          <Button variant="secondary" className="flex-1" onClick={onClose}>
             Cancelar
           </Button>
-          <Button
-            variant="primary"
-            className="flex-1"
-            onClick={onConfirm}
-            disabled={isLoading}
-          >
-            {isLoading ? 'Confirmando...' : 'Confirmar assinatura'}
+          <Button variant="primary" className="flex-1" onClick={onConfirm}>
+            Confirmar assinatura
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Processing Modal (Ajuste 1) ──────────────────────────────────────────────
+
+function ProcessingModal() {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60" />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm px-8 py-10 flex flex-col items-center gap-5 text-center">
+        <Spinner size="lg" />
+        <div>
+          <p className="text-base font-bold text-gray-900">Processando sua assinatura...</p>
+          <p className="mt-1.5 text-sm text-gray-500 leading-relaxed">
+            Aguarde enquanto vinculamos os módulos ao seu perfil.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Subscribe Success Modal (Ajuste 2) ───────────────────────────────────────
+
+type SubscribeSuccessModalProps = {
+  onContinue: () => void
+}
+
+function SubscribeSuccessModal({ onContinue }: SubscribeSuccessModalProps) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm px-8 py-10 flex flex-col items-center gap-5 text-center">
+        {/* Ícone de sucesso */}
+        <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+          <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+
+        <div>
+          <p className="text-lg font-bold text-gray-900">Assinatura realizada com sucesso!</p>
+          <p className="mt-2 text-sm text-gray-500 leading-relaxed">
+            Os módulos selecionados foram vinculados ao perfil atual.
+            <br />
+            Você será direcionado para a tela de Assinaturas.
+          </p>
+        </div>
+
+        <Button variant="primary" className="w-full" onClick={onContinue}>
+          Ver minhas assinaturas
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Subscribe Error Modal (Ajuste 3) ─────────────────────────────────────────
+
+type SubscribeErrorModalProps = {
+  onRetry: () => void
+  onClose: () => void
+}
+
+function SubscribeErrorModal({ onRetry, onClose }: SubscribeErrorModalProps) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm px-8 py-10 flex flex-col items-center gap-5 text-center">
+        {/* Ícone de erro */}
+        <div className="h-16 w-16 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+          <svg className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+        </div>
+
+        <div>
+          <p className="text-lg font-bold text-gray-900">Não foi possível concluir sua assinatura</p>
+          <p className="mt-2 text-sm text-gray-500 leading-relaxed">
+            Tivemos um problema ao processar sua solicitação.
+            <br />
+            Verifique sua conexão e tente novamente.
+          </p>
+        </div>
+
+        <div className="flex gap-3 w-full">
+          <Button variant="secondary" className="flex-1" onClick={onClose}>
+            Fechar
+          </Button>
+          <Button variant="primary" className="flex-1" onClick={onRetry}>
+            Tentar novamente
           </Button>
         </div>
       </div>
@@ -601,9 +688,12 @@ function ConfigPanel({ selected, onRemove, onConfirm }: ConfigPanelProps) {
 
 export function PlansPage() {
   const { currentTenant } = useTenant()
+  const navigate    = useNavigate()
+  const queryClient = useQueryClient()
   const [modalModule, setModalModule] = useState<ModuleBillingOption | null>(null)
   const [configuration, setConfiguration] = useState<Record<string, SelectedConfig>>({})
   const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [subscribeState, setSubscribeState] = useState<SubscribeState>('idle')
 
   const profileName = currentTenant?.tenant.name ?? 'Seu perfil'
   const profileType = currentTenant?.tenant.type ?? 'individual'
@@ -636,8 +726,12 @@ export function PlansPage() {
       await api.post('/api/v1/subscriptions/modules', payload)
     },
     onSuccess: () => {
-      setShowConfirmModal(false)
       setConfiguration({})
+      setSubscribeState('success')
+    },
+    onError: (err) => {
+      console.error('[PlansPage] Erro ao confirmar assinatura:', err)
+      setSubscribeState('error')
     },
   })
 
@@ -652,6 +746,18 @@ export function PlansPage() {
       delete next[moduleId]
       return next
     })
+  }
+
+  // Fecha o modal de confirmação e inicia o processamento
+  function handleConfirmSubscription() {
+    setShowConfirmModal(false)
+    confirmMutation.mutate()
+  }
+
+  // Retry: volta ao estado idle e tenta novamente
+  function handleRetry() {
+    setSubscribeState('idle')
+    confirmMutation.mutate()
   }
 
   const selectedList = Object.values(configuration)
@@ -720,15 +826,37 @@ export function PlansPage() {
         />
       )}
 
-      {/* Confirmation modal */}
-      {showConfirmModal && (
+      {/* Modal de confirmação — oculto durante processamento */}
+      {showConfirmModal && !confirmMutation.isPending && subscribeState === 'idle' && (
         <ConfirmSubscriptionModal
           selected={selectedList}
           profileName={profileName}
           profileType={profileType}
-          isLoading={confirmMutation.isPending}
-          onConfirm={() => confirmMutation.mutate()}
+          onConfirm={handleConfirmSubscription}
           onClose={() => setShowConfirmModal(false)}
+        />
+      )}
+
+      {/* Ajuste 1 — Modal de processamento */}
+      {confirmMutation.isPending && <ProcessingModal />}
+
+      {/* Ajuste 2 — Modal de sucesso */}
+      {subscribeState === 'success' && (
+        <SubscribeSuccessModal
+          onContinue={() => {
+            setSubscribeState('idle')
+            // Invalida o cache de assinaturas para garantir dados atualizados na próxima tela
+            queryClient.invalidateQueries({ queryKey: ['profile-subscriptions'] })
+            navigate('/app/billing/subscriptions', { state: { justSubscribed: true } })
+          }}
+        />
+      )}
+
+      {/* Ajuste 3 — Modal de erro */}
+      {subscribeState === 'error' && (
+        <SubscribeErrorModal
+          onRetry={handleRetry}
+          onClose={() => setSubscribeState('idle')}
         />
       )}
     </div>
