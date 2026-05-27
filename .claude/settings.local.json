@@ -19,7 +19,8 @@
       "PowerShell(Get-ChildItem -Path \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\backend-quarkus\\\\src\\\\main\\\\java\\\\com\\\\saas\\\\entity\" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -match \"\\(plan|plano|modul|subscription|assinatura\\)\" })",
       "PowerShell(Get-ChildItem -Path \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\backend-quarkus\\\\src\\\\main\\\\java\\\\com\\\\saas\" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -match \"resource|Resource\" } | Select-Object FullName)",
       "PowerShell(Get-ChildItem -Path \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\frontend\\\\src\" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -match \"\\(profile|perfil\\)\" })",
-      "PowerShell(Head -20)"
+      "PowerShell(Head -20)",
+      "Bash(Select-Object Name)"
     ]
   }
 }

@@ -470,47 +470,230 @@ public class AdminResource {
     }
 
     // ----------------------------------------------------------------
-    // Assinaturas
+    // Assinaturas por perfil e módulo
     // ----------------------------------------------------------------
+
+    @GET
+    @Path("/subscriptions/summary")
+    public Response getSubscriptionsSummary() {
+        ensureSuperAdmin();
+        Object[] row = (Object[]) em.createNativeQuery(
+            "SELECT COUNT(*)::bigint, " +
+            "COUNT(*) FILTER (WHERE status = 'ACTIVE')::bigint, " +
+            "COUNT(*) FILTER (WHERE billing_cycle = 'MONTHLY')::bigint, " +
+            "COUNT(*) FILTER (WHERE billing_cycle = 'ANNUAL')::bigint, " +
+            "COUNT(*) FILTER (WHERE status = 'CANCELED')::bigint, " +
+            "COUNT(*) FILTER (WHERE status = 'EXPIRED')::bigint, " +
+            "COUNT(*) FILTER (WHERE status = 'PENDING_PAYMENT')::bigint " +
+            "FROM profile_module_subscriptions"
+        ).getSingleResult();
+        Map<String, Object> m = new java.util.LinkedHashMap<>();
+        m.put("total",          ((Number) row[0]).longValue());
+        m.put("active",         ((Number) row[1]).longValue());
+        m.put("monthly",        ((Number) row[2]).longValue());
+        m.put("annual",         ((Number) row[3]).longValue());
+        m.put("canceled",       ((Number) row[4]).longValue());
+        m.put("expired",        ((Number) row[5]).longValue());
+        m.put("pendingPayment", ((Number) row[6]).longValue());
+        return Response.ok(m).build();
+    }
 
     @GET
     @Path("/subscriptions")
     @SuppressWarnings("unchecked")
-    public Response listSubscriptions() {
+    public Response listSubscriptions(
+            @QueryParam("search")        String search,
+            @QueryParam("profileType")   String profileType,
+            @QueryParam("profileId")     String profileId,
+            @QueryParam("companyId")     String companyId,
+            @QueryParam("userId")        String userId,
+            @QueryParam("moduleId")      String moduleId,
+            @QueryParam("planId")        String planId,
+            @QueryParam("billingCycle")  String billingCycle,
+            @QueryParam("status")        String status,
+            @QueryParam("startDateFrom") String startDateFrom,
+            @QueryParam("startDateTo")   String startDateTo,
+            @QueryParam("expiresIn")     String expiresIn,
+            @QueryParam("renewalStatus") String renewalStatus,
+            @QueryParam("page")          @DefaultValue("0") int page,
+            @QueryParam("size")          @DefaultValue("20") int size
+    ) {
         ensureSuperAdmin();
-        List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
-                "SELECT ts.id::text, t.name AS tenant_name, t.slug, " +
-                "p.name AS plan_name, p.code AS plan_code, " +
-                "ts.status, ts.billing_type, ts.plan_version, " +
-                "ts.trial_start::text, ts.trial_end::text, " +
-                "ts.current_period_start::text, ts.current_period_end::text, " +
-                "ts.contracted_price_monthly, ts.contracted_price_annual, " +
-                "ts.created_at::text " +
-                "FROM tenant_subscriptions ts " +
-                "JOIN tenants t ON t.id = ts.tenant_id " +
-                "JOIN plans p ON p.id = ts.plan_id " +
-                "ORDER BY ts.created_at DESC"
-        ).getResultList();
-        var subs = rows.stream().map(row -> {
+
+        int safeSize   = Math.min(Math.max(size, 1), 100);
+        int safeOffset = Math.max(page, 0) * safeSize;
+
+        StringBuilder sql = new StringBuilder(
+            "SELECT pms.id::text, " +
+            "t.id::text, t.name, t.type, " +
+            "CASE WHEN t.type = 'business' THEN t.id::text ELSE NULL END, " +
+            "CASE WHEN t.type = 'business' THEN t.name ELSE NULL END, " +
+            "CASE WHEN t.type = 'business' THEN t.slug ELSE NULL END, " +
+            "up.id::text, up.full_name, au.email, " +
+            "pm.id::text, pm.name, pm.icon_path, " +
+            "p.id::text, p.name, pvm.id::text, p.version, " +
+            "pms.billing_cycle, " +
+            "CASE WHEN pms.billing_cycle = 'MONTHLY' THEN pvm.monthly_price ELSE pvm.annual_monthly_price * 12 END, " +
+            "CASE WHEN pms.billing_cycle = 'ANNUAL' THEN pvm.annual_monthly_price * 12 ELSE NULL END, " +
+            "pms.status, pms.started_at::text, pms.expires_at::text, pms.canceled_at::text, " +
+            "(pms.status = 'ACTIVE'), COUNT(*) OVER() " +
+            "FROM profile_module_subscriptions pms " +
+            "JOIN tenants t ON t.id = pms.tenant_id " +
+            "JOIN platform_modules pm ON pm.id = pms.module_id " +
+            "JOIN plan_version_modules pvm ON pvm.id = pms.plan_version_id " +
+            "JOIN plans p ON p.id = pvm.plan_id " +
+            "LEFT JOIN user_tenants ut ON ut.tenant_id = t.id AND ut.role = 'owner' AND ut.is_active = TRUE " +
+            "LEFT JOIN user_profiles up ON up.id = ut.user_id " +
+            "LEFT JOIN auth.users au ON au.id = ut.user_id " +
+            "WHERE 1=1"
+        );
+
+        Map<String, Object> params = new java.util.LinkedHashMap<>();
+
+        if (search != null && !search.isBlank()) {
+            sql.append(" AND (LOWER(t.name) LIKE LOWER(:search)" +
+                       " OR LOWER(pm.name) LIKE LOWER(:search)" +
+                       " OR LOWER(p.name) LIKE LOWER(:search)" +
+                       " OR LOWER(COALESCE(up.full_name,'')) LIKE LOWER(:search)" +
+                       " OR LOWER(COALESCE(au.email,'')) LIKE LOWER(:search))");
+            params.put("search", "%" + search.trim() + "%");
+        }
+        if (profileType != null && !profileType.isBlank()) {
+            sql.append("INDIVIDUAL".equalsIgnoreCase(profileType.trim())
+                ? " AND t.type = 'individual'"
+                : " AND t.type = 'business'");
+        }
+        if (profileId != null && !profileId.isBlank()) {
+            sql.append(" AND t.id::text = :profileId");
+            params.put("profileId", profileId.trim());
+        }
+        if (companyId != null && !companyId.isBlank()) {
+            sql.append(" AND t.id::text = :companyId AND t.type = 'business'");
+            params.put("companyId", companyId.trim());
+        }
+        if (userId != null && !userId.isBlank()) {
+            sql.append(" AND (up.id::text = :userId OR LOWER(COALESCE(au.email,'')) LIKE LOWER(:userSearch))");
+            params.put("userId", userId.trim());
+            params.put("userSearch", "%" + userId.trim() + "%");
+        }
+        if (moduleId != null && !moduleId.isBlank()) {
+            sql.append(" AND pm.id::text = :moduleId");
+            params.put("moduleId", moduleId.trim());
+        }
+        if (planId != null && !planId.isBlank()) {
+            sql.append(" AND p.id::text = :planId");
+            params.put("planId", planId.trim());
+        }
+        if (billingCycle != null && !billingCycle.isBlank()) {
+            sql.append(" AND pms.billing_cycle = :billingCycle");
+            params.put("billingCycle", billingCycle.toUpperCase().trim());
+        }
+        if (status != null && !status.isBlank()) {
+            sql.append(" AND pms.status = :status");
+            params.put("status", status.toUpperCase().trim());
+        }
+        if (startDateFrom != null && !startDateFrom.isBlank()) {
+            sql.append(" AND pms.started_at >= CAST(:startDateFrom AS TIMESTAMPTZ)");
+            params.put("startDateFrom", startDateFrom.trim());
+        }
+        if (startDateTo != null && !startDateTo.isBlank()) {
+            sql.append(" AND pms.started_at <= CAST(:startDateTo AS TIMESTAMPTZ)");
+            params.put("startDateTo", startDateTo.trim());
+        }
+        if (expiresIn != null && !expiresIn.isBlank()) {
+            switch (expiresIn.trim().toLowerCase()) {
+                case "7"       -> sql.append(" AND pms.expires_at BETWEEN NOW() AND NOW() + INTERVAL '7 days'");
+                case "15"      -> sql.append(" AND pms.expires_at BETWEEN NOW() AND NOW() + INTERVAL '15 days'");
+                case "30"      -> sql.append(" AND pms.expires_at BETWEEN NOW() AND NOW() + INTERVAL '30 days'");
+                case "overdue" -> sql.append(" AND pms.expires_at < NOW()");
+                case "none"    -> sql.append(" AND pms.expires_at IS NULL");
+                default        -> {}
+            }
+        }
+        if (renewalStatus != null && !renewalStatus.isBlank()) {
+            if ("active".equalsIgnoreCase(renewalStatus.trim())) {
+                sql.append(" AND pms.status = 'ACTIVE'");
+            } else if ("canceled".equalsIgnoreCase(renewalStatus.trim())) {
+                sql.append(" AND pms.status IN ('CANCELED','EXPIRED')");
+            }
+        }
+
+        sql.append(" ORDER BY pms.started_at DESC LIMIT :size OFFSET :offset");
+        params.put("size",   safeSize);
+        params.put("offset", safeOffset);
+
+        var query = em.createNativeQuery(sql.toString());
+        params.forEach(query::setParameter);
+        List<Object[]> rows = (List<Object[]>) query.getResultList();
+
+        long totalCount = rows.isEmpty() ? 0L : ((Number) rows.get(0)[25]).longValue();
+
+        var items = rows.stream().map(row -> {
             Map<String, Object> m = new java.util.LinkedHashMap<>();
-            m.put("id", row[0]);
-            m.put("tenant_name", row[1]);
-            m.put("slug", row[2]);
-            m.put("plan_name", row[3]);
-            m.put("plan_code", row[4]);
-            m.put("status", row[5]);
-            m.put("billing_type", row[6]);
-            m.put("plan_version", row[7]);
-            m.put("trial_start", row[8]);
-            m.put("trial_end", row[9]);
-            m.put("current_period_start", row[10]);
-            m.put("current_period_end", row[11]);
-            m.put("contracted_price_monthly", row[12]);
-            m.put("contracted_price_annual", row[13]);
-            m.put("created_at", row[14]);
+            m.put("id",                row[0]);
+            m.put("profileId",         row[1]);
+            m.put("profileName",       row[2]);
+            m.put("profileType",       "business".equals(row[3]) ? "COMPANY" : "INDIVIDUAL");
+            m.put("companyId",         row[4]);
+            m.put("companyName",       row[5]);
+            m.put("companySlug",       row[6]);
+            m.put("ownerUserId",       row[7]);
+            m.put("ownerName",         row[8]);
+            m.put("ownerEmail",        row[9]);
+            m.put("moduleId",          row[10]);
+            m.put("moduleName",        row[11]);
+            m.put("moduleIconPath",    row[12]);
+            m.put("planId",            row[13]);
+            m.put("planName",          row[14]);
+            m.put("planVersionId",     row[15]);
+            m.put("planVersionNumber", row[16]);
+            m.put("billingCycle",      row[17]);
+            m.put("price",             row[18]);
+            m.put("annualTotalPrice",  row[19]);
+            m.put("status",            row[20]);
+            m.put("startedAt",         row[21]);
+            m.put("expiresAt",         row[22]);
+            m.put("canceledAt",        row[23]);
+            m.put("renewalActive",     row[24]);
             return m;
         }).toList();
-        return Response.ok(subs).build();
+
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("items", items);
+        result.put("total", totalCount);
+        result.put("page",  page);
+        result.put("size",  safeSize);
+        return Response.ok(result).build();
+    }
+
+    @POST
+    @Path("/subscriptions/{id}/cancel")
+    @Transactional
+    public Response adminCancelSubscription(@PathParam("id") String id) {
+        ensureSuperAdmin();
+        int updated = em.createNativeQuery(
+            "UPDATE profile_module_subscriptions " +
+            "SET status = 'CANCELED', canceled_at = NOW(), updated_at = NOW() " +
+            "WHERE id::text = :id AND status = 'ACTIVE'"
+        ).setParameter("id", id).executeUpdate();
+        if (updated == 0)
+            return Response.status(404).entity(Map.of("error", "Assinatura não encontrada ou já cancelada")).build();
+        return Response.ok(Map.of("success", true, "id", id, "status", "CANCELED")).build();
+    }
+
+    @POST
+    @Path("/subscriptions/{id}/reactivate")
+    @Transactional
+    public Response adminReactivateSubscription(@PathParam("id") String id) {
+        ensureSuperAdmin();
+        int updated = em.createNativeQuery(
+            "UPDATE profile_module_subscriptions " +
+            "SET status = 'ACTIVE', canceled_at = NULL, updated_at = NOW() " +
+            "WHERE id::text = :id AND status = 'CANCELED' AND (expires_at IS NULL OR expires_at > NOW())"
+        ).setParameter("id", id).executeUpdate();
+        if (updated == 0)
+            return Response.status(404).entity(Map.of("error", "Assinatura não encontrada, não está cancelada ou já expirou")).build();
+        return Response.ok(Map.of("success", true, "id", id, "status", "ACTIVE")).build();
     }
 
     // ----------------------------------------------------------------
