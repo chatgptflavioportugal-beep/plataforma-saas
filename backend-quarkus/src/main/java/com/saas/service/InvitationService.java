@@ -7,6 +7,9 @@ import jakarta.transaction.Transactional;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.util.List;
@@ -137,7 +140,7 @@ public class InvitationService {
         }
 
         @SuppressWarnings("unchecked")
-        var alRows = (List<Object[]>) em.createNativeQuery(
+        var alRows = (List<Object>) em.createNativeQuery(
                 "SELECT name FROM profile_access_levels " +
                 "WHERE id = :alId AND tenant_id = :tenantId AND status = 'ACTIVE'"
         ).setParameter("alId", alId).setParameter("tenantId", tenantId).getResultList();
@@ -145,7 +148,7 @@ public class InvitationService {
         if (alRows.isEmpty()) {
             throw new BadRequestException("Nível de acesso inválido ou inativo");
         }
-        String accessLevelName = (String) alRows.get(0)[0];
+        String accessLevelName = (String) alRows.get(0);
 
         // Verificar se já é membro ativo
         long isMember = ((Number) em.createNativeQuery(
@@ -197,9 +200,9 @@ public class InvitationService {
         String invitationId = (String) result[0];
         String token = (String) result[1];
         String expiresAt = (String) result[2];
-        String inviteLink = baseUrl + "/invite/accept?token=" + token;
 
-        emailService.sendInvitationEmail(normalizedEmail, tenantName, accessLevelName, inviteLink);
+        emailService.sendInvitationEmail(normalizedEmail, tenantName, accessLevelName,
+                baseUrl + "/invite/accept?token=" + token);
 
         Map<String, Object> m = new java.util.LinkedHashMap<>();
         m.put("id", invitationId);
@@ -207,7 +210,6 @@ public class InvitationService {
         m.put("access_level_id", alId.toString());
         m.put("access_level_name", accessLevelName);
         m.put("expires_at", expiresAt);
-        m.put("invite_link", inviteLink);
         return m;
     }
 
@@ -255,12 +257,41 @@ public class InvitationService {
 
     // ----------------------------------------------------------------
     // Aceitar convite (requer usuário autenticado)
-    // Delega para função PostgreSQL SECURITY DEFINER
+    // Valida e-mail do usuário antes de delegar para função PostgreSQL SECURITY DEFINER
     // ----------------------------------------------------------------
 
     @SuppressWarnings("unchecked")
     @Transactional
-    public Map<String, Object> acceptInvitation(String token, UUID userId) {
+    public Map<String, Object> acceptInvitation(String token, UUID userId, String userEmail) {
+        // Buscar e-mail e status do convite pelo token
+        var invRows = (List<Object>) em.createNativeQuery(
+                "SELECT email FROM invitations WHERE token = :token AND status = 'pending' AND expires_at > NOW()"
+        ).setParameter("token", token).getResultList();
+
+        if (invRows.isEmpty()) {
+            // Verificar se existe mas está expirado/cancelado
+            long exists = ((Number) em.createNativeQuery(
+                    "SELECT COUNT(*) FROM invitations WHERE token = :token"
+            ).setParameter("token", token).getSingleResult()).longValue();
+            if (exists == 0) throw new NotFoundException("Convite não encontrado");
+            throw new BadRequestException("Convite inválido, expirado ou já utilizado");
+        }
+
+        String inviteEmail = (String) invRows.get(0);
+        String normalizedUserEmail = userEmail != null ? userEmail.trim().toLowerCase() : "";
+
+        if (!inviteEmail.equalsIgnoreCase(normalizedUserEmail)) {
+            throw new WebApplicationException(Response
+                    .status(Response.Status.FORBIDDEN)
+                    .entity(Map.of(
+                            "error", "wrong_email",
+                            "invitation_email", inviteEmail,
+                            "user_email", normalizedUserEmail
+                    ))
+                    .type(MediaType.APPLICATION_JSON)
+                    .build());
+        }
+
         var result = em.createNativeQuery(
                 "SELECT accept_invitation(:token, :userId)"
         ).setParameter("token", token).setParameter("userId", userId).getSingleResult();

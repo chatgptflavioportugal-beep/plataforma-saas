@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { supabase } from '@/core/auth/supabase'
 import { Button } from '@/shared/components/Button'
@@ -24,6 +24,8 @@ interface RegisterForm {
 }
 
 export function RegisterPage() {
+  const [searchParams] = useSearchParams()
+  const returnUrl = searchParams.get('returnUrl') ?? ''
   const [serverError, setServerError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
@@ -32,19 +34,28 @@ export function RegisterPage() {
 
   async function signUpWithGoogle() {
     setGoogleLoading(true)
+    if (returnUrl) sessionStorage.setItem('auth_return_url', returnUrl)
+    const callbackUrl = returnUrl
+      ? `${window.location.origin}/auth/callback?returnUrl=${encodeURIComponent(returnUrl)}`
+      : `${window.location.origin}/auth/callback`
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: callbackUrl },
     })
   }
 
   async function onSubmit(data: RegisterForm) {
     setServerError(null)
+    if (returnUrl) sessionStorage.setItem('auth_return_url', returnUrl)
+    const emailRedirectTo = returnUrl
+      ? `${window.location.origin}/auth/callback?returnUrl=${encodeURIComponent(returnUrl)}`
+      : `${window.location.origin}/auth/callback`
     const { error } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
       options: {
         data: { full_name: data.full_name },
+        emailRedirectTo,
       },
     })
     if (error) {
@@ -54,6 +65,8 @@ export function RegisterPage() {
     setSuccess(true)
   }
 
+  const loginUrl = returnUrl ? `/login?returnUrl=${encodeURIComponent(returnUrl)}` : '/login'
+
   if (success) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
@@ -61,9 +74,9 @@ export function RegisterPage() {
           <div className="text-5xl">✉️</div>
           <h2 className="text-2xl font-bold text-gray-900">Verifique seu email</h2>
           <p className="text-gray-500">
-            Enviamos um link de confirmação. Após confirmar, você pode fazer login e criar sua empresa.
+            Enviamos um link de confirmação. Após confirmar, você será redirecionado automaticamente.
           </p>
-          <Link to="/login" className="block font-medium text-primary-600 hover:underline">
+          <Link to={loginUrl} className="block font-medium text-primary-600 hover:underline">
             Ir para login
           </Link>
         </div>

@@ -41,12 +41,26 @@ function PermissionTree({
   selectedServiceIds: Set<string>
   onChange: (next: Set<string>) => void
 }) {
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
+
   if (availableModules.length === 0) {
     return (
       <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-6 text-center text-sm text-gray-400">
         Nenhum módulo contratado. Assine um módulo para configurar permissões.
       </div>
     )
+  }
+
+  function toggleExpand(moduleId: string) {
+    setExpandedModules((prev) => {
+      const next = new Set(prev)
+      if (next.has(moduleId)) {
+        next.delete(moduleId)
+      } else {
+        next.add(moduleId)
+      }
+      return next
+    })
   }
 
   function toggleModule(mod: AvailableModule) {
@@ -72,36 +86,58 @@ function PermissionTree({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {availableModules.map((mod) => {
         const ids = mod.services.map((s) => s.serviceId)
         const selected = ids.filter((id) => selectedServiceIds.has(id)).length
         const allSelected = selected === ids.length && ids.length > 0
         const someSelected = selected > 0 && !allSelected
+        const isExpanded = expandedModules.has(mod.moduleId)
 
         return (
           <div key={mod.moduleId} className="rounded-lg border border-gray-200 overflow-hidden">
-            {/* Linha do módulo */}
-            <label className="flex items-center gap-3 px-4 py-3 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
+            {/* Cabeçalho do módulo */}
+            <div className="flex items-center gap-2 px-3 py-3 bg-gray-50 hover:bg-gray-100 transition-colors">
               <ModuleCheckbox
                 checked={allSelected}
                 indeterminate={someSelected}
                 onChange={() => toggleModule(mod)}
               />
-              <div className="flex-1">
+              <button
+                type="button"
+                onClick={() => toggleExpand(mod.moduleId)}
+                className="flex items-center gap-2 flex-1 text-left min-w-0"
+              >
+                <svg
+                  className={`h-3.5 w-3.5 text-gray-400 flex-shrink-0 transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                </svg>
                 <span className="text-sm font-semibold text-gray-800">{mod.moduleName}</span>
-                <span className="ml-2 text-xs text-gray-400">
+                <span
+                  className={`text-xs ml-1 ${
+                    allSelected
+                      ? 'text-green-600 font-medium'
+                      : someSelected
+                        ? 'text-primary-600 font-medium'
+                        : 'text-gray-400'
+                  }`}
+                >
                   {selected}/{ids.length} serviço{ids.length !== 1 ? 's' : ''}
                 </span>
-              </div>
-            </label>
+              </button>
+            </div>
 
-            {/* Serviços do módulo */}
-            {mod.services.length > 0 && (
-              <ul className="divide-y divide-gray-100">
+            {/* Serviços (recolhíveis) */}
+            {isExpanded && mod.services.length > 0 && (
+              <ul className="border-t border-gray-100 divide-y divide-gray-50">
                 {mod.services.map((svc) => (
                   <li key={svc.serviceId}>
-                    <label className="flex items-center gap-3 px-4 py-2.5 pl-10 cursor-pointer hover:bg-gray-50 transition-colors">
+                    <label className="flex items-center gap-3 pl-9 pr-3 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors">
                       <input
                         type="checkbox"
                         checked={selectedServiceIds.has(svc.serviceId)}

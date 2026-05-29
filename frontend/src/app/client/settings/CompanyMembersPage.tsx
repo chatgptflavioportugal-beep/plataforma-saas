@@ -52,8 +52,7 @@ function InviteModal({
   const queryClient = useQueryClient()
   const [email, setEmail] = useState('')
   const [accessLevelId, setAccessLevelId] = useState('')
-  const [inviteLink, setInviteLink] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [sent, setSent] = useState(false)
 
   const { data: accessLevels = [], isLoading: loadingLevels } = useQuery({
     queryKey: ['access-levels', tenantId],
@@ -67,41 +66,28 @@ function InviteModal({
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const { data } = await api.post(`/api/v1/tenants/${tenantId}/invitations`, {
-        email,
-        accessLevelId,
-      })
-      return data as { invite_link: string }
+      await api.post(`/api/v1/tenants/${tenantId}/invitations`, { email, accessLevelId })
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invitations', tenantId] })
-      setInviteLink(data.invite_link)
+      setSent(true)
     },
   })
 
-  async function handleCopy() {
-    if (!inviteLink) return
-    await navigator.clipboard.writeText(inviteLink)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  if (inviteLink) {
+  if (sent) {
     return (
       <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
-          <h3 className="text-lg font-semibold text-gray-900">Convite enviado!</h3>
-          <p className="text-sm text-gray-500">
-            O convite foi enviado para <strong>{email}</strong>. Você também pode compartilhar o link:
-          </p>
-          <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
-            <span className="flex-1 text-xs text-gray-600 truncate">{inviteLink}</span>
-            <button
-              onClick={handleCopy}
-              className="flex-shrink-0 text-xs font-medium text-primary-600 hover:text-primary-700"
-            >
-              {copied ? 'Copiado!' : 'Copiar'}
-            </button>
+          <div className="flex flex-col items-center gap-3 py-2">
+            <div className="h-12 w-12 rounded-full bg-green-50 flex items-center justify-center">
+              <svg className="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900">Convite enviado!</h3>
+            <p className="text-sm text-gray-500 text-center">
+              O convite foi enviado para <strong>{email}</strong>.
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -235,6 +221,7 @@ export function CompanyMembersPage() {
       return data
     },
     enabled: !!tenantId,
+    staleTime: 0,
   })
 
   const { data: invitations = [], isLoading: loadingInvitations } = useQuery({
@@ -244,6 +231,7 @@ export function CompanyMembersPage() {
       return data
     },
     enabled: !!tenantId && canManage,
+    staleTime: 0,
   })
 
   const removeMemberMutation = useMutation({

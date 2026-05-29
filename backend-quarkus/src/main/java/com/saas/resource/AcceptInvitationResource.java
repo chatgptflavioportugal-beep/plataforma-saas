@@ -29,7 +29,8 @@ public class AcceptInvitationResource {
     @POST
     public Response accept(@PathParam("token") String token) {
         UUID userId = UUID.fromString(jwt.getSubject());
-        var result = invitationService.acceptInvitation(token, userId);
+        String userEmail = jwt.getClaim("email");
+        var result = invitationService.acceptInvitation(token, userId, userEmail);
         return Response.ok(result).build();
     }
 }

@@ -18,7 +18,7 @@ function resolveAccessLabel(preview: { access_level_name: string | null; role: s
 export function AcceptInvitePage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { user, isLoading: authLoading } = useAuth()
+  const { user, isLoading: authLoading, signOut } = useAuth()
   const token = searchParams.get('token') ?? ''
 
   const [accepted, setAccepted] = useState(false)
@@ -53,6 +53,15 @@ export function AcceptInvitePage() {
     }
     window.location.href = '/app/dashboard'
   }
+
+  async function handleSignOutAndSwitch() {
+    await signOut()
+    navigate(`/login?returnUrl=${encodeURIComponent(window.location.pathname + window.location.search)}`)
+  }
+
+  const emailMismatch =
+    !!user && !!preview &&
+    user.email?.toLowerCase() !== preview.email.toLowerCase()
 
   if (!token) {
     return (
@@ -173,7 +182,7 @@ export function AcceptInvitePage() {
             </div>
           )}
 
-          {acceptMutation.isError && (
+          {acceptMutation.isError && !emailMismatch && (
             <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-700">
               {(acceptMutation.error as { response?: { data?: { error?: string } } })?.response?.data?.error
                 ?? 'Não foi possível aceitar o convite. Tente novamente.'}
@@ -183,7 +192,38 @@ export function AcceptInvitePage() {
           {/* Ações */}
           {!isExpiredOrCancelled && !isAlreadyAccepted && (
             <>
-              {user ? (
+              {user && emailMismatch ? (
+                <div className="space-y-3">
+                  <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 text-sm text-amber-800 space-y-2">
+                    <p className="font-medium">Este convite foi enviado para outro e-mail.</p>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between gap-2">
+                        <span className="text-amber-600">Convite enviado para:</span>
+                        <span className="font-semibold truncate">{preview?.email}</span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span className="text-amber-600">Você está conectado como:</span>
+                        <span className="font-semibold truncate">{user.email}</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-amber-700">
+                      Para aceitar este convite, saia e entre com o e-mail correto.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleSignOutAndSwitch}
+                    className="w-full rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 transition-colors"
+                  >
+                    Sair e entrar com outro e-mail
+                  </button>
+                  <button
+                    onClick={() => navigate('/app/dashboard')}
+                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Voltar
+                  </button>
+                </div>
+              ) : user ? (
                 <button
                   onClick={() => acceptMutation.mutate()}
                   disabled={acceptMutation.isPending}
@@ -194,19 +234,21 @@ export function AcceptInvitePage() {
               ) : (
                 <div className="space-y-2">
                   <p className="text-center text-xs text-gray-500">
-                    Faça login ou crie uma conta para aceitar o convite.
+                    Entre ou crie uma conta usando o e-mail{' '}
+                    <strong className="text-gray-700">{preview?.email}</strong>{' '}
+                    para aceitar o convite.
                   </p>
                   <button
                     onClick={() => navigate(`/login?returnUrl=${encodeURIComponent(window.location.pathname + window.location.search)}`)}
                     className="w-full rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 transition-colors"
                   >
-                    Fazer login
+                    Entrar ou criar conta
                   </button>
                   <button
                     onClick={() => navigate(`/register?returnUrl=${encodeURIComponent(window.location.pathname + window.location.search)}`)}
                     className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                   >
-                    Criar conta
+                    Criar conta nova
                   </button>
                 </div>
               )}

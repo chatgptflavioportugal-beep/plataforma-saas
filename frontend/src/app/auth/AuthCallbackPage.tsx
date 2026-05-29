@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/core/auth/AuthContext'
 
 export function AuthCallbackPage() {
   const { session, profile, isLoading } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   useEffect(() => {
     // Aguarda o AuthProvider terminar de carregar sessão + profile.
@@ -16,7 +17,11 @@ export function AuthCallbackPage() {
       return
     }
 
-    const returnUrl = sessionStorage.getItem('auth_return_url')
+    // returnUrl pode vir de: (1) query param (emailRedirectTo do Supabase) ou
+    // (2) sessionStorage (OAuth / fluxo na mesma aba)
+    const returnUrl =
+      searchParams.get('returnUrl') ||
+      sessionStorage.getItem('auth_return_url')
     if (returnUrl) {
       sessionStorage.removeItem('auth_return_url')
       navigate(returnUrl, { replace: true })
@@ -29,7 +34,7 @@ export function AuthCallbackPage() {
       ? '/admin/dashboard'
       : '/app/dashboard'
     navigate(destination, { replace: true })
-  }, [isLoading, session, navigate])
+  }, [isLoading, session, navigate, searchParams])
   // Nota: profile propositalmente fora das deps — isLoading=false já garante
   // que o profile está carregado. Incluir profile causaria dupla navegação.
 
