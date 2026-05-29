@@ -81,13 +81,16 @@ public class InvitationResource {
         ensureOwnerOrAdmin(tc);
 
         String email = body.get("email");
-        String role = body.getOrDefault("role", "member");
+        String accessLevelId = body.get("accessLevelId");
 
         if (email == null || email.isBlank()) {
             return Response.status(400).entity(Map.of("error", "E-mail é obrigatório")).build();
         }
+        if (accessLevelId == null || accessLevelId.isBlank()) {
+            return Response.status(400).entity(Map.of("error", "Nível de acesso é obrigatório")).build();
+        }
 
-        var result = invitationService.sendInvitation(tenantId, email, role, tc.getUserId());
+        var result = invitationService.sendInvitation(tenantId, email, accessLevelId, tc.getUserId());
         return Response.ok(result).build();
     }
 

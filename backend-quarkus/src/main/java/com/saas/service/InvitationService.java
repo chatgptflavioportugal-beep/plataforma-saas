@@ -32,10 +32,12 @@ public class InvitationService {
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> listMembers(UUID tenantId) {
         var rows = (List<Object[]>) em.createNativeQuery(
-                "SELECT ut.user_id::text, up.full_name, au.email, ut.role, ut.created_at::text " +
+                "SELECT ut.user_id::text, up.full_name, au.email, ut.role, ut.created_at::text, " +
+                "       ut.access_level_id::text, pal.name AS access_level_name " +
                 "FROM user_tenants ut " +
                 "LEFT JOIN user_profiles up ON up.id = ut.user_id " +
                 "LEFT JOIN auth.users au ON au.id = ut.user_id " +
+                "LEFT JOIN profile_access_levels pal ON pal.id = ut.access_level_id " +
                 "WHERE ut.tenant_id = :tenantId AND ut.is_active = TRUE " +
                 "ORDER BY ut.created_at ASC"
         ).setParameter("tenantId", tenantId).getResultList();
@@ -47,6 +49,8 @@ public class InvitationService {
             m.put("email", row[2]);
             m.put("role", row[3]);
             m.put("joined_at", row[4]);
+            m.put("access_level_id", row[5]);
+            m.put("access_level_name", row[6]);
             return m;
         }).collect(java.util.stream.Collectors.toList());
     }
@@ -94,8 +98,10 @@ public class InvitationService {
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> listInvitations(UUID tenantId) {
         var rows = (List<Object[]>) em.createNativeQuery(
-                "SELECT i.id::text, i.email, i.role, i.status, i.expires_at::text, i.created_at::text " +
+                "SELECT i.id::text, i.email, i.role, i.status, i.expires_at::text, i.created_at::text, " +
+                "       i.access_level_id::text, pal.name AS access_level_name " +
                 "FROM invitations i " +
+                "LEFT JOIN profile_access_levels pal ON pal.id = i.access_level_id " +
                 "WHERE i.tenant_id = :tenantId " +
                 "ORDER BY i.created_at DESC"
         ).setParameter("tenantId", tenantId).getResultList();
@@ -108,24 +114,40 @@ public class InvitationService {
             m.put("status", row[3]);
             m.put("expires_at", row[4]);
             m.put("created_at", row[5]);
+            m.put("access_level_id", row[6]);
+            m.put("access_level_name", row[7]);
             return m;
         }).collect(java.util.stream.Collectors.toList());
     }
 
     // ----------------------------------------------------------------
-    // Enviar convite
+    // Enviar convite com Nível de Acesso
     // ----------------------------------------------------------------
 
     @Transactional
-    public Map<String, Object> sendInvitation(UUID tenantId, String email, String role, UUID invitedBy) {
+    public Map<String, Object> sendInvitation(UUID tenantId, String email, String accessLevelId, UUID invitedBy) {
         String normalizedEmail = email.trim().toLowerCase();
 
-        // Validar role
-        if (!List.of("admin", "member", "finance").contains(role)) {
-            throw new BadRequestException("Role inválido: " + role);
+        // Validar e resolver o nível de acesso
+        UUID alId;
+        try {
+            alId = UUID.fromString(accessLevelId);
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("ID de nível de acesso inválido");
         }
 
-        // Verificar se já é membro ativo (COUNT pode retornar Long ou BigInteger)
+        @SuppressWarnings("unchecked")
+        var alRows = (List<Object[]>) em.createNativeQuery(
+                "SELECT name FROM profile_access_levels " +
+                "WHERE id = :alId AND tenant_id = :tenantId AND status = 'ACTIVE'"
+        ).setParameter("alId", alId).setParameter("tenantId", tenantId).getResultList();
+
+        if (alRows.isEmpty()) {
+            throw new BadRequestException("Nível de acesso inválido ou inativo");
+        }
+        String accessLevelName = (String) alRows.get(0)[0];
+
+        // Verificar se já é membro ativo
         long isMember = ((Number) em.createNativeQuery(
                 "SELECT COUNT(*) FROM user_tenants ut " +
                 "JOIN auth.users au ON au.id = ut.user_id " +
@@ -151,18 +173,18 @@ public class InvitationService {
                 "SELECT name FROM tenants WHERE id = :tenantId"
         ).setParameter("tenantId", tenantId).getSingleResult();
 
-        // Criar convite (token gerado pelo DEFAULT da tabela)
+        // Criar convite — role = 'member' (padrão para todos os convidados)
         em.createNativeQuery(
-                "INSERT INTO invitations (tenant_id, invited_by, email, role) " +
-                "VALUES (:tenantId, :invitedBy, :email, :role)"
+                "INSERT INTO invitations (tenant_id, invited_by, email, role, access_level_id) " +
+                "VALUES (:tenantId, :invitedBy, :email, 'member', :alId)"
         )
         .setParameter("tenantId", tenantId)
         .setParameter("invitedBy", invitedBy)
         .setParameter("email", normalizedEmail)
-        .setParameter("role", role)
+        .setParameter("alId", alId)
         .executeUpdate();
 
-        // Buscar o convite recem-criado
+        // Buscar o convite recém-criado
         var result = (Object[]) em.createNativeQuery(
                 "SELECT id::text, token, expires_at::text FROM invitations " +
                 "WHERE tenant_id = :tenantId AND email = :email AND status = 'pending' " +
@@ -177,13 +199,13 @@ public class InvitationService {
         String expiresAt = (String) result[2];
         String inviteLink = baseUrl + "/invite/accept?token=" + token;
 
-        // Enviar e-mail (loga o link mesmo que o envio falhe)
-        emailService.sendInvitationEmail(normalizedEmail, tenantName, role, inviteLink);
+        emailService.sendInvitationEmail(normalizedEmail, tenantName, accessLevelName, inviteLink);
 
         Map<String, Object> m = new java.util.LinkedHashMap<>();
         m.put("id", invitationId);
         m.put("email", normalizedEmail);
-        m.put("role", role);
+        m.put("access_level_id", alId.toString());
+        m.put("access_level_name", accessLevelName);
         m.put("expires_at", expiresAt);
         m.put("invite_link", inviteLink);
         return m;
@@ -210,8 +232,11 @@ public class InvitationService {
     @SuppressWarnings("unchecked")
     public Map<String, Object> getInvitationPreview(String token) {
         var rows = (List<Object[]>) em.createNativeQuery(
-                "SELECT i.email, i.role, i.status, i.expires_at::text, t.name as tenant_name " +
-                "FROM invitations i JOIN tenants t ON t.id = i.tenant_id " +
+                "SELECT i.email, i.role, i.status, i.expires_at::text, t.name AS tenant_name, " +
+                "       pal.name AS access_level_name " +
+                "FROM invitations i " +
+                "JOIN tenants t ON t.id = i.tenant_id " +
+                "LEFT JOIN profile_access_levels pal ON pal.id = i.access_level_id " +
                 "WHERE i.token = :token"
         ).setParameter("token", token).getResultList();
 
@@ -224,6 +249,7 @@ public class InvitationService {
         m.put("status", row[2]);
         m.put("expires_at", row[3]);
         m.put("tenant_name", row[4]);
+        m.put("access_level_name", row[5]);
         return m;
     }
 

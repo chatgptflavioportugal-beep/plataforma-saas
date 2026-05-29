@@ -20,7 +20,10 @@
       "PowerShell(Get-ChildItem -Path \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\backend-quarkus\\\\src\\\\main\\\\java\\\\com\\\\saas\" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -match \"resource|Resource\" } | Select-Object FullName)",
       "PowerShell(Get-ChildItem -Path \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\frontend\\\\src\" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -match \"\\(profile|perfil\\)\" })",
       "PowerShell(Head -20)",
-      "Bash(Select-Object Name)"
+      "Bash(Select-Object Name)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\" -Force | Select-Object Name, @{Name=\"Type\"; Expression={if \\($_.PSIsContainer\\) {\"Dir\"} else {\"File\"}}} | Format-Table -AutoSize)",
+      "Bash(ls -la /c/desenvolupadora/sistema/saas-plataforma/backend-quarkus/src/main/java/com/saas/entity/ 2>/dev/null || find /c/desenvolvimento/sistema/saas-plataforma/backend-quarkus -name \"*.java\" -path \"*/entity/*\" | head -20)",
+      "Read(//c/desenvolupadora/sistema/saas-plataforma/backend-quarkus/src/main/java/com/saas/**)"
     ]
   }
 }

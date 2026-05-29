@@ -53,25 +53,47 @@ export function SettingsPage() {
       </div>
 
       {canManageMembers && (
-        <div className="rounded-xl bg-white border border-gray-100 p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold text-gray-900">Membros da empresa</h2>
-              <p className="text-sm text-gray-500 mt-0.5">
-                Gerencie quem tem acesso a esta empresa.
-              </p>
+        <>
+          <div className="rounded-xl bg-white border border-gray-100 p-6 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-gray-900">Membros da empresa</h2>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Gerencie quem tem acesso a esta empresa.
+                </p>
+              </div>
+              <Link
+                to="/app/settings/members"
+                className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
+              >
+                Gerenciar
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
             </div>
-            <Link
-              to="/app/settings/members"
-              className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
-            >
-              Gerenciar
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
           </div>
-        </div>
+
+          <div className="rounded-xl bg-white border border-gray-100 p-6 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-gray-900">Níveis de Acesso</h2>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Configure as permissões disponíveis para os membros.
+                </p>
+              </div>
+              <Link
+                to="/app/settings/access-levels"
+                className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Gerenciar
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
+            </div>
+          </div>
+        </>
       )}
     </div>
   )

@@ -11,6 +11,10 @@ const ROLE_LABELS: Record<string, string> = {
   finance: 'Financeiro',
 }
 
+function resolveAccessLabel(preview: { access_level_name: string | null; role: string }): string {
+  return preview.access_level_name ?? ROLE_LABELS[preview.role] ?? preview.role
+}
+
 export function AcceptInvitePage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -146,8 +150,8 @@ export function AcceptInvitePage() {
                 <span className="font-semibold text-gray-900">{preview.tenant_name}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">Papel</span>
-                <span className="font-medium text-gray-800">{ROLE_LABELS[preview.role] ?? preview.role}</span>
+                <span className="text-gray-500">Nível de Acesso</span>
+                <span className="font-medium text-gray-800">{resolveAccessLabel(preview)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Enviado para</span>

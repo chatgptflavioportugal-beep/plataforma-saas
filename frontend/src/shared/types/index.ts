@@ -188,6 +188,8 @@ export interface CompanyMember {
   full_name: string | null
   email: string | null
   role: 'owner' | 'admin' | 'member' | 'finance'
+  access_level_id: string | null
+  access_level_name: string | null
   joined_at: string
 }
 
@@ -195,6 +197,8 @@ export interface Invitation {
   id: string
   email: string
   role: 'admin' | 'member' | 'finance'
+  access_level_id: string | null
+  access_level_name: string | null
   status: 'pending' | 'accepted' | 'expired' | 'cancelled'
   expires_at: string
   created_at: string
@@ -203,9 +207,42 @@ export interface Invitation {
 export interface InvitationPreview {
   email: string
   role: string
+  access_level_name: string | null
   status: 'pending' | 'accepted' | 'expired' | 'cancelled'
   expires_at: string
   tenant_name: string
+}
+
+export interface AccessLevelPermission {
+  id: string
+  moduleId: string
+  serviceId: string
+}
+
+export interface AccessLevel {
+  id: string
+  name: string
+  description: string | null
+  status: 'ACTIVE' | 'INACTIVE'
+  createdAt: string
+  updatedAt: string
+  permissions: AccessLevelPermission[]
+  memberCount: number
+}
+
+export interface AvailableService {
+  serviceId: string
+  serviceName: string
+  serviceSlug: string
+  serviceIconPath: string | null
+}
+
+export interface AvailableModule {
+  moduleId: string
+  moduleName: string
+  moduleSlug: string
+  moduleIconPath: string | null
+  services: AvailableService[]
 }
 
 export interface ProfileModuleSubscription {

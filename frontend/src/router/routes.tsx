@@ -21,6 +21,7 @@ import { TrialExpiredPage } from '@/app/client/billing/TrialExpiredPage'
 import { FeatureLockedPage } from '@/app/client/billing/FeatureLockedPage'
 import { SettingsPage } from '@/app/client/SettingsPage'
 import { CompanyMembersPage } from '@/app/client/settings/CompanyMembersPage'
+import { AccessLevelsPage } from '@/app/client/settings/AccessLevelsPage'
 
 import { AdminLayout } from '@/shared/layouts/AdminLayout'
 import { AdminDashboardPage } from '@/app/admin/AdminDashboardPage'
@@ -79,6 +80,7 @@ export function AppRouter() {
             <Route path="billing/feature-locked" element={<FeatureLockedPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="settings/members" element={<CompanyMembersPage />} />
+            <Route path="settings/access-levels" element={<AccessLevelsPage />} />
           </Route>
 
           {/* /admin — área administrativa (SUPER_ADMIN) */}

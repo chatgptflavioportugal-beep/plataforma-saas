@@ -14,15 +14,9 @@ public class EmailService {
     @Inject
     Mailer mailer;
 
-    public void sendInvitationEmail(String to, String tenantName, String role, String inviteLink) {
-        String roleLabel = switch (role) {
-            case "admin" -> "Administrador";
-            case "finance" -> "Financeiro";
-            default -> "Membro";
-        };
-
+    public void sendInvitationEmail(String to, String tenantName, String accessLevelName, String inviteLink) {
         String subject = "Você foi convidado para " + tenantName;
-        String html = buildInvitationEmailHtml(tenantName, roleLabel, inviteLink);
+        String html = buildInvitationEmailHtml(tenantName, accessLevelName, inviteLink);
 
         LOG.infof("Convite enviado para %s | tenant=%s | link=%s", to, tenantName, inviteLink);
 
@@ -35,7 +29,7 @@ public class EmailService {
         }
     }
 
-    private String buildInvitationEmailHtml(String tenantName, String roleLabel, String inviteLink) {
+    private String buildInvitationEmailHtml(String tenantName, String accessLevelName, String inviteLink) {
         return """
                 <!DOCTYPE html>
                 <html>
@@ -45,7 +39,7 @@ public class EmailService {
                     <h2 style="color: #111827; margin-top: 0;">Você foi convidado!</h2>
                     <p style="color: #6b7280;">
                       Você foi convidado para participar de <strong style="color: #111827;">%s</strong>
-                      como <strong style="color: #111827;">%s</strong>.
+                      com nível de acesso <strong style="color: #111827;">%s</strong>.
                     </p>
                     <a href="%s"
                        style="display: inline-block; margin-top: 16px; padding: 12px 24px;
@@ -60,6 +54,6 @@ public class EmailService {
                   </div>
                 </body>
                 </html>
-                """.formatted(tenantName, roleLabel, inviteLink);
+                """.formatted(tenantName, accessLevelName, inviteLink);
     }
 }
