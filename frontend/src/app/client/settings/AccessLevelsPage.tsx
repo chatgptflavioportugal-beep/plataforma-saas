@@ -3,11 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/shared/services/api'
 import { useTenant } from '@/core/workspaces/TenantContext'
-import type { AccessLevel, AvailableModule } from '@/shared/types'
+import type { AccessLevel, AvailableModule, AdminPermissionGroup, PermissionTreeResponse } from '@/shared/types'
 
-// ─── Árvore de permissões ──────────────────────────────────────────────────────
+// ─── Checkbox com estado indeterminado ────────────────────────────────────────
 
-function ModuleCheckbox({
+function TreeCheckbox({
   checked,
   indeterminate,
   onChange,
@@ -32,7 +32,9 @@ function ModuleCheckbox({
   )
 }
 
-function PermissionTree({
+// ─── Árvore de módulos contratados ────────────────────────────────────────────
+
+function ModulesPermissionTree({
   availableModules,
   selectedServiceIds,
   onChange,
@@ -45,7 +47,7 @@ function PermissionTree({
 
   if (availableModules.length === 0) {
     return (
-      <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-6 text-center text-sm text-gray-400">
+      <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-5 text-center text-sm text-gray-400">
         Nenhum módulo contratado. Assine um módulo para configurar permissões.
       </div>
     )
@@ -54,11 +56,7 @@ function PermissionTree({
   function toggleExpand(moduleId: string) {
     setExpandedModules((prev) => {
       const next = new Set(prev)
-      if (next.has(moduleId)) {
-        next.delete(moduleId)
-      } else {
-        next.add(moduleId)
-      }
+      next.has(moduleId) ? next.delete(moduleId) : next.add(moduleId)
       return next
     })
   }
@@ -67,21 +65,13 @@ function PermissionTree({
     const ids = mod.services.map((s) => s.serviceId)
     const allSelected = ids.every((id) => selectedServiceIds.has(id))
     const next = new Set(selectedServiceIds)
-    if (allSelected) {
-      ids.forEach((id) => next.delete(id))
-    } else {
-      ids.forEach((id) => next.add(id))
-    }
+    allSelected ? ids.forEach((id) => next.delete(id)) : ids.forEach((id) => next.add(id))
     onChange(next)
   }
 
   function toggleService(serviceId: string) {
     const next = new Set(selectedServiceIds)
-    if (next.has(serviceId)) {
-      next.delete(serviceId)
-    } else {
-      next.add(serviceId)
-    }
+    next.has(serviceId) ? next.delete(serviceId) : next.add(serviceId)
     onChange(next)
   }
 
@@ -96,9 +86,8 @@ function PermissionTree({
 
         return (
           <div key={mod.moduleId} className="rounded-lg border border-gray-200 overflow-hidden">
-            {/* Cabeçalho do módulo */}
             <div className="flex items-center gap-2 px-3 py-3 bg-gray-50 hover:bg-gray-100 transition-colors">
-              <ModuleCheckbox
+              <TreeCheckbox
                 checked={allSelected}
                 indeterminate={someSelected}
                 onChange={() => toggleModule(mod)}
@@ -132,7 +121,6 @@ function PermissionTree({
               </button>
             </div>
 
-            {/* Serviços (recolhíveis) */}
             {isExpanded && mod.services.length > 0 && (
               <ul className="border-t border-gray-100 divide-y divide-gray-50">
                 {mod.services.map((svc) => (
@@ -157,17 +145,124 @@ function PermissionTree({
   )
 }
 
+// ─── Seção de permissões administrativas ──────────────────────────────────────
+
+function AdminPermissionsSection({
+  adminGroups,
+  selectedKeys,
+  onChange,
+}: {
+  adminGroups: AdminPermissionGroup[]
+  selectedKeys: Set<string>
+  onChange: (next: Set<string>) => void
+}) {
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+
+  function toggleExpand(groupKey: string) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev)
+      next.has(groupKey) ? next.delete(groupKey) : next.add(groupKey)
+      return next
+    })
+  }
+
+  function toggleGroup(group: AdminPermissionGroup) {
+    const keys = group.permissions.map((p) => p.permissionKey)
+    const allSelected = keys.every((k) => selectedKeys.has(k))
+    const next = new Set(selectedKeys)
+    allSelected ? keys.forEach((k) => next.delete(k)) : keys.forEach((k) => next.add(k))
+    onChange(next)
+  }
+
+  function togglePermission(key: string) {
+    const next = new Set(selectedKeys)
+    next.has(key) ? next.delete(key) : next.add(key)
+    onChange(next)
+  }
+
+  return (
+    <div className="space-y-2">
+      {adminGroups.map((group) => {
+        const keys = group.permissions.map((p) => p.permissionKey)
+        const selected = keys.filter((k) => selectedKeys.has(k)).length
+        const allSelected = selected === keys.length && keys.length > 0
+        const someSelected = selected > 0 && !allSelected
+        const isExpanded = expandedGroups.has(group.groupKey)
+
+        return (
+          <div key={group.groupKey} className="rounded-lg border border-indigo-100 overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-3 bg-indigo-50/60 hover:bg-indigo-50 transition-colors">
+              <TreeCheckbox
+                checked={allSelected}
+                indeterminate={someSelected}
+                onChange={() => toggleGroup(group)}
+              />
+              <button
+                type="button"
+                onClick={() => toggleExpand(group.groupKey)}
+                className="flex items-center gap-2 flex-1 text-left min-w-0"
+              >
+                <svg
+                  className={`h-3.5 w-3.5 text-indigo-400 flex-shrink-0 transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                </svg>
+                <span className="text-sm font-semibold text-gray-800">{group.groupName}</span>
+                <span
+                  className={`text-xs ml-1 ${
+                    allSelected
+                      ? 'text-green-600 font-medium'
+                      : someSelected
+                        ? 'text-indigo-600 font-medium'
+                        : 'text-gray-400'
+                  }`}
+                >
+                  {selected}/{keys.length}
+                </span>
+              </button>
+            </div>
+
+            {isExpanded && (
+              <ul className="border-t border-indigo-50 divide-y divide-indigo-50/50">
+                {group.permissions.map((perm) => (
+                  <li key={perm.permissionKey}>
+                    <label className="flex items-center gap-3 pl-9 pr-3 py-2.5 cursor-pointer hover:bg-indigo-50/30 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={selectedKeys.has(perm.permissionKey)}
+                        onChange={() => togglePermission(perm.permissionKey)}
+                        className="h-4 w-4 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      />
+                      <span className="text-sm text-gray-700">{perm.label}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Modal criar/editar ────────────────────────────────────────────────────────
 
 function AccessLevelModal({
   tenantId,
   level,
   availableModules,
+  adminPermissions,
   onClose,
 }: {
   tenantId: string
   level: AccessLevel | null
   availableModules: AvailableModule[]
+  adminPermissions: AdminPermissionGroup[]
   onClose: () => void
 }) {
   const queryClient = useQueryClient()
@@ -175,6 +270,9 @@ function AccessLevelModal({
   const [description, setDescription] = useState(level?.description ?? '')
   const [selectedServiceIds, setSelectedServiceIds] = useState<Set<string>>(
     () => new Set(level?.permissions.map((p) => p.serviceId) ?? [])
+  )
+  const [selectedAdminKeys, setSelectedAdminKeys] = useState<Set<string>>(
+    () => new Set(level?.adminPermissions ?? [])
   )
 
   const isEdit = !!level
@@ -185,6 +283,7 @@ function AccessLevelModal({
         name: name.trim(),
         description: description.trim() || null,
         serviceIds: Array.from(selectedServiceIds),
+        adminPermissionKeys: Array.from(selectedAdminKeys),
       }
       if (isEdit) {
         await api.put(`/api/v1/tenants/${tenantId}/access-levels/${level!.id}`, body)
@@ -217,7 +316,7 @@ function AccessLevelModal({
           </button>
         </div>
 
-        <div className="px-6 space-y-4">
+        <div className="px-6 space-y-5">
           {/* Nome */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
@@ -246,17 +345,36 @@ function AccessLevelModal({
             />
           </div>
 
-          {/* Permissões */}
+          {/* Permissões — Módulos contratados */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Permissões</label>
-            <p className="text-xs text-gray-500 mb-3">
-              Selecione quais módulos e serviços este nível de acesso pode utilizar.
-              Apenas módulos com assinatura ativa são exibidos.
+            <label className="block text-sm font-medium text-gray-700 mb-1">Permissões</label>
+
+            <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wide">
+              Módulos contratados
             </p>
-            <PermissionTree
+            <ModulesPermissionTree
               availableModules={availableModules}
               selectedServiceIds={selectedServiceIds}
               onChange={setSelectedServiceIds}
+            />
+          </div>
+
+          {/* Separador */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 border-t border-gray-200" />
+            <span className="text-xs text-gray-400 font-medium">Administração do Perfil</span>
+            <div className="flex-1 border-t border-gray-200" />
+          </div>
+
+          {/* Permissões — Administrativas */}
+          <div>
+            <p className="text-xs text-gray-500 mb-3">
+              Controle o acesso a telas e ações administrativas do perfil empresarial.
+            </p>
+            <AdminPermissionsSection
+              adminGroups={adminPermissions}
+              selectedKeys={selectedAdminKeys}
+              onChange={setSelectedAdminKeys}
             />
           </div>
 
@@ -301,7 +419,9 @@ function AccessLevelCard({
 }) {
   const moduleCount = new Set(level.permissions.map((p) => p.moduleId)).size
   const serviceCount = level.permissions.length
+  const adminPermCount = level.adminPermissions?.length ?? 0
   const isActive = level.status === 'ACTIVE'
+  const hasPermissions = serviceCount > 0 || adminPermCount > 0
 
   return (
     <div className="flex items-start gap-4 px-6 py-5">
@@ -321,14 +441,24 @@ function AccessLevelCard({
           <p className="text-xs text-gray-500 mt-0.5 truncate">{level.description}</p>
         )}
 
-        <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-400">
-          {serviceCount > 0 ? (
-            <span>
-              {serviceCount} serviço{serviceCount !== 1 ? 's' : ''} em{' '}
-              {moduleCount} módulo{moduleCount !== 1 ? 's' : ''}
-            </span>
-          ) : (
+        <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-400 flex-wrap">
+          {!hasPermissions ? (
             <span className="text-amber-500">Sem permissões configuradas</span>
+          ) : (
+            <>
+              {serviceCount > 0 && (
+                <span>
+                  {serviceCount} serviço{serviceCount !== 1 ? 's' : ''} em{' '}
+                  {moduleCount} módulo{moduleCount !== 1 ? 's' : ''}
+                </span>
+              )}
+              {serviceCount > 0 && adminPermCount > 0 && <span>·</span>}
+              {adminPermCount > 0 && (
+                <span>
+                  {adminPermCount} perm. adm.
+                </span>
+              )}
+            </>
           )}
           {level.memberCount > 0 && (
             <span>
@@ -386,16 +516,19 @@ export function AccessLevelsPage() {
     enabled: !!tenantId,
   })
 
-  const { data: availableModules = [] } = useQuery({
-    queryKey: ['access-levels-modules', tenantId],
+  const { data: permissionTree } = useQuery({
+    queryKey: ['access-levels-tree', tenantId],
     queryFn: async () => {
-      const { data } = await api.get<AvailableModule[]>(
+      const { data } = await api.get<PermissionTreeResponse>(
         `/api/v1/tenants/${tenantId}/access-levels/available-modules`
       )
       return data
     },
     enabled: !!tenantId && canManage,
   })
+
+  const availableModules = permissionTree?.modules ?? []
+  const adminPermissions = permissionTree?.adminPermissions ?? []
 
   const toggleStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: 'ACTIVE' | 'INACTIVE' }) => {
@@ -439,6 +572,7 @@ export function AccessLevelsPage() {
           tenantId={tenantId}
           level={editingLevel}
           availableModules={availableModules}
+          adminPermissions={adminPermissions}
           onClose={() => setShowModal(false)}
         />
       )}
@@ -491,7 +625,7 @@ export function AccessLevelsPage() {
             <div>
               <p className="text-sm font-medium text-gray-900">Nenhum nível de acesso cadastrado</p>
               <p className="text-sm text-gray-500 mt-1">
-                Crie níveis de acesso para definir quais módulos e serviços cada membro poderá utilizar.
+                Crie níveis de acesso para definir quais módulos, serviços e permissões administrativas cada membro poderá utilizar.
               </p>
             </div>
           </div>

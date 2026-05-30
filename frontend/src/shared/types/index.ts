@@ -219,6 +219,17 @@ export interface AccessLevelPermission {
   serviceId: string
 }
 
+export interface AdminPermission {
+  permissionKey: string
+  label: string
+}
+
+export interface AdminPermissionGroup {
+  groupKey: string
+  groupName: string
+  permissions: AdminPermission[]
+}
+
 export interface AccessLevel {
   id: string
   name: string
@@ -227,6 +238,7 @@ export interface AccessLevel {
   createdAt: string
   updatedAt: string
   permissions: AccessLevelPermission[]
+  adminPermissions: string[]
   memberCount: number
 }
 
@@ -243,6 +255,11 @@ export interface AvailableModule {
   moduleSlug: string
   moduleIconPath: string | null
   services: AvailableService[]
+}
+
+export interface PermissionTreeResponse {
+  modules: AvailableModule[]
+  adminPermissions: AdminPermissionGroup[]
 }
 
 export interface ProfileModuleSubscription {

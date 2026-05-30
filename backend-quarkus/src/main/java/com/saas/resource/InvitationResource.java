@@ -5,6 +5,7 @@ import com.saas.service.InvitationService;
 import com.saas.service.TenantService;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
@@ -27,6 +28,9 @@ public class InvitationResource {
     @Inject
     TenantService tenantService;
 
+    @Inject
+    EntityManager em;
+
     // ─── Perfil do tenant ────────────────────────────────────────────────────
 
     @GET
@@ -47,6 +51,7 @@ public class InvitationResource {
     public Response listMembers(@PathParam("tenantId") UUID tenantId,
                                 @Context SecurityContext ctx) {
         TenantContext tc = resolveAndCheckAccess(ctx, tenantId);
+        requireAdminPerm(tc, tenantId, "members.view");
         return Response.ok(invitationService.listMembers(tenantId)).build();
     }
 
@@ -56,7 +61,7 @@ public class InvitationResource {
                                  @PathParam("userId") UUID targetUserId,
                                  @Context SecurityContext ctx) {
         TenantContext tc = resolveAndCheckAccess(ctx, tenantId);
-        ensureOwnerOrAdmin(tc);
+        requireAdminPerm(tc, tenantId, "members.remove");
         invitationService.removeMember(tenantId, targetUserId, tc.getUserId(), tc.getUserRole());
         return Response.noContent().build();
     }
@@ -68,7 +73,7 @@ public class InvitationResource {
     public Response listInvitations(@PathParam("tenantId") UUID tenantId,
                                     @Context SecurityContext ctx) {
         TenantContext tc = resolveAndCheckAccess(ctx, tenantId);
-        ensureOwnerOrAdmin(tc);
+        requireAdminPerm(tc, tenantId, "invites.view");
         return Response.ok(invitationService.listInvitations(tenantId)).build();
     }
 
@@ -78,7 +83,7 @@ public class InvitationResource {
                                    Map<String, String> body,
                                    @Context SecurityContext ctx) {
         TenantContext tc = resolveAndCheckAccess(ctx, tenantId);
-        ensureOwnerOrAdmin(tc);
+        requireAdminPerm(tc, tenantId, "members.invite");
 
         String email = body.get("email");
         String accessLevelId = body.get("accessLevelId");
@@ -100,12 +105,33 @@ public class InvitationResource {
                                      @PathParam("invId") UUID invId,
                                      @Context SecurityContext ctx) {
         TenantContext tc = resolveAndCheckAccess(ctx, tenantId);
-        ensureOwnerOrAdmin(tc);
+        requireAdminPerm(tc, tenantId, "invites.cancel");
         invitationService.cancelInvitation(tenantId, invId);
         return Response.noContent().build();
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    private boolean hasAdminPerm(TenantContext tc, UUID tenantId, String permKey) {
+        if (List.of("owner", "admin").contains(tc.getUserRole())) return true;
+        long count = ((Number) em.createNativeQuery(
+            "SELECT COUNT(*) FROM profile_access_level_admin_permissions ap " +
+            "JOIN user_tenants ut ON ut.access_level_id = ap.access_level_id " +
+            "WHERE ut.user_id = :userId AND ut.tenant_id = :tenantId " +
+            "  AND ut.is_active = TRUE AND ap.permission_key = :permKey"
+        )
+        .setParameter("userId", tc.getUserId())
+        .setParameter("tenantId", tenantId)
+        .setParameter("permKey", permKey)
+        .getSingleResult()).longValue();
+        return count > 0;
+    }
+
+    private void requireAdminPerm(TenantContext tc, UUID tenantId, String permKey) {
+        if (!hasAdminPerm(tc, tenantId, permKey)) {
+            throw new ForbiddenException("Permissão necessária: " + permKey);
+        }
+    }
 
     private TenantContext resolveAndCheckAccess(SecurityContext ctx, UUID tenantId) {
         TenantContext tc = TenantContext.from(ctx);
@@ -113,11 +139,5 @@ public class InvitationResource {
             throw new ForbiddenException("Acesso negado ao tenant");
         }
         return tc;
-    }
-
-    private void ensureOwnerOrAdmin(TenantContext tc) {
-        if (!List.of("owner", "admin").contains(tc.getUserRole())) {
-            throw new ForbiddenException("Apenas proprietários e administradores podem gerenciar membros e convites");
-        }
     }
 }

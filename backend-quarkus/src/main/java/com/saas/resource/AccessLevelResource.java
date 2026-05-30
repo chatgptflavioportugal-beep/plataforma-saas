@@ -23,8 +23,83 @@ public class AccessLevelResource {
     @Inject
     EntityManager em;
 
+    // ─── Permissões administrativas fixas do sistema ──────────────────────────
 
-    // ─── GET /available-modules — módulos+serviços com assinatura ativa ────────
+    private static final List<Map<String, Object>> ADMIN_PERMISSION_GROUPS = buildAdminGroups();
+    private static final Set<String> ALL_ADMIN_PERMISSION_KEYS = buildAllAdminKeys();
+
+    private static List<Map<String, Object>> buildAdminGroups() {
+        return List.of(
+            adminGroup("members", "Membros", List.of(
+                adminPerm("members.view", "Visualizar membros"),
+                adminPerm("members.invite", "Convidar membros"),
+                adminPerm("members.remove", "Remover membros"),
+                adminPerm("members.change_access_level", "Alterar nível de acesso de membros")
+            )),
+            adminGroup("access_levels", "Níveis de Acesso", List.of(
+                adminPerm("access_levels.view", "Visualizar níveis de acesso"),
+                adminPerm("access_levels.create", "Criar nível de acesso"),
+                adminPerm("access_levels.edit", "Editar nível de acesso"),
+                adminPerm("access_levels.inactivate", "Inativar nível de acesso"),
+                adminPerm("access_levels.delete", "Excluir nível de acesso")
+            )),
+            adminGroup("plans", "Planos", List.of(
+                adminPerm("plans.view", "Visualizar planos disponíveis"),
+                adminPerm("plans.subscribe", "Contratar módulos/planos")
+            )),
+            adminGroup("subscriptions", "Assinaturas", List.of(
+                adminPerm("subscriptions.view", "Visualizar assinaturas"),
+                adminPerm("subscriptions.cancel", "Cancelar assinatura"),
+                adminPerm("subscriptions.reactivate", "Reativar assinatura")
+            )),
+            adminGroup("company_settings", "Configurações da Empresa", List.of(
+                adminPerm("company_settings.view", "Visualizar configurações da empresa"),
+                adminPerm("company_settings.edit", "Editar dados da empresa")
+            )),
+            adminGroup("dashboard", "Dashboard", List.of(
+                adminPerm("dashboard.view", "Visualizar dashboard")
+            )),
+            adminGroup("invites", "Convites", List.of(
+                adminPerm("invites.view", "Visualizar convites"),
+                adminPerm("invites.cancel", "Cancelar convites"),
+                adminPerm("invites.resend", "Reenviar convites")
+            )),
+            adminGroup("billing", "Faturamento", List.of(
+                adminPerm("billing.view", "Visualizar faturamento"),
+                adminPerm("billing.payment_methods.manage", "Gerenciar formas de pagamento"),
+                adminPerm("billing.payment_history.view", "Visualizar histórico de pagamentos")
+            ))
+        );
+    }
+
+    private static Set<String> buildAllAdminKeys() {
+        Set<String> keys = new HashSet<>();
+        for (Map<String, Object> group : ADMIN_PERMISSION_GROUPS) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> perms = (List<Map<String, Object>>) group.get("permissions");
+            for (Map<String, Object> perm : perms) {
+                keys.add((String) perm.get("permissionKey"));
+            }
+        }
+        return Set.copyOf(keys);
+    }
+
+    private static Map<String, Object> adminGroup(String key, String name, List<Map<String, Object>> perms) {
+        Map<String, Object> g = new LinkedHashMap<>();
+        g.put("groupKey", key);
+        g.put("groupName", name);
+        g.put("permissions", perms);
+        return g;
+    }
+
+    private static Map<String, Object> adminPerm(String key, String label) {
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("permissionKey", key);
+        p.put("label", label);
+        return p;
+    }
+
+    // ─── GET /available-modules — árvore completa (módulos + permissões adm.) ──
 
     @GET
     @Path("/available-modules")
@@ -46,17 +121,17 @@ public class AccessLevelResource {
             "ORDER BY pm.sort_order, pms.sort_order"
         ).setParameter("tenantId", tenantId).getResultList();
 
-        Map<String, Map<String, Object>> modules = new LinkedHashMap<>();
+        Map<String, Map<String, Object>> moduleMap = new LinkedHashMap<>();
         for (Object[] row : rows) {
             String moduleId = (String) row[0];
-            if (!modules.containsKey(moduleId)) {
+            if (!moduleMap.containsKey(moduleId)) {
                 Map<String, Object> mod = new LinkedHashMap<>();
                 mod.put("moduleId", moduleId);
                 mod.put("moduleName", row[1]);
                 mod.put("moduleSlug", row[2]);
                 mod.put("moduleIconPath", row[3]);
                 mod.put("services", new ArrayList<Map<String, Object>>());
-                modules.put(moduleId, mod);
+                moduleMap.put(moduleId, mod);
             }
             Map<String, Object> svc = new LinkedHashMap<>();
             svc.put("serviceId", row[4]);
@@ -64,11 +139,15 @@ public class AccessLevelResource {
             svc.put("serviceSlug", row[6]);
             svc.put("serviceIconPath", row[7]);
             @SuppressWarnings("unchecked")
-            List<Map<String, Object>> services = (List<Map<String, Object>>) modules.get(moduleId).get("services");
+            List<Map<String, Object>> services = (List<Map<String, Object>>) moduleMap.get(moduleId).get("services");
             services.add(svc);
         }
 
-        return Response.ok(new ArrayList<>(modules.values())).build();
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("modules", new ArrayList<>(moduleMap.values()));
+        result.put("adminPermissions", ADMIN_PERMISSION_GROUPS);
+
+        return Response.ok(result).build();
     }
 
     // ─── GET / — listar níveis de acesso ─────────────────────────────────────
@@ -79,7 +158,8 @@ public class AccessLevelResource {
         @PathParam("tenantId") UUID tenantId,
         @Context SecurityContext ctx
     ) {
-        resolveAndCheckAccess(ctx, tenantId);
+        TenantContext tc = resolveAndCheckAccess(ctx, tenantId);
+        requireAdminPerm(tc, tenantId, "access_levels.view");
 
         List<Object[]> levels = (List<Object[]>) em.createNativeQuery(
             "SELECT id::text, name, description, status, created_at::text, updated_at::text " +
@@ -105,6 +185,11 @@ public class AccessLevelResource {
                 return pm;
             }).collect(Collectors.toList());
 
+            List<String> adminPerms = (List<String>) em.createNativeQuery(
+                "SELECT permission_key FROM profile_access_level_admin_permissions " +
+                "WHERE access_level_id = :levelId ORDER BY created_at"
+            ).setParameter("levelId", UUID.fromString(levelId)).getResultList();
+
             long memberCount = ((Number) em.createNativeQuery(
                 "SELECT COUNT(*) FROM user_tenants WHERE access_level_id = :levelId AND is_active = TRUE"
             ).setParameter("levelId", UUID.fromString(levelId)).getSingleResult()).longValue();
@@ -117,6 +202,7 @@ public class AccessLevelResource {
             m.put("createdAt", row[4]);
             m.put("updatedAt", row[5]);
             m.put("permissions", permissions);
+            m.put("adminPermissions", adminPerms);
             m.put("memberCount", memberCount);
             return m;
         }).collect(Collectors.toList());
@@ -135,7 +221,7 @@ public class AccessLevelResource {
         @Context SecurityContext ctx
     ) {
         TenantContext tc = resolveAndCheckAccess(ctx, tenantId);
-        ensureOwnerOrAdmin(tc);
+        requireAdminPerm(tc, tenantId, "access_levels.create");
 
         String name = body != null ? (String) body.get("name") : null;
         if (name == null || name.isBlank()) {
@@ -145,6 +231,7 @@ public class AccessLevelResource {
         Object rawDesc = body.get("description");
         String description = rawDesc != null ? rawDesc.toString().trim() : null;
         List<String> serviceIds = (List<String>) body.get("serviceIds");
+        List<String> adminPermissionKeys = (List<String>) body.get("adminPermissionKeys");
 
         em.createNativeQuery(
             "INSERT INTO profile_access_levels (tenant_id, name, description) " +
@@ -168,6 +255,14 @@ public class AccessLevelResource {
             }
         }
 
+        if (adminPermissionKeys != null && !adminPermissionKeys.isEmpty()) {
+            try {
+                insertAdminPermissions(UUID.fromString(levelId), adminPermissionKeys);
+            } catch (BadRequestException e) {
+                return Response.status(400).entity(Map.of("error", e.getMessage())).build();
+            }
+        }
+
         return Response.status(201).entity(Map.of("id", levelId)).build();
     }
 
@@ -184,7 +279,7 @@ public class AccessLevelResource {
         @Context SecurityContext ctx
     ) {
         TenantContext tc = resolveAndCheckAccess(ctx, tenantId);
-        ensureOwnerOrAdmin(tc);
+        requireAdminPerm(tc, tenantId, "access_levels.edit");
 
         String name = body != null ? (String) body.get("name") : null;
         if (name == null || name.isBlank()) {
@@ -194,6 +289,7 @@ public class AccessLevelResource {
         Object rawDesc = body.get("description");
         String description = rawDesc != null ? rawDesc.toString().trim() : null;
         List<String> serviceIds = (List<String>) body.get("serviceIds");
+        List<String> adminPermissionKeys = (List<String>) body.get("adminPermissionKeys");
 
         int updated = em.createNativeQuery(
             "UPDATE profile_access_levels " +
@@ -214,9 +310,21 @@ public class AccessLevelResource {
             "DELETE FROM profile_access_level_permissions WHERE access_level_id = :alId"
         ).setParameter("alId", alId).executeUpdate();
 
+        em.createNativeQuery(
+            "DELETE FROM profile_access_level_admin_permissions WHERE access_level_id = :alId"
+        ).setParameter("alId", alId).executeUpdate();
+
         if (serviceIds != null && !serviceIds.isEmpty()) {
             try {
                 insertPermissions(alId, tenantId, serviceIds);
+            } catch (BadRequestException e) {
+                return Response.status(400).entity(Map.of("error", e.getMessage())).build();
+            }
+        }
+
+        if (adminPermissionKeys != null && !adminPermissionKeys.isEmpty()) {
+            try {
+                insertAdminPermissions(alId, adminPermissionKeys);
             } catch (BadRequestException e) {
                 return Response.status(400).entity(Map.of("error", e.getMessage())).build();
             }
@@ -237,7 +345,7 @@ public class AccessLevelResource {
         @Context SecurityContext ctx
     ) {
         TenantContext tc = resolveAndCheckAccess(ctx, tenantId);
-        ensureOwnerOrAdmin(tc);
+        requireAdminPerm(tc, tenantId, "access_levels.inactivate");
 
         String status = body != null ? body.get("status") : null;
         if (!List.of("ACTIVE", "INACTIVE").contains(status)) {
@@ -272,7 +380,7 @@ public class AccessLevelResource {
         @Context SecurityContext ctx
     ) {
         TenantContext tc = resolveAndCheckAccess(ctx, tenantId);
-        ensureOwnerOrAdmin(tc);
+        requireAdminPerm(tc, tenantId, "access_levels.delete");
 
         long memberCount = ((Number) em.createNativeQuery(
             "SELECT COUNT(*) FROM user_tenants WHERE access_level_id = :alId AND is_active = TRUE"
@@ -294,7 +402,6 @@ public class AccessLevelResource {
             )).build();
         }
 
-        // Verifica que pertence ao tenant antes de excluir
         int deleted = em.createNativeQuery(
             "DELETE FROM profile_access_levels WHERE id = :alId AND tenant_id = :tenantId"
         )
@@ -349,17 +456,47 @@ public class AccessLevelResource {
         }
     }
 
+    private void insertAdminPermissions(UUID levelId, List<String> keys) {
+        for (String key : keys) {
+            if (!ALL_ADMIN_PERMISSION_KEYS.contains(key)) {
+                throw new BadRequestException("Permissão administrativa inválida: " + key);
+            }
+            em.createNativeQuery(
+                "INSERT INTO profile_access_level_admin_permissions (access_level_id, permission_key) " +
+                "VALUES (:levelId, :key) ON CONFLICT (access_level_id, permission_key) DO NOTHING"
+            )
+            .setParameter("levelId", levelId)
+            .setParameter("key", key)
+            .executeUpdate();
+        }
+    }
+
+    private boolean hasAdminPerm(TenantContext tc, UUID tenantId, String permKey) {
+        if (List.of("owner", "admin").contains(tc.getUserRole())) return true;
+        long count = ((Number) em.createNativeQuery(
+            "SELECT COUNT(*) FROM profile_access_level_admin_permissions ap " +
+            "JOIN user_tenants ut ON ut.access_level_id = ap.access_level_id " +
+            "WHERE ut.user_id = :userId AND ut.tenant_id = :tenantId " +
+            "  AND ut.is_active = TRUE AND ap.permission_key = :permKey"
+        )
+        .setParameter("userId", tc.getUserId())
+        .setParameter("tenantId", tenantId)
+        .setParameter("permKey", permKey)
+        .getSingleResult()).longValue();
+        return count > 0;
+    }
+
+    private void requireAdminPerm(TenantContext tc, UUID tenantId, String permKey) {
+        if (!hasAdminPerm(tc, tenantId, permKey)) {
+            throw new ForbiddenException("Permissão necessária: " + permKey);
+        }
+    }
+
     private TenantContext resolveAndCheckAccess(SecurityContext ctx, UUID tenantId) {
         TenantContext tc = TenantContext.from(ctx);
         if (!tc.getTenantId().equals(tenantId)) {
             throw new ForbiddenException("Acesso negado ao tenant");
         }
         return tc;
-    }
-
-    private void ensureOwnerOrAdmin(TenantContext tc) {
-        if (!List.of("owner", "admin").contains(tc.getUserRole())) {
-            throw new ForbiddenException("Apenas proprietários e administradores podem gerenciar níveis de acesso");
-        }
     }
 }
