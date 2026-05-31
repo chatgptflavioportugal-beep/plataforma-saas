@@ -99,7 +99,7 @@ public class AccessLevelResource {
         return p;
     }
 
-    // ─── GET /available-modules — árvore completa (módulos + permissões adm.) ──
+    // ─── GET /available-modules — árvore completa (módulos + grupos + permissões adm.) ──
 
     @GET
     @Path("/available-modules")
@@ -110,37 +110,80 @@ public class AccessLevelResource {
     ) {
         resolveAndCheckAccess(ctx, tenantId);
 
+        // Retorna módulo, grupo (se ativo), serviço.
+        // Serviços de grupos inativos aparecem em ungroupedServices.
         List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
             "SELECT pm.id::text, pm.name, pm.slug, pm.icon_path, " +
-            "       pms.id::text, pms.name, pms.slug, pms.icon_path " +
+            "  CASE WHEN g.status = 'ACTIVE' THEN g.id::text ELSE NULL END, " +
+            "  CASE WHEN g.status = 'ACTIVE' THEN g.name ELSE NULL END, " +
+            "  CASE WHEN g.status = 'ACTIVE' THEN g.description ELSE NULL END, " +
+            "  CASE WHEN g.status = 'ACTIVE' THEN g.icon_path ELSE NULL END, " +
+            "  CASE WHEN g.status = 'ACTIVE' THEN g.sort_order ELSE NULL END, " +
+            "  pms.id::text, pms.name, pms.slug, pms.icon_path, pms.sort_order " +
             "FROM profile_module_subscriptions sub " +
             "JOIN platform_modules pm ON pm.id = sub.module_id " +
             "JOIN platform_module_services pms ON pms.module_id = pm.id " +
+            "LEFT JOIN platform_module_service_groups g ON g.id = pms.service_group_id " +
             "WHERE sub.tenant_id = :tenantId AND sub.status = 'ACTIVE' " +
             "  AND pm.is_active = TRUE AND pms.is_active = TRUE " +
-            "ORDER BY pm.sort_order, pms.sort_order"
+            "ORDER BY pm.sort_order, " +
+            "  CASE WHEN g.status = 'ACTIVE' THEN g.sort_order ELSE 9999 END, " +
+            "  pms.sort_order"
         ).setParameter("tenantId", tenantId).getResultList();
 
+        // moduleId → module
         Map<String, Map<String, Object>> moduleMap = new LinkedHashMap<>();
+        // moduleId:groupId → group
+        Map<String, Map<String, Object>> groupMap = new LinkedHashMap<>();
+
         for (Object[] row : rows) {
             String moduleId = (String) row[0];
+            String groupId  = (String) row[4]; // null se sem grupo ou grupo inativo
+
             if (!moduleMap.containsKey(moduleId)) {
                 Map<String, Object> mod = new LinkedHashMap<>();
                 mod.put("moduleId", moduleId);
                 mod.put("moduleName", row[1]);
                 mod.put("moduleSlug", row[2]);
                 mod.put("moduleIconPath", row[3]);
-                mod.put("services", new ArrayList<Map<String, Object>>());
+                mod.put("serviceGroups", new ArrayList<Map<String, Object>>());
+                mod.put("ungroupedServices", new ArrayList<Map<String, Object>>());
                 moduleMap.put(moduleId, mod);
             }
+
             Map<String, Object> svc = new LinkedHashMap<>();
-            svc.put("serviceId", row[4]);
-            svc.put("serviceName", row[5]);
-            svc.put("serviceSlug", row[6]);
-            svc.put("serviceIconPath", row[7]);
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> services = (List<Map<String, Object>>) moduleMap.get(moduleId).get("services");
-            services.add(svc);
+            svc.put("serviceId",       row[9]);
+            svc.put("serviceName",     row[10]);
+            svc.put("serviceSlug",     row[11]);
+            svc.put("serviceIconPath", row[12]);
+            svc.put("sortOrder",       row[13]);
+
+            if (groupId != null) {
+                String groupKey = moduleId + ":" + groupId;
+                if (!groupMap.containsKey(groupKey)) {
+                    Map<String, Object> grp = new LinkedHashMap<>();
+                    grp.put("groupId",          groupId);
+                    grp.put("groupName",        row[5]);
+                    grp.put("groupDescription", row[6]);
+                    grp.put("groupIconPath",    row[7]);
+                    grp.put("sortOrder",        row[8]);
+                    grp.put("services", new ArrayList<Map<String, Object>>());
+                    groupMap.put(groupKey, grp);
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> moduleGroups =
+                        (List<Map<String, Object>>) moduleMap.get(moduleId).get("serviceGroups");
+                    moduleGroups.add(grp);
+                }
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> groupServices =
+                    (List<Map<String, Object>>) groupMap.get(groupKey).get("services");
+                groupServices.add(svc);
+            } else {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> ungrouped =
+                    (List<Map<String, Object>>) moduleMap.get(moduleId).get("ungroupedServices");
+                ungrouped.add(svc);
+            }
         }
 
         Map<String, Object> result = new LinkedHashMap<>();

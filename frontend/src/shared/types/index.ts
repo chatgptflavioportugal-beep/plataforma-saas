@@ -247,6 +247,16 @@ export interface AvailableService {
   serviceName: string
   serviceSlug: string
   serviceIconPath: string | null
+  sortOrder?: number | null
+}
+
+export interface AvailableServiceGroup {
+  groupId: string
+  groupName: string
+  groupDescription: string | null
+  groupIconPath: string | null
+  sortOrder: number | null
+  services: AvailableService[]
 }
 
 export interface AvailableModule {
@@ -254,7 +264,8 @@ export interface AvailableModule {
   moduleName: string
   moduleSlug: string
   moduleIconPath: string | null
-  services: AvailableService[]
+  serviceGroups: AvailableServiceGroup[]
+  ungroupedServices: AvailableService[]
 }
 
 export interface PermissionTreeResponse {

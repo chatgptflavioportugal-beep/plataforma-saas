@@ -31,7 +31,9 @@
       "Bash(Select-Object -First 20)",
       "Bash(Format-Table FullName)",
       "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")",
-      "Bash(node_modules/.bin/tsc --noEmit)"
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(find /c/desenvolupament/sistema/saas-plataforma -type f \\\\\\( -name \"*.js\" -o -name \"*.ts\" \\\\\\) ! -path \"*/node_modules/*\" ! -path \"*/.next/*\" | grep -E \"\\(router|server|api\\)\" | head -20)",
+      "Read(//c/desenvolupament/sistema/**)"
     ]
   }
 }

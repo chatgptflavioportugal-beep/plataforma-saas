@@ -3,7 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/shared/services/api'
 import { useTenant } from '@/core/workspaces/TenantContext'
-import type { AccessLevel, AvailableModule, AdminPermissionGroup, PermissionTreeResponse } from '@/shared/types'
+import type {
+  AccessLevel,
+  AvailableModule,
+  AvailableServiceGroup,
+  AdminPermissionGroup,
+  PermissionTreeResponse,
+} from '@/shared/types'
 
 // ─── Checkbox com estado indeterminado ────────────────────────────────────────
 
@@ -112,13 +118,28 @@ function ModulePermissionModal({
   onCancel: () => void
 }) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set(initialSelected))
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
-  const allIds = module.services.map((s) => s.serviceId)
+  const hasGroups = module.serviceGroups.length > 0
+
+  const allIds = useMemo(() => [
+    ...module.serviceGroups.flatMap((g) => g.services.map((s) => s.serviceId)),
+    ...module.ungroupedServices.map((s) => s.serviceId),
+  ], [module])
+
   const allChecked = allIds.length > 0 && allIds.every((id) => selected.has(id))
   const someChecked = allIds.some((id) => selected.has(id)) && !allChecked
 
   function toggleAll() {
     setSelected(allChecked ? new Set() : new Set(allIds))
+  }
+
+  function toggleGroup(group: AvailableServiceGroup) {
+    const ids = group.services.map((s) => s.serviceId)
+    const allGroupChecked = ids.length > 0 && ids.every((id) => selected.has(id))
+    const next = new Set(selected)
+    allGroupChecked ? ids.forEach((id) => next.delete(id)) : ids.forEach((id) => next.add(id))
+    setSelected(next)
   }
 
   function toggleService(id: string) {
@@ -127,9 +148,18 @@ function ModulePermissionModal({
     setSelected(next)
   }
 
+  function toggleExpand(groupId: string) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev)
+      next.has(groupId) ? next.delete(groupId) : next.add(groupId)
+      return next
+    })
+  }
+
   return (
     <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[85vh]">
+        {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
           <div>
             <h3 className="text-base font-semibold text-gray-900">Configurar permissões</h3>
@@ -142,6 +172,7 @@ function ModulePermissionModal({
           </button>
         </div>
 
+        {/* Select all */}
         <div className="px-6 pt-4 pb-3 border-b border-gray-50 flex-shrink-0">
           <label className="flex items-center gap-3 cursor-pointer">
             <TreeCheckbox checked={allChecked} indeterminate={someChecked} onChange={toggleAll} />
@@ -150,24 +181,115 @@ function ModulePermissionModal({
           </label>
         </div>
 
+        {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 py-2">
-          <ul className="space-y-0.5">
-            {module.services.map((svc) => (
-              <li key={svc.serviceId}>
-                <label className="flex items-center gap-3 py-2 px-2 -mx-2 cursor-pointer hover:bg-gray-50 rounded-lg transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(svc.serviceId)}
-                    onChange={() => toggleService(svc.serviceId)}
-                    className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
-                  />
-                  <span className="text-sm text-gray-700">{svc.serviceName}</span>
-                </label>
-              </li>
-            ))}
-          </ul>
+          {hasGroups ? (
+            <div className="space-y-1 py-1">
+              {/* Grupos */}
+              {module.serviceGroups.map((group) => {
+                const groupIds = group.services.map((s) => s.serviceId)
+                const groupSel = groupIds.filter((id) => selected.has(id)).length
+                const groupAllChecked = groupIds.length > 0 && groupSel === groupIds.length
+                const groupSomeChecked = groupSel > 0 && !groupAllChecked
+                const isExpanded = expandedGroups.has(group.groupId)
+
+                return (
+                  <div key={group.groupId} className="rounded-lg border border-gray-100 overflow-hidden">
+                    <div className="flex items-center gap-2 px-3 py-2.5 bg-gray-50/80 hover:bg-gray-50 transition-colors">
+                      <TreeCheckbox
+                        checked={groupAllChecked}
+                        indeterminate={groupSomeChecked}
+                        onChange={() => toggleGroup(group)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(group.groupId)}
+                        className="flex items-center gap-2 flex-1 text-left"
+                      >
+                        <svg
+                          className={`h-3.5 w-3.5 text-gray-400 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                        </svg>
+                        <span className="text-sm font-semibold text-gray-800">{group.groupName}</span>
+                        <span className={`text-xs ml-1 ${
+                          groupAllChecked
+                            ? 'text-green-600 font-medium'
+                            : groupSomeChecked
+                              ? 'text-blue-600 font-medium'
+                              : 'text-gray-400'
+                        }`}>
+                          {groupSel}/{groupIds.length}
+                        </span>
+                      </button>
+                    </div>
+                    {isExpanded && (
+                      <ul className="border-t border-gray-100 divide-y divide-gray-50">
+                        {group.services.map((svc) => (
+                          <li key={svc.serviceId}>
+                            <label className="flex items-center gap-3 pl-9 pr-3 py-2 cursor-pointer hover:bg-gray-50/50 transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={selected.has(svc.serviceId)}
+                                onChange={() => toggleService(svc.serviceId)}
+                                className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
+                              />
+                              <span className="text-sm text-gray-700">{svc.serviceName}</span>
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )
+              })}
+
+              {/* Serviços sem grupo */}
+              {module.ungroupedServices.length > 0 && (
+                <div>
+                  {module.serviceGroups.length > 0 && (
+                    <p className="text-xs text-gray-400 font-medium px-1 pt-2 pb-1">Outros serviços</p>
+                  )}
+                  <ul className="space-y-0.5">
+                    {module.ungroupedServices.map((svc) => (
+                      <li key={svc.serviceId}>
+                        <label className="flex items-center gap-3 py-2 px-2 -mx-2 cursor-pointer hover:bg-gray-50 rounded-lg transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={selected.has(svc.serviceId)}
+                            onChange={() => toggleService(svc.serviceId)}
+                            className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
+                          />
+                          <span className="text-sm text-gray-700">{svc.serviceName}</span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ) : (
+            // Sem grupos — lista plana (comportamento original)
+            <ul className="space-y-0.5 py-1">
+              {module.ungroupedServices.map((svc) => (
+                <li key={svc.serviceId}>
+                  <label className="flex items-center gap-3 py-2 px-2 -mx-2 cursor-pointer hover:bg-gray-50 rounded-lg transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(svc.serviceId)}
+                      onChange={() => toggleService(svc.serviceId)}
+                      className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
+                    />
+                    <span className="text-sm text-gray-700">{svc.serviceName}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
+        {/* Footer */}
         <div className="flex gap-3 px-6 py-4 border-t border-gray-100 flex-shrink-0">
           <button
             type="button"
@@ -442,12 +564,19 @@ function AccessLevelFormModal({
 
   const totalAdminKeys = adminPermissions.reduce((sum, g) => sum + g.permissions.length, 0)
 
+  function getAllModuleServiceIds(mod: AvailableModule): string[] {
+    return [
+      ...mod.serviceGroups.flatMap((g) => g.services.map((s) => s.serviceId)),
+      ...mod.ungroupedServices.map((s) => s.serviceId),
+    ]
+  }
+
   function getModuleSelected(mod: AvailableModule): Set<string> {
-    return new Set(mod.services.map((s) => s.serviceId).filter((id) => selectedServiceIds.has(id)))
+    return new Set(getAllModuleServiceIds(mod).filter((id) => selectedServiceIds.has(id)))
   }
 
   function applyModulePermissions(mod: AvailableModule, newSelected: Set<string>) {
-    const moduleServiceIds = new Set(mod.services.map((s) => s.serviceId))
+    const moduleServiceIds = new Set(getAllModuleServiceIds(mod))
     const next = new Set(Array.from(selectedServiceIds).filter((id) => !moduleServiceIds.has(id)))
     newSelected.forEach((id) => next.add(id))
     setSelectedServiceIds(next)
@@ -546,7 +675,7 @@ function AccessLevelFormModal({
                       <PermissionCard
                         key={mod.moduleId}
                         name={mod.moduleName}
-                        total={mod.services.length}
+                        total={getAllModuleServiceIds(mod).length}
                         selected={getModuleSelected(mod).size}
                         onConfigure={() => setConfiguringModule(mod)}
                       />
