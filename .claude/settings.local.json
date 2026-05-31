@@ -26,7 +26,12 @@
       "Read(//c/desenvolupadora/sistema/saas-plataforma/backend-quarkus/src/main/java/com/saas/**)",
       "Bash(Get-ChildItem -Path \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\backend-quarkus\\\\src\\\\main\\\\java\\\\com\\\\saas\" -Recurse -Directory)",
       "Bash(Sort-Object)",
-      "Bash(Get-Unique)"
+      "Bash(Get-Unique)",
+      "Bash(Get-ChildItem -Path \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\" -Recurse -Directory)",
+      "Bash(Select-Object -First 20)",
+      "Bash(Format-Table FullName)",
+      "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")",
+      "Bash(node_modules/.bin/tsc --noEmit)"
     ]
   }
 }
