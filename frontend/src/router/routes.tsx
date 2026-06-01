@@ -31,6 +31,8 @@ import { AdminSystemAdminsPage } from '@/app/admin/AdminSystemAdminsPage'
 import { AdminPlansPage } from '@/app/admin/AdminPlansPage'
 import { AdminSubscriptionsPage } from '@/app/admin/AdminSubscriptionsPage'
 import { AdminModulesPage } from '@/app/admin/AdminModulesPage'
+import { AdminUsersPage } from '@/app/admin/AdminUsersPage'
+import { AdminAccessLevelsPage } from '@/app/admin/AdminAccessLevelsPage'
 
 export function AppRouter() {
   return (
@@ -99,6 +101,8 @@ export function AppRouter() {
             <Route path="plans" element={<AdminPlansPage />} />
             <Route path="subscriptions" element={<AdminSubscriptionsPage />} />
             <Route path="modules" element={<AdminModulesPage />} />
+            <Route path="admin-users" element={<AdminUsersPage />} />
+            <Route path="admin-access-levels" element={<AdminAccessLevelsPage />} />
             {/* Redirecionamentos de rotas legadas */}
             <Route path="company-users" element={<Navigate to="/admin/customers" replace />} />
             <Route path="users" element={<Navigate to="/admin/customers" replace />} />

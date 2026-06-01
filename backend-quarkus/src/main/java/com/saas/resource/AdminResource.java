@@ -32,17 +32,58 @@ public class AdminResource {
     // Autorização
     // ----------------------------------------------------------------
 
-    private void ensureSuperAdmin() {
+    String currentUserId() {
         String userId = jwt.getSubject();
-        if (userId == null) throw new ForbiddenException("Acesso restrito a SUPER_ADMIN");
+        if (userId == null) throw new ForbiddenException("Não autenticado");
+        return userId;
+    }
+
+    /**
+     * Exige que o usuário seja SUPER_ADMIN ou ADMIN_USER ativo com a permissão especificada.
+     * Passar null em permissionKey verifica apenas que é um admin válido (para listagens gerais).
+     */
+    void requireAdminPermission(String permissionKey) {
+        String userId = currentUserId();
         try {
-            String role = (String) em.createNativeQuery(
-                    "SELECT system_role FROM user_profiles WHERE id::text = :id"
+            Object[] row = (Object[]) em.createNativeQuery(
+                "SELECT system_role, is_active, admin_access_level_id::text " +
+                "FROM user_profiles WHERE id::text = :id"
             ).setParameter("id", userId).getSingleResult();
-            if (!"SUPER_ADMIN".equals(role)) throw new ForbiddenException("Acesso restrito a SUPER_ADMIN");
+
+            String role = (String) row[0];
+            boolean isActive = Boolean.TRUE.equals(row[1]);
+
+            if ("SUPER_ADMIN".equals(role)) return;
+
+            if (!"ADMIN_USER".equals(role))
+                throw new ForbiddenException("Acesso restrito à área administrativa");
+
+            if (!isActive)
+                throw new ForbiddenException("Usuário administrativo inativo");
+
+            if (permissionKey == null) return;
+
+            String accessLevelId = (String) row[2];
+            if (accessLevelId == null)
+                throw new ForbiddenException("Você não possui permissão para executar esta ação");
+
+            long has = ((Number) em.createNativeQuery(
+                "SELECT COUNT(*) FROM admin_access_level_permissions " +
+                "WHERE access_level_id::text = :lvl AND permission_key = :key"
+            ).setParameter("lvl", accessLevelId).setParameter("key", permissionKey)
+             .getSingleResult()).longValue();
+
+            if (has == 0)
+                throw new ForbiddenException("Você não possui permissão para executar esta ação");
+
         } catch (jakarta.persistence.NoResultException e) {
             throw new ForbiddenException("Perfil de usuário não encontrado");
         }
+    }
+
+    /** Mantido para compatibilidade interna; usa requireAdminPermission com null. */
+    private void ensureSuperAdmin() {
+        requireAdminPermission(null);
     }
 
     // ----------------------------------------------------------------
@@ -52,7 +93,7 @@ public class AdminResource {
     @GET
     @Path("/stats")
     public Response stats(@Context SecurityContext ctx) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.dashboard.view");
         long totalBusinessTenants = n("SELECT COUNT(*) FROM tenants WHERE type = 'business'");
         long activeTenants        = n("SELECT COUNT(*) FROM tenants WHERE status = 'active' AND type = 'business'");
         long trialTenants         = n("SELECT COUNT(*) FROM tenants WHERE status = 'trial' AND type = 'business'");
@@ -110,14 +151,14 @@ public class AdminResource {
             @QueryParam("search") String search,
             @QueryParam("status") String status,
             @QueryParam("has_extra_members") Boolean hasExtraMembers) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.companies.view");
         return Response.ok(tenantService.listAdminTenants(search, status, hasExtraMembers)).build();
     }
 
     @GET
     @Path("/tenants/{id}")
     public Response getTenantDetail(@PathParam("id") String id) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.companies.detail");
         var detail = tenantService.getAdminTenantDetail(id);
         if (detail == null)
             return Response.status(404).entity(Map.of("error", "Empresa não encontrada")).build();
@@ -131,14 +172,14 @@ public class AdminResource {
     @GET
     @Path("/plans")
     public Response listPlans() {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.plans.view");
         return Response.ok(planService.listAllPlansAdmin()).build();
     }
 
     @GET
     @Path("/plans/{code}/versions")
     public Response getPlanVersions(@PathParam("code") String code) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.plans.version_history");
         return Response.ok(planService.getPlanVersionHistory(code)).build();
     }
 
@@ -149,7 +190,7 @@ public class AdminResource {
     @POST
     @Path("/plans")
     public Response createPlan(Map<String, Object> body) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.plans.create");
         var req = mapToRequest(body);
         if (req.code() == null || req.code().isBlank())
             return Response.status(400).entity(Map.of("error", "code é obrigatório")).build();
@@ -166,7 +207,7 @@ public class AdminResource {
     @POST
     @Path("/plans/{id}/new-version")
     public Response createNewVersion(@PathParam("id") String id, Map<String, Object> body) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.plans.create_version");
         try {
             var req = mapToRequest(body);
             return Response.status(201).entity(planService.createNewVersion(id, req)).build();
@@ -184,7 +225,7 @@ public class AdminResource {
     @POST
     @Path("/plans/{id}/edit")
     public Response editPlanWithNewVersion(@PathParam("id") String id, Map<String, Object> body) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.plans.edit");
         try {
             var req = mapToRequest(body);
             var modules = mapToPlanModuleWithLimitsRequests(body);
@@ -204,7 +245,7 @@ public class AdminResource {
     @Path("/plans/{id}/status")
     @Consumes(MediaType.WILDCARD)
     public Response togglePlanStatus(@PathParam("id") String id) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.plans.activate");
         try {
             return Response.ok(planService.togglePlanStatus(id)).build();
         } catch (NotFoundException e) {
@@ -220,7 +261,7 @@ public class AdminResource {
     @Path("/plans/{id}/popular")
     @Consumes(MediaType.WILDCARD)
     public Response setMostPopular(@PathParam("id") String id) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.plans.edit");
         try {
             return Response.ok(planService.setMostPopular(id)).build();
         } catch (NotFoundException e) {
@@ -244,7 +285,7 @@ public class AdminResource {
             @QueryParam("is_member") Boolean isMember,
             @QueryParam("is_active") Boolean isActive,
             @QueryParam("profile_type") String profileType) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.clients.view");
 
         StringBuilder sql = new StringBuilder(
             "WITH cdata AS (" +
@@ -332,7 +373,7 @@ public class AdminResource {
     @Path("/customers/{id}")
     @SuppressWarnings("unchecked")
     public Response getCustomerDetail(@PathParam("id") String id) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.clients.detail");
 
         List<Object[]> userRows = (List<Object[]>) em.createNativeQuery(
             "SELECT up.id::text, au.email, up.full_name, up.is_active, up.created_at::text, au.last_sign_in_at::text " +
@@ -447,7 +488,7 @@ public class AdminResource {
     @Path("/system-admins")
     @SuppressWarnings("unchecked")
     public Response listSystemAdmins() {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.users.view");
         List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
                 "SELECT up.id::text, au.email, up.full_name, up.system_role, up.is_active, " +
                 "up.created_at::text " +
@@ -476,7 +517,7 @@ public class AdminResource {
     @GET
     @Path("/subscriptions/summary")
     public Response getSubscriptionsSummary() {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.subscriptions.view");
         Object[] row = (Object[]) em.createNativeQuery(
             "SELECT COUNT(*)::bigint, " +
             "COUNT(*) FILTER (WHERE status = 'ACTIVE')::bigint, " +
@@ -518,7 +559,7 @@ public class AdminResource {
             @QueryParam("page")          @DefaultValue("0") int page,
             @QueryParam("size")          @DefaultValue("20") int size
     ) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.subscriptions.view");
 
         int safeSize   = Math.min(Math.max(size, 1), 100);
         int safeOffset = Math.max(page, 0) * safeSize;
@@ -670,7 +711,7 @@ public class AdminResource {
     @Path("/subscriptions/{id}/cancel")
     @Transactional
     public Response adminCancelSubscription(@PathParam("id") String id) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.subscriptions.cancel");
         int updated = em.createNativeQuery(
             "UPDATE profile_module_subscriptions " +
             "SET status = 'CANCELED', canceled_at = NOW(), updated_at = NOW() " +
@@ -685,7 +726,7 @@ public class AdminResource {
     @Path("/subscriptions/{id}/reactivate")
     @Transactional
     public Response adminReactivateSubscription(@PathParam("id") String id) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.subscriptions.reactivate");
         int updated = em.createNativeQuery(
             "UPDATE profile_module_subscriptions " +
             "SET status = 'ACTIVE', canceled_at = NULL, updated_at = NOW() " +
@@ -704,7 +745,7 @@ public class AdminResource {
     @Path("/modules")
     @SuppressWarnings("unchecked")
     public Response listModules(@QueryParam("search") String search, @QueryParam("is_active") Boolean isActive) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.modules.view");
         StringBuilder sql = new StringBuilder(
             "SELECT m.id::text, m.name, m.slug, m.description, m.module_url, m.icon_path, " +
             "  m.is_active, m.sort_order, m.created_at::text, m.updated_at::text, " +
@@ -745,7 +786,7 @@ public class AdminResource {
     @Path("/modules")
     @Transactional
     public Response createModule(Map<String, Object> body) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.modules.create");
         String name = (String) body.get("name");
         String slug = (String) body.get("slug");
         String moduleUrl = (String) body.get("module_url");
@@ -796,7 +837,7 @@ public class AdminResource {
     @Path("/modules/{id}")
     @Transactional
     public Response updateModule(@PathParam("id") String id, Map<String, Object> body) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.modules.edit");
         String name = (String) body.get("name");
         String slug = (String) body.get("slug");
         String moduleUrl = (String) body.get("module_url");
@@ -839,7 +880,7 @@ public class AdminResource {
     @Consumes(MediaType.WILDCARD)
     @Transactional
     public Response toggleModuleStatus(@PathParam("id") String id) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.modules.activate");
         int updated = em.createNativeQuery(
             "UPDATE platform_modules SET is_active = NOT is_active WHERE id::text = :id"
         ).setParameter("id", id).executeUpdate();
@@ -856,7 +897,7 @@ public class AdminResource {
     @Path("/modules/{moduleId}/services")
     @SuppressWarnings("unchecked")
     public Response listModuleServices(@PathParam("moduleId") String moduleId) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.services.view");
         List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
             "SELECT s.id::text, s.module_id::text, s.name, s.slug, s.description, " +
             "  s.icon_path, s.is_active, s.sort_order, s.created_at::text, s.updated_at::text, " +
@@ -883,7 +924,7 @@ public class AdminResource {
     @Transactional
     @SuppressWarnings("unchecked")
     public Response createModuleService(@PathParam("moduleId") String moduleId, Map<String, Object> body) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.services.create");
         String name = (String) body.get("name");
         String slug = (String) body.get("slug");
         if (name == null || name.isBlank())
@@ -962,7 +1003,7 @@ public class AdminResource {
             @PathParam("moduleId") String moduleId,
             @PathParam("id") String id,
             Map<String, Object> body) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.services.edit");
         String name = (String) body.get("name");
         String slug = (String) body.get("slug");
         if (name == null || name.isBlank())
@@ -1033,7 +1074,7 @@ public class AdminResource {
     public Response toggleModuleServiceStatus(
             @PathParam("moduleId") String moduleId,
             @PathParam("id") String id) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.services.activate");
         int updated = em.createNativeQuery(
             "UPDATE platform_module_services SET is_active = NOT is_active WHERE id::text = :id AND module_id::text = :moduleId"
         ).setParameter("id", id).setParameter("moduleId", moduleId).executeUpdate();
@@ -1050,7 +1091,7 @@ public class AdminResource {
     @Path("/modules/{moduleId}/service-groups")
     @SuppressWarnings("unchecked")
     public Response listModuleServiceGroups(@PathParam("moduleId") String moduleId) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.services.groups.manage");
         List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
             "SELECT g.id::text, g.module_id::text, g.name, g.description, g.icon_path, " +
             "  g.sort_order, g.status, g.created_at::text, g.updated_at::text, " +
@@ -1076,7 +1117,7 @@ public class AdminResource {
     @Transactional
     @SuppressWarnings("unchecked")
     public Response createModuleServiceGroup(@PathParam("moduleId") String moduleId, Map<String, Object> body) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.services.groups.manage");
         String name = (String) body.get("name");
         if (name == null || name.isBlank())
             return Response.status(400).entity(Map.of("error", "name é obrigatório")).build();
@@ -1117,7 +1158,7 @@ public class AdminResource {
             @PathParam("moduleId") String moduleId,
             @PathParam("id") String id,
             Map<String, Object> body) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.services.groups.manage");
         String name = (String) body.get("name");
         if (name == null || name.isBlank())
             return Response.status(400).entity(Map.of("error", "name é obrigatório")).build();
@@ -1146,7 +1187,7 @@ public class AdminResource {
             @PathParam("moduleId") String moduleId,
             @PathParam("id") String id,
             Map<String, Object> body) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.services.groups.manage");
         String newStatus = body instanceof Map<?,?> ? (String) body.get("status") : null;
         if (!List.of("ACTIVE", "INACTIVE").contains(newStatus))
             return Response.status(400).entity(Map.of("error", "Status inválido. Use ACTIVE ou INACTIVE")).build();
@@ -1178,14 +1219,14 @@ public class AdminResource {
     @GET
     @Path("/plans/{planId}/modules")
     public Response listPlanVersionModules(@PathParam("planId") String planId) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.plans.view");
         return Response.ok(planService.listPlanVersionModules(planId)).build();
     }
 
     @POST
     @Path("/plans/{planId}/modules")
     public Response addPlanVersionModule(@PathParam("planId") String planId, Map<String, Object> body) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.plans.edit");
         try {
             var req = mapToPlanVersionModuleRequest(body);
             return Response.status(201).entity(planService.addPlanVersionModule(planId, req)).build();
@@ -1202,7 +1243,7 @@ public class AdminResource {
             @PathParam("planId") String planId,
             @PathParam("pvmId") String pvmId,
             Map<String, Object> body) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.plans.edit");
         try {
             var req = mapToPlanVersionModuleRequest(body);
             return Response.ok(planService.updatePlanVersionModule(pvmId, req)).build();
@@ -1218,7 +1259,7 @@ public class AdminResource {
     public Response removePlanVersionModule(
             @PathParam("planId") String planId,
             @PathParam("pvmId") String pvmId) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.plans.edit");
         try {
             return Response.ok(planService.removePlanVersionModule(pvmId)).build();
         } catch (NotFoundException e) {
@@ -1236,7 +1277,7 @@ public class AdminResource {
             @PathParam("planId") String planId,
             @PathParam("pvmId") String pvmId,
             Map<String, Object> body) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.plans.edit");
         try {
             var req = mapToPlanVersionModuleLimitRequest(body);
             return Response.status(201).entity(planService.addPlanVersionModuleLimit(pvmId, req)).build();
@@ -1254,7 +1295,7 @@ public class AdminResource {
             @PathParam("pvmId") String pvmId,
             @PathParam("limitId") String limitId,
             Map<String, Object> body) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.plans.edit");
         try {
             var req = mapToPlanVersionModuleLimitRequest(body);
             return Response.ok(planService.updatePlanVersionModuleLimit(limitId, req)).build();
@@ -1271,7 +1312,7 @@ public class AdminResource {
             @PathParam("planId") String planId,
             @PathParam("pvmId") String pvmId,
             @PathParam("limitId") String limitId) {
-        ensureSuperAdmin();
+        requireAdminPermission("admin.plans.edit");
         try {
             return Response.ok(planService.removePlanVersionModuleLimit(limitId)).build();
         } catch (NotFoundException e) {

@@ -3,11 +3,58 @@ export interface UserProfile {
   full_name: string | null
   avatar_url: string | null
   phone: string | null
-  system_role: 'user' | 'SUPER_ADMIN' | 'ADMIN' | 'SUPPORT' | 'FINANCE_ADMIN'
+  system_role: 'user' | 'SUPER_ADMIN' | 'ADMIN_USER'
   is_active: boolean
+  admin_access_level_id: string | null
   metadata: Record<string, unknown>
   created_at: string
   updated_at: string
+}
+
+// ─── Admin Access Levels ──────────────────────────────────────────────────────
+
+export interface AdminAccessLevel {
+  id: string
+  name: string
+  description: string | null
+  status: 'ACTIVE' | 'INACTIVE'
+  permCount: number
+  userCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AdminAccessLevelDetail extends AdminAccessLevel {
+  permissionKeys: string[]
+}
+
+export interface AdminPermissionGroup {
+  groupKey: string
+  groupName: string
+  permissions: AdminPermission[]
+}
+
+export interface AdminPermission {
+  permissionKey: string
+  label: string
+}
+
+export interface AdminPermissionTreeResponse {
+  groups: AdminPermissionGroup[]
+}
+
+// ─── Admin Users ──────────────────────────────────────────────────────────────
+
+export interface AdminUser {
+  id: string
+  email: string
+  fullName: string | null
+  systemRole: 'SUPER_ADMIN' | 'ADMIN_USER'
+  isActive: boolean
+  accessLevelId: string | null
+  accessLevelName: string | null
+  createdAt: string
+  lastSignInAt: string | null
 }
 
 export interface Tenant {
@@ -217,17 +264,6 @@ export interface AccessLevelPermission {
   id: string
   moduleId: string
   serviceId: string
-}
-
-export interface AdminPermission {
-  permissionKey: string
-  label: string
-}
-
-export interface AdminPermissionGroup {
-  groupKey: string
-  groupName: string
-  permissions: AdminPermission[]
 }
 
 export interface AccessLevel {
