@@ -35,6 +35,8 @@ function AdminUserModal({
     tempPassword: '',
   })
   const [error, setError] = useState('')
+  const [createdPassword, setCreatedPassword] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -43,23 +45,37 @@ function AdminUserModal({
           fullName: form.fullName,
           accessLevelId: form.accessLevelId || null,
         })
+        return null
       } else {
-        await api.post('/api/v1/admin/admin-users', {
+        const { data } = await api.post<{ tempPassword: string }>('/api/v1/admin/admin-users', {
           email: form.email,
           fullName: form.fullName,
           accessLevelId: form.accessLevelId || null,
           tempPassword: form.tempPassword || null,
         })
+        return data
       }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['admin-admin-users'] })
-      onClose()
+      if (data?.tempPassword) {
+        setCreatedPassword(data.tempPassword)
+      } else {
+        onClose()
+      }
     },
     onError: (err: any) => {
       setError(err?.response?.data?.error ?? 'Erro ao salvar usuário')
     },
   })
+
+  function copyPassword() {
+    if (!createdPassword) return
+    navigator.clipboard.writeText(createdPassword).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
 
   function set(field: keyof typeof form, value: string) {
     setForm(f => ({ ...f, [field]: value }))
@@ -76,6 +92,34 @@ function AdminUserModal({
           <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
         </div>
 
+        {createdPassword ? (
+          <div className="p-6 space-y-4">
+            <div className="rounded-lg bg-green-900/30 border border-green-700/50 p-4 space-y-3">
+              <p className="text-sm font-medium text-green-300">Usuário criado com sucesso!</p>
+              <p className="text-xs text-gray-400">
+                Compartilhe a senha temporária abaixo com o usuário. Ela não será exibida novamente.
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 rounded bg-gray-900 border border-gray-700 px-3 py-2 text-sm text-white font-mono tracking-wider">
+                  {createdPassword}
+                </code>
+                <button
+                  onClick={copyPassword}
+                  className="rounded-lg bg-gray-700 border border-gray-600 text-gray-300 text-xs font-medium px-3 py-2 hover:bg-gray-600 min-w-[64px]"
+                >
+                  {copied ? 'Copiado!' : 'Copiar'}
+                </button>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="w-full rounded-lg bg-blue-600 text-white text-sm font-medium py-2 hover:bg-blue-500"
+            >
+              Fechar
+            </button>
+          </div>
+        ) : (
+        <>
         <div className="p-6 space-y-4">
           {!isEdit && (
             <div>
@@ -160,6 +204,8 @@ function AdminUserModal({
             {mutation.isPending ? 'Salvando...' : isEdit ? 'Salvar' : 'Criar Usuário'}
           </button>
         </div>
+        </>
+        )}
       </div>
     </div>
   )

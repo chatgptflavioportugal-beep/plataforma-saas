@@ -30,11 +30,11 @@ public class AdminUsersResource {
     @Inject JsonWebToken  jwt;
     @Inject AdminResource adminResource;
 
-    @ConfigProperty(name = "supabase.url", defaultValue = "")
-    String supabaseUrl;
+    @ConfigProperty(name = "supabase.url")
+    Optional<String> supabaseUrl;
 
-    @ConfigProperty(name = "supabase.service-role-key", defaultValue = "")
-    String supabaseServiceRoleKey;
+    @ConfigProperty(name = "supabase.service-role-key")
+    Optional<String> supabaseServiceRoleKey;
 
     // ─── Listagem ─────────────────────────────────────────────────────────────
 
@@ -134,13 +134,18 @@ public class AdminUsersResource {
                 return Response.status(409).entity(Map.of("error", "Já existe um usuário administrativo com este e-mail")).build();
         }
 
-        // Criar usuário no Supabase via Admin API ou usar senha temporária
+        // Definir senha efetiva antes de chamar o Supabase
+        String effectivePassword = (tempPassword != null && !tempPassword.isBlank())
+                ? tempPassword.trim()
+                : generateTempPassword();
+
+        // Criar usuário no Supabase via Admin API
         String newUserId = null;
 
-        if (!supabaseUrl.isBlank() && !supabaseServiceRoleKey.isBlank()) {
-            // Chamar Supabase Admin API para criar o usuário
+        if (supabaseUrl.isPresent() && !supabaseUrl.get().isBlank()
+                && supabaseServiceRoleKey.isPresent() && !supabaseServiceRoleKey.get().isBlank()) {
             try {
-                newUserId = createSupabaseUser(email.trim().toLowerCase(), fullName.trim(), tempPassword);
+                newUserId = createSupabaseUser(email.trim().toLowerCase(), fullName.trim(), effectivePassword);
             } catch (Exception e) {
                 return Response.status(500).entity(Map.of("error", "Erro ao criar usuário no sistema de autenticação: " + e.getMessage())).build();
             }
@@ -200,6 +205,7 @@ public class AdminUsersResource {
         out.put("accessLevelId",   r[5]);
         out.put("accessLevelName", r[6]);
         out.put("createdAt",       r[7]);
+        out.put("tempPassword",    effectivePassword);
 
         return Response.status(201).entity(out).build();
     }
@@ -291,7 +297,9 @@ public class AdminUsersResource {
     // ─── Supabase Admin API ───────────────────────────────────────────────────
 
     private String createSupabaseUser(String email, String fullName, String tempPassword) throws Exception {
-        String password = (tempPassword != null && !tempPassword.isBlank()) ? tempPassword : generateTempPassword();
+        String password = tempPassword;
+        String url = supabaseUrl.orElseThrow();
+        String key = supabaseServiceRoleKey.orElseThrow();
 
         String body = String.format(
             "{\"email\":\"%s\",\"password\":\"%s\",\"email_confirm\":true,\"user_metadata\":{\"full_name\":\"%s\"}}",
@@ -300,10 +308,10 @@ public class AdminUsersResource {
 
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(supabaseUrl + "/auth/v1/admin/users"))
+            .uri(URI.create(url + "/auth/v1/admin/users"))
             .header("Content-Type", "application/json")
-            .header("Authorization", "Bearer " + supabaseServiceRoleKey)
-            .header("apikey", supabaseServiceRoleKey)
+            .header("Authorization", "Bearer " + key)
+            .header("apikey", key)
             .POST(HttpRequest.BodyPublishers.ofString(body))
             .build();
 
