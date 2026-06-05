@@ -1,5 +1,6 @@
 package com.saas.resource;
 
+import com.saas.service.EmailService;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -9,11 +10,13 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.jwt.JsonWebToken;
+import org.jboss.logging.Logger;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.security.SecureRandom;
 import java.util.*;
 
 /**
@@ -26,9 +29,12 @@ import java.util.*;
 @Consumes(MediaType.APPLICATION_JSON)
 public class AdminUsersResource {
 
+    private static final Logger LOG = Logger.getLogger(AdminUsersResource.class);
+
     @Inject EntityManager em;
     @Inject JsonWebToken  jwt;
     @Inject AdminResource adminResource;
+    @Inject EmailService  emailService;
 
     @ConfigProperty(name = "supabase.url")
     Optional<String> supabaseUrl;
@@ -104,6 +110,7 @@ public class AdminUsersResource {
         String fullName = (String) body.get("fullName");
         String accessLevelId = (String) body.get("accessLevelId");
         String tempPassword = (String) body.get("tempPassword");
+        boolean sendPasswordEmail = !Boolean.FALSE.equals(body.get("sendPasswordEmail"));
 
         if (email == null || email.isBlank())
             return Response.status(400).entity(Map.of("error", "email é obrigatório")).build();
@@ -196,6 +203,12 @@ public class AdminUsersResource {
             return Response.status(500).entity(Map.of("error", "Usuário criado mas não encontrado")).build();
 
         Object[] r = result.get(0);
+
+        boolean emailSent = false;
+        if (sendPasswordEmail) {
+            emailSent = emailService.sendAdminUserCreatedEmail(email.trim().toLowerCase(), effectivePassword);
+        }
+
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("id",              r[0]);
         out.put("email",           r[1]);
@@ -206,6 +219,7 @@ public class AdminUsersResource {
         out.put("accessLevelName", r[6]);
         out.put("createdAt",       r[7]);
         out.put("tempPassword",    effectivePassword);
+        out.put("emailSent",       emailSent);
 
         return Response.status(201).entity(out).build();
     }
@@ -294,6 +308,102 @@ public class AdminUsersResource {
         return Response.ok(Map.of("ok", true, "isActive", isActive)).build();
     }
 
+    // ─── Reset de senha ───────────────────────────────────────────────────────
+
+    @POST
+    @Path("/{id}/reset-password")
+    @SuppressWarnings("unchecked")
+    public Response resetPassword(@PathParam("id") String id, Map<String, Object> body) {
+        adminResource.requireAdminPermission("admin.users.reset_password");
+
+        boolean sendPasswordEmail = !Boolean.FALSE.equals(body.get("sendPasswordEmail"));
+
+        List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
+            "SELECT au.email, up.system_role FROM user_profiles up " +
+            "JOIN auth.users au ON au.id = up.id WHERE up.id::text = :id"
+        ).setParameter("id", id).getResultList();
+
+        if (rows.isEmpty())
+            return Response.status(404).entity(Map.of("error", "Usuário não encontrado")).build();
+
+        String userEmail  = (String) rows.get(0)[0];
+        String systemRole = (String) rows.get(0)[1];
+
+        if ("SUPER_ADMIN".equals(systemRole))
+            return Response.status(403).entity(Map.of("error", "Não é permitido resetar a senha do SUPER_ADMIN")).build();
+
+        boolean supabaseConfigured = supabaseUrl.isPresent() && !supabaseUrl.get().isBlank()
+                && supabaseServiceRoleKey.isPresent() && !supabaseServiceRoleKey.get().isBlank();
+
+        LOG.debugf("reset-password: userId=%s supabaseConfigured=%s", id, supabaseConfigured);
+
+        if (!supabaseConfigured) {
+            return Response.status(500).entity(Map.of(
+                "error", "Reset de senha requer VITE_SUPABASE_URL e VITE_SUPABASE_SERVICE_ROLE_KEY configurados no backend."
+            )).build();
+        }
+
+        String newPassword = generateTempPassword();
+
+        try {
+            updateSupabaseUserPassword(id, newPassword);
+            LOG.infof("reset-password: senha atualizada no Supabase para userId=%s", id);
+        } catch (Exception e) {
+            LOG.errorf("reset-password: falha ao atualizar senha no Supabase para userId=%s — %s", id, e.getMessage());
+            return Response.status(500).entity(Map.of("error", "Erro ao atualizar senha: " + e.getMessage())).build();
+        }
+
+        boolean emailSent = false;
+        if (sendPasswordEmail) {
+            emailSent = emailService.sendAdminUserPasswordResetEmail(userEmail, newPassword);
+        }
+
+        return Response.ok(Map.of(
+            "success",           true,
+            "message",           "Senha resetada com sucesso.",
+            "temporaryPassword", newPassword,
+            "emailSent",         emailSent,
+            "email",             userEmail
+        )).build();
+    }
+
+    // ─── Reenviar senha por e-mail ────────────────────────────────────────────
+
+    @POST
+    @Path("/{id}/send-password-email")
+    @SuppressWarnings("unchecked")
+    public Response sendPasswordEmailEndpoint(@PathParam("id") String id, Map<String, Object> body) {
+        // Permite quem pode criar ou quem pode resetar senha
+        boolean allowed = false;
+        try { adminResource.requireAdminPermission("admin.users.create"); allowed = true; } catch (ForbiddenException ignored) {}
+        if (!allowed) adminResource.requireAdminPermission("admin.users.reset_password");
+
+        String password = (String) body.get("password");
+        if (password == null || password.isBlank())
+            return Response.status(400).entity(Map.of("error", "password é obrigatório")).build();
+
+        String context = body.get("context") instanceof String s ? s : "created";
+
+        List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
+            "SELECT au.email FROM user_profiles up " +
+            "JOIN auth.users au ON au.id = up.id " +
+            "WHERE up.id::text = :id AND up.system_role IN ('SUPER_ADMIN', 'ADMIN_USER')"
+        ).setParameter("id", id).getResultList();
+
+        if (rows.isEmpty())
+            return Response.status(404).entity(Map.of("error", "Usuário não encontrado")).build();
+
+        String userEmail = (String) rows.get(0)[0];
+        boolean sent = "reset".equals(context)
+            ? emailService.sendAdminUserPasswordResetEmail(userEmail, password)
+            : emailService.sendAdminUserCreatedEmail(userEmail, password);
+
+        if (!sent)
+            return Response.status(500).entity(Map.of("error", "Falha ao enviar e-mail")).build();
+
+        return Response.ok(Map.of("ok", true, "email", userEmail)).build();
+    }
+
     // ─── Supabase Admin API ───────────────────────────────────────────────────
 
     private String createSupabaseUser(String email, String fullName, String tempPassword) throws Exception {
@@ -331,11 +441,51 @@ public class AdminUsersResource {
         return responseBody.substring(idStart, idEnd);
     }
 
+    private void updateSupabaseUserPassword(String userId, String newPassword) throws Exception {
+        String url = supabaseUrl.orElseThrow();
+        String key = supabaseServiceRoleKey.orElseThrow();
+
+        String targetUrl = url + "/auth/v1/admin/users/" + userId;
+        LOG.debugf("updateSupabaseUserPassword: PUT %s", targetUrl);
+
+        String reqBody = "{\"password\":\"" + newPassword.replace("\\", "\\\\").replace("\"", "\\\"") + "\"}";
+
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(targetUrl))
+            .header("Content-Type", "application/json")
+            .header("Authorization", "Bearer " + key)
+            .header("apikey", key)
+            .PUT(HttpRequest.BodyPublishers.ofString(reqBody))
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        LOG.debugf("updateSupabaseUserPassword: status=%d body=%s", response.statusCode(), response.body());
+
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new RuntimeException("Supabase retornou status " + response.statusCode() + ": " + response.body());
+        }
+    }
+
     private String generateTempPassword() {
-        String chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$";
+        String upper   = "ABCDEFGHJKMNPQRSTUVWXYZ";
+        String lower   = "abcdefghjkmnpqrstuvwxyz";
+        String digits  = "23456789";
+        String special = "!@#$%";
+        String all     = upper + lower + digits + special;
+
+        SecureRandom rnd = new SecureRandom();
+        List<Character> chars = new ArrayList<>();
+        chars.add(upper.charAt(rnd.nextInt(upper.length())));
+        chars.add(lower.charAt(rnd.nextInt(lower.length())));
+        chars.add(digits.charAt(rnd.nextInt(digits.length())));
+        chars.add(special.charAt(rnd.nextInt(special.length())));
+        for (int i = 0; i < 8; i++) chars.add(all.charAt(rnd.nextInt(all.length())));
+        Collections.shuffle(chars, rnd);
+
         StringBuilder sb = new StringBuilder();
-        java.util.Random rnd = new java.util.Random();
-        for (int i = 0; i < 12; i++) sb.append(chars.charAt(rnd.nextInt(chars.length())));
+        chars.forEach(sb::append);
         return sb.toString();
     }
 }

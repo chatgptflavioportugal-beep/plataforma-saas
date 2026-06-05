@@ -72,10 +72,11 @@ public class AdminAccessLevelsResource {
                 perm("admin.services.groups.manage", "Gerenciar grupos de serviços")
             )),
             group("users", "Usuários Administrativos", List.of(
-                perm("admin.users.view",       "Visualizar usuários administrativos"),
-                perm("admin.users.create",     "Criar usuário administrativo"),
-                perm("admin.users.edit",       "Editar usuário administrativo"),
-                perm("admin.users.activate",   "Ativar/inativar usuário administrativo")
+                perm("admin.users.view",           "Visualizar usuários administrativos"),
+                perm("admin.users.create",         "Criar usuário administrativo"),
+                perm("admin.users.edit",           "Editar usuário administrativo"),
+                perm("admin.users.activate",       "Ativar/inativar usuário administrativo"),
+                perm("admin.users.reset_password", "Resetar senha de usuário administrativo")
             )),
             group("access_levels", "Níveis de Acesso Admin", List.of(
                 perm("admin.access_levels.view",       "Visualizar níveis de acesso"),

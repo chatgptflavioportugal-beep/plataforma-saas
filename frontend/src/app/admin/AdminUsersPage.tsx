@@ -6,12 +6,119 @@ import type { AdminUser, AdminAccessLevel } from '@/shared/types'
 
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: 'Super Admin',
-  ADMIN_USER: 'Usuário Admin',
+  ADMIN_USER:  'Usuário Admin',
 }
 
 const ROLE_COLORS: Record<string, string> = {
   SUPER_ADMIN: 'bg-red-900 text-red-200',
   ADMIN_USER:  'bg-blue-900 text-blue-200',
+}
+
+// ─── Modal exibição de senha provisória ───────────────────────────────────────
+
+function PasswordRevealModal({
+  title,
+  subtitle,
+  email,
+  password,
+  userId,
+  initialEmailSent,
+  context,
+  onClose,
+}: {
+  title: string
+  subtitle: string
+  email: string
+  password: string
+  userId: string
+  initialEmailSent: boolean
+  context: 'created' | 'reset'
+  onClose: () => void
+}) {
+  const [copied, setCopied] = useState(false)
+  const [emailSent, setEmailSent] = useState(initialEmailSent)
+  const [emailError, setEmailError] = useState('')
+  const [sendingEmail, setSendingEmail] = useState(false)
+
+  function copyPassword() {
+    navigator.clipboard.writeText(password).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  async function handleSendEmail() {
+    setSendingEmail(true)
+    setEmailError('')
+    try {
+      await api.post(`/api/v1/admin/admin-users/${userId}/send-password-email`, {
+        password,
+        context,
+      })
+      setEmailSent(true)
+    } catch {
+      setEmailError('Não foi possível enviar o e-mail. Copie a senha manualmente.')
+    } finally {
+      setSendingEmail(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-md rounded-xl bg-gray-800 border border-gray-700 shadow-2xl">
+        <div className="p-6 space-y-4">
+          <div className="rounded-lg bg-green-900/30 border border-green-700/50 p-4 space-y-4">
+            <p className="text-sm font-semibold text-green-300">{title}</p>
+            <p className="text-xs text-gray-400">{subtitle}</p>
+
+            <div className="space-y-1">
+              <p className="text-xs text-gray-500">E-mail:</p>
+              <p className="text-sm text-white font-medium">{email}</p>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-xs text-gray-500">Senha provisória:</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 rounded bg-gray-900 border border-gray-700 px-3 py-2 text-sm text-white font-mono tracking-wider">
+                  {password}
+                </code>
+                <button
+                  onClick={copyPassword}
+                  className="rounded-lg bg-gray-700 border border-gray-600 text-gray-300 text-xs font-medium px-3 py-2 hover:bg-gray-600 min-w-[72px]"
+                >
+                  {copied ? 'Copiado!' : 'Copiar'}
+                </button>
+              </div>
+            </div>
+
+            {emailSent ? (
+              <p className="text-xs text-green-400">E-mail enviado com sucesso.</p>
+            ) : (
+              <div className="space-y-1">
+                {emailError && (
+                  <p className="text-xs text-red-400">{emailError}</p>
+                )}
+                <button
+                  onClick={handleSendEmail}
+                  disabled={sendingEmail}
+                  className="w-full rounded-lg bg-gray-700 border border-gray-600 text-gray-300 text-xs font-medium py-2 hover:bg-gray-600 disabled:opacity-50"
+                >
+                  {sendingEmail ? 'Enviando e-mail...' : 'Enviar por e-mail'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={onClose}
+            className="w-full rounded-lg bg-blue-600 text-white text-sm font-medium py-2 hover:bg-blue-500"
+          >
+            Concluir
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ─── Modal criar/editar ────────────────────────────────────────────────────────
@@ -33,10 +140,10 @@ function AdminUserModal({
     fullName: user?.fullName ?? '',
     accessLevelId: user?.accessLevelId ?? '',
     tempPassword: '',
+    sendPasswordEmail: true,
   })
   const [error, setError] = useState('')
-  const [createdPassword, setCreatedPassword] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [reveal, setReveal] = useState<{ userId: string; email: string; password: string; emailSent: boolean } | null>(null)
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -47,11 +154,14 @@ function AdminUserModal({
         })
         return null
       } else {
-        const { data } = await api.post<{ tempPassword: string }>('/api/v1/admin/admin-users', {
+        const { data } = await api.post<{
+          id: string; email: string; tempPassword: string; emailSent: boolean
+        }>('/api/v1/admin/admin-users', {
           email: form.email,
           fullName: form.fullName,
           accessLevelId: form.accessLevelId || null,
           tempPassword: form.tempPassword || null,
+          sendPasswordEmail: form.sendPasswordEmail,
         })
         return data
       }
@@ -59,7 +169,7 @@ function AdminUserModal({
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['admin-admin-users'] })
       if (data?.tempPassword) {
-        setCreatedPassword(data.tempPassword)
+        setReveal({ userId: data.id, email: data.email, password: data.tempPassword, emailSent: data.emailSent })
       } else {
         onClose()
       }
@@ -69,17 +179,24 @@ function AdminUserModal({
     },
   })
 
-  function copyPassword() {
-    if (!createdPassword) return
-    navigator.clipboard.writeText(createdPassword).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
-  }
-
-  function set(field: keyof typeof form, value: string) {
+  function set<K extends keyof typeof form>(field: K, value: typeof form[K]) {
     setForm(f => ({ ...f, [field]: value }))
     setError('')
+  }
+
+  if (reveal) {
+    return (
+      <PasswordRevealModal
+        title="Usuário administrativo criado com sucesso!"
+        subtitle="Uma senha provisória foi gerada para este usuário. Ela não será exibida novamente após fechar."
+        email={reveal.email}
+        password={reveal.password}
+        userId={reveal.userId}
+        initialEmailSent={reveal.emailSent}
+        context="created"
+        onClose={onClose}
+      />
+    )
   }
 
   return (
@@ -92,34 +209,6 @@ function AdminUserModal({
           <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
         </div>
 
-        {createdPassword ? (
-          <div className="p-6 space-y-4">
-            <div className="rounded-lg bg-green-900/30 border border-green-700/50 p-4 space-y-3">
-              <p className="text-sm font-medium text-green-300">Usuário criado com sucesso!</p>
-              <p className="text-xs text-gray-400">
-                Compartilhe a senha temporária abaixo com o usuário. Ela não será exibida novamente.
-              </p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 rounded bg-gray-900 border border-gray-700 px-3 py-2 text-sm text-white font-mono tracking-wider">
-                  {createdPassword}
-                </code>
-                <button
-                  onClick={copyPassword}
-                  className="rounded-lg bg-gray-700 border border-gray-600 text-gray-300 text-xs font-medium px-3 py-2 hover:bg-gray-600 min-w-[64px]"
-                >
-                  {copied ? 'Copiado!' : 'Copiar'}
-                </button>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="w-full rounded-lg bg-blue-600 text-white text-sm font-medium py-2 hover:bg-blue-500"
-            >
-              Fechar
-            </button>
-          </div>
-        ) : (
-        <>
         <div className="p-6 space-y-4">
           {!isEdit && (
             <div>
@@ -160,33 +249,41 @@ function AdminUserModal({
           </div>
 
           {!isEdit && (
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">Senha temporária (opcional)</label>
-              <input
-                type="text"
-                value={form.tempPassword}
-                onChange={e => set('tempPassword', e.target.value)}
-                className="w-full rounded-lg bg-gray-700 border border-gray-600 text-white text-sm px-3 py-2 focus:outline-none focus:border-blue-500"
-                placeholder="Deixe em branco para gerar automaticamente"
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Se não informada, uma senha aleatória será gerada. Compartilhe-a com o usuário.
-              </p>
-            </div>
+            <>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">Senha temporária (opcional)</label>
+                <input
+                  type="text"
+                  value={form.tempPassword}
+                  onChange={e => set('tempPassword', e.target.value)}
+                  className="w-full rounded-lg bg-gray-700 border border-gray-600 text-white text-sm px-3 py-2 focus:outline-none focus:border-blue-500"
+                  placeholder="Deixe em branco para gerar automaticamente"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Se não informada, uma senha aleatória será gerada.
+                </p>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.sendPasswordEmail}
+                  onChange={e => set('sendPasswordEmail', e.target.checked)}
+                  className="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
+                />
+                <span className="text-xs text-gray-300">Enviar senha provisória por e-mail ao usuário</span>
+              </label>
+
+              <div className="rounded-lg bg-amber-900/30 border border-amber-700/40 px-3 py-2">
+                <p className="text-xs text-amber-300">
+                  O usuário deverá acessar a área Admin usando <strong>e-mail e senha</strong>.
+                  Login com Google não é permitido para usuários administrativos.
+                </p>
+              </div>
+            </>
           )}
 
-          {!isEdit && (
-            <div className="rounded-lg bg-amber-900/30 border border-amber-700/40 px-3 py-2">
-              <p className="text-xs text-amber-300">
-                O usuário deverá acessar a área Admin usando <strong>e-mail e senha</strong>.
-                Login com Google não é permitido para usuários administrativos.
-              </p>
-            </div>
-          )}
-
-          {error && (
-            <p className="text-sm text-red-400">{error}</p>
-          )}
+          {error && <p className="text-sm text-red-400">{error}</p>}
         </div>
 
         <div className="flex gap-3 px-6 pb-6">
@@ -201,11 +298,103 @@ function AdminUserModal({
             disabled={mutation.isPending}
             className="flex-1 rounded-lg bg-blue-600 text-white text-sm font-medium py-2 hover:bg-blue-500 disabled:opacity-50"
           >
-            {mutation.isPending ? 'Salvando...' : isEdit ? 'Salvar' : 'Criar Usuário'}
+            {mutation.isPending
+              ? (isEdit ? 'Salvando...' : 'Criando usuário...')
+              : (isEdit ? 'Salvar' : 'Criar Usuário')}
           </button>
         </div>
-        </>
-        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Modal confirmação reset de senha ─────────────────────────────────────────
+
+function ResetPasswordModal({
+  user,
+  onClose,
+}: {
+  user: AdminUser
+  onClose: () => void
+}) {
+  const [sendPasswordEmail, setSendPasswordEmail] = useState(true)
+  const [reveal, setReveal] = useState<{ password: string; emailSent: boolean } | null>(null)
+  const [error, setError] = useState('')
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<{
+        temporaryPassword: string; emailSent: boolean; email: string
+      }>(`/api/v1/admin/admin-users/${user.id}/reset-password`, { sendPasswordEmail })
+      return data
+    },
+    onSuccess: (data) => {
+      setReveal({ password: data.temporaryPassword, emailSent: data.emailSent })
+    },
+    onError: (err: any) => {
+      setError(err?.response?.data?.error ?? 'Erro ao resetar senha')
+    },
+  })
+
+  if (reveal) {
+    return (
+      <PasswordRevealModal
+        title="Senha resetada com sucesso!"
+        subtitle="Uma nova senha provisória foi gerada. Ela não será exibida novamente após fechar."
+        email={user.email}
+        password={reveal.password}
+        userId={user.id}
+        initialEmailSent={reveal.emailSent}
+        context="reset"
+        onClose={onClose}
+      />
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-sm rounded-xl bg-gray-800 border border-gray-700 shadow-2xl">
+        <div className="px-6 py-4 border-b border-gray-700">
+          <h2 className="text-lg font-semibold text-white">Resetar senha</h2>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <p className="text-sm text-gray-300">
+            Você está prestes a gerar uma nova senha provisória para:
+          </p>
+          <p className="text-sm font-semibold text-white">{user.email}</p>
+          <p className="text-xs text-amber-300 bg-amber-900/30 border border-amber-700/40 rounded-lg px-3 py-2">
+            A senha anterior deixará de funcionar.
+          </p>
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={sendPasswordEmail}
+              onChange={e => setSendPasswordEmail(e.target.checked)}
+              className="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
+            />
+            <span className="text-xs text-gray-300">Enviar nova senha por e-mail ao usuário</span>
+          </label>
+
+          {error && <p className="text-sm text-red-400">{error}</p>}
+        </div>
+
+        <div className="flex gap-3 px-6 pb-6">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-lg border border-gray-600 text-gray-300 text-sm font-medium py-2 hover:bg-gray-700"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={() => mutation.mutate()}
+            disabled={mutation.isPending}
+            className="flex-1 rounded-lg bg-red-600 text-white text-sm font-medium py-2 hover:bg-red-500 disabled:opacity-50"
+          >
+            {mutation.isPending ? 'Resetando senha...' : 'Resetar senha'}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -218,11 +407,13 @@ export function AdminUsersPage() {
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [editingUser, setEditingUser] = useState<AdminUser | null | 'new'>()
+  const [resetTarget, setResetTarget] = useState<AdminUser | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
 
-  const canCreate = isSuperAdmin || hasAdminPermission('admin.users.create')
-  const canEdit   = isSuperAdmin || hasAdminPermission('admin.users.edit')
-  const canToggle = isSuperAdmin || hasAdminPermission('admin.users.activate')
+  const canCreate       = isSuperAdmin || hasAdminPermission('admin.users.create')
+  const canEdit         = isSuperAdmin || hasAdminPermission('admin.users.edit')
+  const canToggle       = isSuperAdmin || hasAdminPermission('admin.users.activate')
+  const canResetPassword = isSuperAdmin || hasAdminPermission('admin.users.reset_password')
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ['admin-admin-users', search, statusFilter],
@@ -251,6 +442,9 @@ export function AdminUsersPage() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-admin-users'] }),
   })
+
+  const hasActions = (u: AdminUser) =>
+    u.systemRole !== 'SUPER_ADMIN' && (canEdit || canToggle || canResetPassword)
 
   return (
     <div className="space-y-6">
@@ -339,24 +533,34 @@ export function AdminUsersPage() {
                         {u.lastSignInAt ? new Date(u.lastSignInAt).toLocaleDateString('pt-BR') : '—'}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          {canEdit && u.systemRole !== 'SUPER_ADMIN' && (
-                            <button
-                              onClick={() => setEditingUser(u)}
-                              className="text-xs text-blue-400 hover:text-blue-300"
-                            >
-                              Editar
-                            </button>
-                          )}
-                          {canToggle && u.systemRole !== 'SUPER_ADMIN' && (
-                            <button
-                              onClick={() => toggleStatus.mutate({ id: u.id, isActive: !u.isActive })}
-                              className={`text-xs ${u.isActive ? 'text-red-400 hover:text-red-300' : 'text-green-400 hover:text-green-300'}`}
-                            >
-                              {u.isActive ? 'Inativar' : 'Ativar'}
-                            </button>
-                          )}
-                        </div>
+                        {hasActions(u) && (
+                          <div className="flex items-center gap-3">
+                            {canEdit && (
+                              <button
+                                onClick={() => setEditingUser(u)}
+                                className="text-xs text-blue-400 hover:text-blue-300"
+                              >
+                                Editar
+                              </button>
+                            )}
+                            {canResetPassword && (
+                              <button
+                                onClick={() => setResetTarget(u)}
+                                className="text-xs text-yellow-400 hover:text-yellow-300"
+                              >
+                                Resetar senha
+                              </button>
+                            )}
+                            {canToggle && (
+                              <button
+                                onClick={() => toggleStatus.mutate({ id: u.id, isActive: !u.isActive })}
+                                className={`text-xs ${u.isActive ? 'text-red-400 hover:text-red-300' : 'text-green-400 hover:text-green-300'}`}
+                              >
+                                {u.isActive ? 'Inativar' : 'Ativar'}
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -381,6 +585,12 @@ export function AdminUsersPage() {
           user={editingUser === 'new' ? null : editingUser}
           accessLevels={accessLevels}
           onClose={() => setEditingUser(undefined)}
+        />
+      )}
+      {resetTarget && (
+        <ResetPasswordModal
+          user={resetTarget}
+          onClose={() => setResetTarget(null)}
         />
       )}
     </div>
