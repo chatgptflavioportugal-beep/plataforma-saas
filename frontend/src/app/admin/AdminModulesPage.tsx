@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/shared/services/api'
+import { useAuth } from '@/core/auth/AuthContext'
 
 // ─── tipos ───────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,7 @@ interface ModuleService {
 interface ModuleFormData {
   name: string
   slug: string
+  slugManuallyEdited: boolean
   description: string
   module_url: string
   icon_path: string
@@ -59,6 +61,7 @@ interface ModuleFormData {
 interface ServiceFormData {
   name: string
   slug: string
+  slugManuallyEdited: boolean
   description: string
   icon_path: string
   is_active: boolean
@@ -75,16 +78,32 @@ interface GroupFormData {
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-function toSlug(value: string) {
-  return value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+function normalizeSlug(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s_-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function modulePermissionKey(slug: string): string {
+  return slug ? `module.${slug}` : ''
+}
+
+function servicePermissionKey(moduleSlug: string, serviceSlug: string): string {
+  return moduleSlug && serviceSlug ? `module.${moduleSlug}.${serviceSlug}` : ''
 }
 
 const EMPTY_MODULE: ModuleFormData = {
-  name: '', slug: '', description: '', module_url: '', icon_path: '', is_active: true, sort_order: '99',
+  name: '', slug: '', slugManuallyEdited: false, description: '', module_url: '', icon_path: '', is_active: true, sort_order: '99',
 }
 
 const EMPTY_SERVICE: ServiceFormData = {
-  name: '', slug: '', description: '', icon_path: '', is_active: true, sort_order: '99', service_group_id: '',
+  name: '', slug: '', slugManuallyEdited: false, description: '', icon_path: '', is_active: true, sort_order: '99', service_group_id: '',
 }
 
 const EMPTY_GROUP: GroupFormData = {
@@ -93,7 +112,8 @@ const EMPTY_GROUP: GroupFormData = {
 
 function moduleToForm(m: PlatformModule): ModuleFormData {
   return {
-    name: m.name, slug: m.slug, description: m.description ?? '',
+    name: m.name, slug: m.slug, slugManuallyEdited: true,
+    description: m.description ?? '',
     module_url: m.module_url, icon_path: m.icon_path ?? '',
     is_active: m.is_active, sort_order: String(m.sort_order),
   }
@@ -101,7 +121,8 @@ function moduleToForm(m: PlatformModule): ModuleFormData {
 
 function serviceToForm(s: ModuleService): ServiceFormData {
   return {
-    name: s.name, slug: s.slug, description: s.description ?? '',
+    name: s.name, slug: s.slug, slugManuallyEdited: true,
+    description: s.description ?? '',
     icon_path: s.icon_path ?? '', is_active: s.is_active,
     sort_order: String(s.sort_order), service_group_id: s.service_group_id ?? '',
   }
@@ -189,7 +210,15 @@ function ModuleForm({ module, onClose, onSaved }: { module?: PlatformModule; onC
   }
 
   function handleNameChange(value: string) {
-    setForm((f) => ({ ...f, name: value, slug: module ? f.slug : toSlug(value) }))
+    setForm((f) => ({
+      ...f,
+      name: value,
+      slug: f.slugManuallyEdited ? f.slug : normalizeSlug(value),
+    }))
+  }
+
+  function handleSlugChange(value: string) {
+    setForm((f) => ({ ...f, slug: normalizeSlug(value), slugManuallyEdited: true }))
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -233,11 +262,22 @@ function ModuleForm({ module, onClose, onSaved }: { module?: PlatformModule; onC
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1">Slug *</label>
-              <input required value={form.slug} onChange={(e) => field('slug', toSlug(e.target.value))}
+              <input required value={form.slug} onChange={(e) => handleSlugChange(e.target.value)}
                 className="w-full rounded-lg bg-gray-800 border border-gray-600 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-blue-500"
                 placeholder="Ex: pdf" />
             </div>
           </div>
+          {form.slug && (
+            <div className="rounded-lg bg-gray-800/80 border border-gray-700 px-3 py-2 space-y-1">
+              <p className="text-xs text-gray-500">Código de permissão</p>
+              <p className="text-xs font-mono text-blue-400">{modulePermissionKey(form.slug)}</p>
+            </div>
+          )}
+          {module && form.slugManuallyEdited && form.slug !== module.slug && (
+            <div className="rounded-lg bg-yellow-900/30 border border-yellow-700 px-3 py-2 text-xs text-yellow-300">
+              Atenção: alterar o slug pode impactar permissões já configuradas para este módulo.
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Descrição</label>
             <textarea value={form.description} onChange={(e) => field('description', e.target.value)} rows={2}
@@ -376,12 +416,14 @@ function GroupForm({
 
 function ServiceForm({
   moduleId,
+  moduleSlug,
   service,
   groups,
   onClose,
   onSaved,
 }: {
   moduleId: string
+  moduleSlug: string
   service?: ModuleService
   groups: ServiceGroup[]
   onClose: () => void
@@ -398,7 +440,15 @@ function ServiceForm({
   }
 
   function handleNameChange(value: string) {
-    setForm((f) => ({ ...f, name: value, slug: service ? f.slug : toSlug(value) }))
+    setForm((f) => ({
+      ...f,
+      name: value,
+      slug: f.slugManuallyEdited ? f.slug : normalizeSlug(value),
+    }))
+  }
+
+  function handleSlugChange(value: string) {
+    setForm((f) => ({ ...f, slug: normalizeSlug(value), slugManuallyEdited: true }))
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -446,11 +496,22 @@ function ServiceForm({
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1">Slug *</label>
-              <input required value={form.slug} onChange={(e) => field('slug', toSlug(e.target.value))}
+              <input required value={form.slug} onChange={(e) => handleSlugChange(e.target.value)}
                 className="w-full rounded-lg bg-gray-800 border border-gray-600 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-blue-500"
                 placeholder="Ex: pdf-merge" />
             </div>
           </div>
+          {form.slug && (
+            <div className="rounded-lg bg-gray-800/80 border border-gray-700 px-3 py-2 space-y-1">
+              <p className="text-xs text-gray-500">Código de permissão</p>
+              <p className="text-xs font-mono text-blue-400">{servicePermissionKey(moduleSlug, form.slug)}</p>
+            </div>
+          )}
+          {service && form.slugManuallyEdited && form.slug !== service.slug && (
+            <div className="rounded-lg bg-yellow-900/30 border border-yellow-700 px-3 py-2 text-xs text-yellow-300">
+              Atenção: alterar o slug pode impactar permissões já configuradas para este serviço.
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Grupo de Serviços</label>
             <select
@@ -508,6 +569,7 @@ function ServiceForm({
 
 function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () => void }) {
   const qc = useQueryClient()
+  const { hasAdminPermission } = useAuth()
   const [showCreateService, setShowCreateService] = useState(false)
   const [editService, setEditService] = useState<ModuleService | null>(null)
   const [showCreateGroup, setShowCreateGroup] = useState(false)
@@ -590,12 +652,14 @@ function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () 
             <h2 className="text-lg font-bold text-white">Grupos de Serviços</h2>
             <p className="text-xs text-gray-400 mt-0.5">Organizam serviços em categorias dentro do módulo</p>
           </div>
-          <button
-            onClick={() => setShowCreateGroup(true)}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-700 text-gray-200 text-sm hover:bg-gray-600 transition-colors"
-          >
-            <span>+</span> Novo Grupo
-          </button>
+          {hasAdminPermission('admin.services.groups.manage') && (
+            <button
+              onClick={() => setShowCreateGroup(true)}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-700 text-gray-200 text-sm hover:bg-gray-600 transition-colors"
+            >
+              <span>+</span> Novo Grupo
+            </button>
+          )}
         </div>
 
         {groupStatusError && (
@@ -638,24 +702,28 @@ function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () 
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-2">
-                        <button onClick={() => setEditGroup(grp)}
-                          className="px-2.5 py-1 rounded-md bg-gray-700 text-gray-200 text-xs hover:bg-gray-600 transition-colors">
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => toggleGroupStatus.mutate({
-                            id: grp.id,
-                            status: grp.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE',
-                          })}
-                          disabled={toggleGroupStatus.isPending}
-                          className={`px-2.5 py-1 rounded-md text-xs transition-colors disabled:opacity-50 ${
-                            grp.status === 'ACTIVE'
-                              ? 'bg-orange-900/40 text-orange-300 hover:bg-orange-900/60'
-                              : 'bg-green-900/40 text-green-300 hover:bg-green-900/60'
-                          }`}
-                        >
-                          {grp.status === 'ACTIVE' ? 'Inativar' : 'Ativar'}
-                        </button>
+                        {hasAdminPermission('admin.services.groups.manage') && (
+                          <button onClick={() => setEditGroup(grp)}
+                            className="px-2.5 py-1 rounded-md bg-gray-700 text-gray-200 text-xs hover:bg-gray-600 transition-colors">
+                            Editar
+                          </button>
+                        )}
+                        {hasAdminPermission('admin.services.groups.manage') && (
+                          <button
+                            onClick={() => toggleGroupStatus.mutate({
+                              id: grp.id,
+                              status: grp.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE',
+                            })}
+                            disabled={toggleGroupStatus.isPending}
+                            className={`px-2.5 py-1 rounded-md text-xs transition-colors disabled:opacity-50 ${
+                              grp.status === 'ACTIVE'
+                                ? 'bg-orange-900/40 text-orange-300 hover:bg-orange-900/60'
+                                : 'bg-green-900/40 text-green-300 hover:bg-green-900/60'
+                            }`}
+                          >
+                            {grp.status === 'ACTIVE' ? 'Inativar' : 'Ativar'}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -673,12 +741,14 @@ function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () 
             <h2 className="text-lg font-bold text-white">Serviços</h2>
             <p className="text-xs text-gray-400 mt-0.5">{services.length} serviço{services.length !== 1 ? 's' : ''} cadastrado{services.length !== 1 ? 's' : ''}</p>
           </div>
-          <button
-            onClick={() => setShowCreateService(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-500 transition-colors"
-          >
-            <span>+</span> Novo Serviço
-          </button>
+          {hasAdminPermission('admin.services.create') && (
+            <button
+              onClick={() => setShowCreateService(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-500 transition-colors"
+            >
+              <span>+</span> Novo Serviço
+            </button>
+          )}
         </div>
 
         <div className="rounded-xl bg-gray-800/60 border border-gray-700 overflow-x-auto">
@@ -711,23 +781,28 @@ function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () 
                         <span className="text-xs text-gray-600">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-3 font-mono text-gray-400 text-xs">{svc.slug}</td>
+                    <td className="px-3 py-3 font-mono text-gray-400 text-xs">
+                      <div>{svc.slug}</div>
+                      <div className="text-blue-500 text-xs mt-0.5">{servicePermissionKey(module.slug, svc.slug)}</div>
+                    </td>
                     <td className="px-3 py-3 text-gray-400">{svc.sort_order}</td>
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-2">
                         <Toggle
                           checked={svc.is_active}
                           onChange={() => toggleServiceStatus.mutate(svc.id)}
-                          disabled={toggleServiceStatus.isPending}
+                          disabled={toggleServiceStatus.isPending || !hasAdminPermission('admin.services.activate')}
                         />
                         <Badge label={svc.is_active ? 'Ativo' : 'Inativo'} variant={svc.is_active ? 'green' : 'gray'} />
                       </div>
                     </td>
                     <td className="px-3 py-3">
-                      <button onClick={() => setEditService(svc)}
-                        className="px-2.5 py-1 rounded-md bg-gray-700 text-gray-200 text-xs hover:bg-gray-600 transition-colors">
-                        Editar
-                      </button>
+                      {hasAdminPermission('admin.services.edit') && (
+                        <button onClick={() => setEditService(svc)}
+                          className="px-2.5 py-1 rounded-md bg-gray-700 text-gray-200 text-xs hover:bg-gray-600 transition-colors">
+                          Editar
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -738,10 +813,10 @@ function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () 
       </div>
 
       {showCreateService && (
-        <ServiceForm moduleId={module.id} groups={groups} onClose={() => setShowCreateService(false)} onSaved={handleSavedService} />
+        <ServiceForm moduleId={module.id} moduleSlug={module.slug} groups={groups} onClose={() => setShowCreateService(false)} onSaved={handleSavedService} />
       )}
       {editService && (
-        <ServiceForm moduleId={module.id} service={editService} groups={groups} onClose={() => setEditService(null)} onSaved={handleSavedService} />
+        <ServiceForm moduleId={module.id} moduleSlug={module.slug} service={editService} groups={groups} onClose={() => setEditService(null)} onSaved={handleSavedService} />
       )}
       {showCreateGroup && (
         <GroupForm moduleId={module.id} onClose={() => setShowCreateGroup(false)} onSaved={handleSavedGroup} />
@@ -757,6 +832,7 @@ function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () 
 
 export function AdminModulesPage() {
   const qc = useQueryClient()
+  const { hasAdminPermission } = useAuth()
 
   const [search, setSearch] = useState('')
   const [filterActive, setFilterActive] = useState<boolean | null>(null)
@@ -799,12 +875,14 @@ export function AdminModulesPage() {
           <h1 className="text-2xl font-bold text-white">Módulos</h1>
           <p className="text-sm text-gray-400 mt-0.5">Cadastro de módulos e serviços da plataforma</p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-500 transition-colors"
-        >
-          <span>+</span> Novo Módulo
-        </button>
+        {hasAdminPermission('admin.modules.create') && (
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-500 transition-colors"
+          >
+            <span>+</span> Novo Módulo
+          </button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -856,7 +934,10 @@ export function AdminModulesPage() {
                 <tr key={mod.id} className="hover:bg-gray-700/30 transition-colors">
                   <td className="px-3 py-3"><ModuleIcon iconPath={mod.icon_path} size={8} /></td>
                   <td className="px-3 py-3 text-white font-medium whitespace-nowrap">{mod.name}</td>
-                  <td className="px-3 py-3 font-mono text-gray-400 text-xs">{mod.slug}</td>
+                  <td className="px-3 py-3 font-mono text-gray-400 text-xs">
+                    <div>{mod.slug}</div>
+                    <div className="text-blue-500 text-xs mt-0.5">{modulePermissionKey(mod.slug)}</div>
+                  </td>
                   <td className="px-3 py-3 text-gray-400 text-xs whitespace-nowrap max-w-[160px] truncate">{mod.module_url}</td>
                   <td className="px-3 py-3">
                     <span className="text-gray-300 font-semibold">{mod.service_count}</span>
@@ -868,7 +949,7 @@ export function AdminModulesPage() {
                       <Toggle
                         checked={mod.is_active}
                         onChange={() => toggleStatus.mutate(mod.id)}
-                        disabled={toggleStatus.isPending}
+                        disabled={toggleStatus.isPending || !hasAdminPermission('admin.modules.activate')}
                       />
                       <Badge label={mod.is_active ? 'Ativo' : 'Inativo'} variant={mod.is_active ? 'green' : 'gray'} />
                     </div>
@@ -881,12 +962,14 @@ export function AdminModulesPage() {
                       >
                         Serviços
                       </button>
-                      <button
-                        onClick={() => setEditModule(mod)}
-                        className="px-2.5 py-1 rounded-md bg-gray-700 text-gray-200 text-xs hover:bg-gray-600 transition-colors"
-                      >
-                        Editar
-                      </button>
+                      {hasAdminPermission('admin.modules.edit') && (
+                        <button
+                          onClick={() => setEditModule(mod)}
+                          className="px-2.5 py-1 rounded-md bg-gray-700 text-gray-200 text-xs hover:bg-gray-600 transition-colors"
+                        >
+                          Editar
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

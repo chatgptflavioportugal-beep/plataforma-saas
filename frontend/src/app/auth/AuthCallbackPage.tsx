@@ -30,7 +30,8 @@ export function AuthCallbackPage() {
 
     // profile é sempre definido aqui porque isLoading=false garante que
     // loadProfile() completou (setProfile + setIsLoading são batched no React 18).
-    const destination = profile?.system_role === 'SUPER_ADMIN'
+    const role = profile?.system_role
+    const destination = (role === 'SUPER_ADMIN' || role === 'ADMIN_USER')
       ? '/admin/dashboard'
       : '/app/dashboard'
     navigate(destination, { replace: true })

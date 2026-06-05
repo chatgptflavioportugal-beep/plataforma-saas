@@ -86,6 +86,13 @@ public class AdminResource {
         requireAdminPermission(null);
     }
 
+    private static final java.util.regex.Pattern SLUG_PATTERN =
+        java.util.regex.Pattern.compile("^[a-z0-9][a-z0-9_-]*$|^[a-z0-9]$");
+
+    private boolean isValidSlug(String slug) {
+        return slug != null && !slug.isBlank() && SLUG_PATTERN.matcher(slug).matches();
+    }
+
     // ----------------------------------------------------------------
     // Dashboard stats
     // ----------------------------------------------------------------
@@ -794,6 +801,8 @@ public class AdminResource {
             return Response.status(400).entity(Map.of("error", "name é obrigatório")).build();
         if (slug == null || slug.isBlank())
             return Response.status(400).entity(Map.of("error", "slug é obrigatório")).build();
+        if (!isValidSlug(slug))
+            return Response.status(400).entity(Map.of("error", "Slug inválido. Use apenas letras minúsculas, números e hífen")).build();
         if (moduleUrl == null || moduleUrl.isBlank())
             return Response.status(400).entity(Map.of("error", "module_url é obrigatório")).build();
 
@@ -845,6 +854,8 @@ public class AdminResource {
             return Response.status(400).entity(Map.of("error", "name é obrigatório")).build();
         if (slug == null || slug.isBlank())
             return Response.status(400).entity(Map.of("error", "slug é obrigatório")).build();
+        if (!isValidSlug(slug))
+            return Response.status(400).entity(Map.of("error", "Slug inválido. Use apenas letras minúsculas, números e hífen")).build();
         if (moduleUrl == null || moduleUrl.isBlank())
             return Response.status(400).entity(Map.of("error", "module_url é obrigatório")).build();
 
@@ -931,6 +942,8 @@ public class AdminResource {
             return Response.status(400).entity(Map.of("error", "name é obrigatório")).build();
         if (slug == null || slug.isBlank())
             return Response.status(400).entity(Map.of("error", "slug é obrigatório")).build();
+        if (!isValidSlug(slug))
+            return Response.status(400).entity(Map.of("error", "Slug inválido. Use apenas letras minúsculas, números e hífen")).build();
 
         long moduleExists = ((Number) em.createNativeQuery(
             "SELECT COUNT(*) FROM platform_modules WHERE id::text = :id"
@@ -1010,6 +1023,8 @@ public class AdminResource {
             return Response.status(400).entity(Map.of("error", "name é obrigatório")).build();
         if (slug == null || slug.isBlank())
             return Response.status(400).entity(Map.of("error", "slug é obrigatório")).build();
+        if (!isValidSlug(slug))
+            return Response.status(400).entity(Map.of("error", "Slug inválido. Use apenas letras minúsculas, números e hífen")).build();
 
         long slugExists = ((Number) em.createNativeQuery(
             "SELECT COUNT(*) FROM platform_module_services WHERE module_id::text = :moduleId AND slug = :slug AND id::text != :id"

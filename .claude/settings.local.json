@@ -33,7 +33,13 @@
       "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")",
       "Bash(node_modules/.bin/tsc --noEmit)",
       "Bash(find /c/desenvolupament/sistema/saas-plataforma -type f \\\\\\( -name \"*.js\" -o -name \"*.ts\" \\\\\\) ! -path \"*/node_modules/*\" ! -path \"*/.next/*\" | grep -E \"\\(router|server|api\\)\" | head -20)",
-      "Read(//c/desenvolupament/sistema/**)"
+      "Read(//c/desenvolupament/sistema/**)",
+      "Bash(dir -s -r)",
+      "Bash(findstr /i \"module\\\\|service\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\backend-quarkus\\\\src\\\\main\\\\java\\\\com\\\\saas\" -Directory)",
+      "Bash(node -e \"const v = 'Imobiliária'; const result = v.normalize\\('NFD'\\).replace\\(/[̀-ͯ]/g,''\\).toLowerCase\\(\\).replace\\(/[^a-z0-9\\\\s_-]/g,''\\).trim\\(\\).replace\\(/\\\\s+/g,'-'\\).replace\\(/-+/g,'-'\\).replace\\(/^-+|-+$/g,''\\); console.log\\(result\\);\")",
+      "PowerShell(cd \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\frontend\"; npx tsc --noEmit 2>&1 | Where-Object { $_ -match \"AdminModulesPage\" } | Select-Object -First 30)",
+      "Bash(node -e ' *)"
     ]
   }
 }

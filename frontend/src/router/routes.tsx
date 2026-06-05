@@ -3,6 +3,7 @@ import { AuthProvider } from '@/core/auth/AuthContext'
 import { TenantProvider } from '@/core/workspaces/TenantContext'
 import { AuthGuard } from '@/core/auth/AuthGuard'
 import { SuperAdminGuard } from '@/core/auth/SuperAdminGuard'
+import { ClientAreaGuard } from '@/core/auth/ClientAreaGuard'
 import { SubscriptionGuard } from '@/core/permissions/SubscriptionGuard'
 
 import { LoginPage } from '@/app/public/LoginPage'
@@ -24,6 +25,7 @@ import { CompanyMembersPage } from '@/app/client/settings/CompanyMembersPage'
 import { AccessLevelsPage } from '@/app/client/settings/AccessLevelsPage'
 
 import { AdminLayout } from '@/shared/layouts/AdminLayout'
+import { AdminPermissionGuard } from '@/core/auth/AdminPermissionGuard'
 import { AdminDashboardPage } from '@/app/admin/AdminDashboardPage'
 import { AdminTenantsPage } from '@/app/admin/AdminTenantsPage'
 import { AdminCustomersPage } from '@/app/admin/AdminCustomersPage'
@@ -47,30 +49,38 @@ export function AppRouter() {
           {/* Seleção de perfil (autenticado, sem TenantProvider) */}
           <Route path="/select-profile" element={
             <AuthGuard>
-              <ProfileSelectorPage />
+              <ClientAreaGuard>
+                <ProfileSelectorPage />
+              </ClientAreaGuard>
             </AuthGuard>
           } />
 
           {/* Onboarding — criar empresa (tenant individual já existe pelo trigger) */}
           <Route path="/onboarding" element={
             <AuthGuard>
-              <OnboardingPage />
+              <ClientAreaGuard>
+                <OnboardingPage />
+              </ClientAreaGuard>
             </AuthGuard>
           } />
 
           {/* Aceitar convite — autenticado, sem TenantProvider */}
           <Route path="/invite/accept" element={
-            <AcceptInvitePage />
+            <ClientAreaGuard>
+              <AcceptInvitePage />
+            </ClientAreaGuard>
           } />
 
           {/* /app — área das empresas */}
           <Route path="/app/*" element={
             <AuthGuard>
+              <ClientAreaGuard>
               <TenantProvider>
                 <SubscriptionGuard>
                   <AppLayout />
                 </SubscriptionGuard>
               </TenantProvider>
+              </ClientAreaGuard>
             </AuthGuard>
           }>
             <Route index element={<Navigate to="dashboard" replace />} />
@@ -94,15 +104,15 @@ export function AppRouter() {
             </AuthGuard>
           }>
             <Route index element={<Navigate to="dashboard" replace />} />
-            <Route path="dashboard" element={<AdminDashboardPage />} />
-            <Route path="tenants" element={<AdminTenantsPage />} />
-            <Route path="customers" element={<AdminCustomersPage />} />
-            <Route path="system-admins" element={<AdminSystemAdminsPage />} />
-            <Route path="plans" element={<AdminPlansPage />} />
-            <Route path="subscriptions" element={<AdminSubscriptionsPage />} />
-            <Route path="modules" element={<AdminModulesPage />} />
-            <Route path="admin-users" element={<AdminUsersPage />} />
-            <Route path="admin-access-levels" element={<AdminAccessLevelsPage />} />
+            <Route path="dashboard" element={<AdminPermissionGuard permission="admin.dashboard.view"><AdminDashboardPage /></AdminPermissionGuard>} />
+            <Route path="tenants" element={<AdminPermissionGuard permission="admin.companies.view"><AdminTenantsPage /></AdminPermissionGuard>} />
+            <Route path="customers" element={<AdminPermissionGuard permission="admin.clients.view"><AdminCustomersPage /></AdminPermissionGuard>} />
+            <Route path="system-admins" element={<AdminPermissionGuard permission="admin.users.view"><AdminSystemAdminsPage /></AdminPermissionGuard>} />
+            <Route path="plans" element={<AdminPermissionGuard permission="admin.plans.view"><AdminPlansPage /></AdminPermissionGuard>} />
+            <Route path="subscriptions" element={<AdminPermissionGuard permission="admin.subscriptions.view"><AdminSubscriptionsPage /></AdminPermissionGuard>} />
+            <Route path="modules" element={<AdminPermissionGuard permission="admin.modules.view"><AdminModulesPage /></AdminPermissionGuard>} />
+            <Route path="admin-users" element={<AdminPermissionGuard permission="admin.users.view"><AdminUsersPage /></AdminPermissionGuard>} />
+            <Route path="admin-access-levels" element={<AdminPermissionGuard permission="admin.access_levels.view"><AdminAccessLevelsPage /></AdminPermissionGuard>} />
             {/* Redirecionamentos de rotas legadas */}
             <Route path="company-users" element={<Navigate to="/admin/customers" replace />} />
             <Route path="users" element={<Navigate to="/admin/customers" replace />} />

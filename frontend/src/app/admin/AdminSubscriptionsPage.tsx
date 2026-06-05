@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/shared/services/api'
+import { useAuth } from '@/core/auth/AuthContext'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -133,9 +134,10 @@ function DetailModal({
   onCancel: (id: string) => void
   onReactivate: (id: string) => void
 }) {
+  const { hasAdminPermission } = useAuth()
   const isAnnual     = sub.billingCycle === 'ANNUAL'
-  const canCancel    = sub.status === 'ACTIVE'
-  const canReactivate = sub.status === 'CANCELED' && isStillValid(sub.expiresAt)
+  const canCancel    = sub.status === 'ACTIVE' && hasAdminPermission('admin.subscriptions.cancel')
+  const canReactivate = sub.status === 'CANCELED' && isStillValid(sub.expiresAt) && hasAdminPermission('admin.subscriptions.reactivate')
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

@@ -27,7 +27,8 @@ async function resolveDestination(userId: string): Promise<string> {
     .select('system_role')
     .eq('id', userId)
     .single()
-  return data?.system_role === 'SUPER_ADMIN' ? '/admin/dashboard' : '/app/dashboard'
+  const role = data?.system_role
+  return (role === 'SUPER_ADMIN' || role === 'ADMIN_USER') ? '/admin/dashboard' : '/app/dashboard'
 }
 
 export function LoginPage() {

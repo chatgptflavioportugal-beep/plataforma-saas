@@ -141,7 +141,10 @@ function PermGroupModal({ group, selectedKeys, onClose, onSave }: {
                   onChange={() => togglePerm(p.permissionKey)}
                   className="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 cursor-pointer"
                 />
-                <span className="text-sm text-gray-300">{p.label}</span>
+                <span className="text-sm text-gray-300 flex-1">
+                  {p.label}
+                  <span className="ml-1.5 text-xs text-gray-500 font-mono">({p.permissionKey})</span>
+                </span>
               </label>
             ))}
           </div>

@@ -6,6 +6,8 @@ import com.saas.service.PlanService;
 import com.saas.service.TenantService;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.NoResultException;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -30,6 +32,20 @@ public class PublicResource {
 
     @Inject
     JsonWebToken jwt;
+
+    @Inject
+    EntityManager em;
+
+    private boolean isAdminUser(String userId) {
+        try {
+            String role = (String) em.createNativeQuery(
+                "SELECT system_role FROM user_profiles WHERE id::text = :id"
+            ).setParameter("id", userId).getSingleResult();
+            return "SUPER_ADMIN".equals(role) || "ADMIN_USER".equals(role);
+        } catch (NoResultException e) {
+            return false;
+        }
+    }
 
     @GET
     @Path("/health")
@@ -66,6 +82,9 @@ public class PublicResource {
     @Authenticated
     public Response onboarding(Map<String, String> body) {
         UUID userId = UUID.fromString(jwt.getSubject());
+        if (isAdminUser(userId.toString()))
+            return Response.status(403).entity(Map.of("error", "Usuários administrativos não podem criar perfis cliente")).build();
+
         String name = body.get("name");
         String slug = body.get("slug");
 
@@ -91,6 +110,9 @@ public class PublicResource {
     @Authenticated
     public Response createIndividualTenant() {
         UUID userId = UUID.fromString(jwt.getSubject());
+        if (isAdminUser(userId.toString()))
+            return Response.status(403).entity(Map.of("error", "Usuários administrativos não podem criar perfis cliente")).build();
+
         try {
             Map<String, Object> result = tenantService.ensureIndividualTenant(userId);
             return Response.ok(result).build();

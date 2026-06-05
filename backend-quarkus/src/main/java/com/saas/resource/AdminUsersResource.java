@@ -139,6 +139,11 @@ public class AdminUsersResource {
                 return Response.status(409).entity(Map.of("error", "Este e-mail pertence ao SUPER_ADMIN")).build();
             if ("ADMIN_USER".equals(existingRole))
                 return Response.status(409).entity(Map.of("error", "Já existe um usuário administrativo com este e-mail")).build();
+            // Bloquear promoção de conta cliente para admin — emails são exclusivos por área
+            return Response.status(409).entity(Map.of("error",
+                "Este e-mail já está cadastrado como usuário cliente. " +
+                "Um e-mail não pode pertencer à área administrativa e à área cliente ao mesmo tempo."
+            )).build();
         }
 
         // Definir senha efetiva antes de chamar o Supabase
