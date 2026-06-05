@@ -64,7 +64,7 @@ interface LocalLimit {
   tempId: string
   title: string
   description: string
-  limitKey: string
+  code: string
   limitValue: string
   unit: string
   sortOrder: string
@@ -74,6 +74,7 @@ interface LocalModule {
   tempId: string
   moduleId: string
   moduleName: string
+  moduleSlug: string
   monthlyPrice: string
   annualMonthlyPrice: string
   status: 'active' | 'inactive'
@@ -81,12 +82,20 @@ interface LocalModule {
   limits: LocalLimit[]
 }
 
-function pvmToLocalModule(pvm: PlanVersionModule): LocalModule {
+function extractLimitCode(fullCode: string | null, planCode: string, moduleSlug: string): string {
+  if (!fullCode) return ''
+  const prefix = `${planCode}.${moduleSlug}.`
+  if (fullCode.startsWith(prefix)) return fullCode.slice(prefix.length)
+  return fullCode
+}
+
+function pvmToLocalModule(pvm: PlanVersionModule, planCode: string): LocalModule {
   const limits = parseLimits(pvm.limits_json)
   return {
     tempId: pvm.id,
     moduleId: pvm.module_id,
     moduleName: pvm.module_name,
+    moduleSlug: pvm.module_slug,
     monthlyPrice: String(pvm.monthly_price ?? 0),
     annualMonthlyPrice: String(pvm.annual_monthly_price ?? 0),
     status: pvm.status as 'active' | 'inactive',
@@ -95,7 +104,7 @@ function pvmToLocalModule(pvm: PlanVersionModule): LocalModule {
       tempId: l.id,
       title: l.title,
       description: l.description ?? '',
-      limitKey: l.limit_key ?? '',
+      code: extractLimitCode(l.code, planCode, pvm.module_slug),
       limitValue: l.limit_value ?? '',
       unit: l.unit ?? '',
       sortOrder: String(l.sort_order ?? 99),
@@ -104,7 +113,7 @@ function pvmToLocalModule(pvm: PlanVersionModule): LocalModule {
 }
 
 const EMPTY_LOCAL_LIMIT: LocalLimit = {
-  tempId: '', title: '', description: '', limitKey: '', limitValue: '', unit: '', sortOrder: '99',
+  tempId: '', title: '', description: '', code: '', limitValue: '', unit: '', sortOrder: '99',
 }
 
 // ─── componentes base ─────────────────────────────────────────────────────────
@@ -574,10 +583,10 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
 
   useEffect(() => {
     if (fetchedModules && !modulesReady) {
-      setLocalModules(fetchedModules.map(pvmToLocalModule))
+      setLocalModules(fetchedModules.map((pvm) => pvmToLocalModule(pvm, plan.code)))
       setModulesReady(true)
     }
-  }, [fetchedModules, modulesReady])
+  }, [fetchedModules, modulesReady, plan.code])
 
   // Busca todos os módulos da plataforma disponíveis
   const { data: allPlatformModules = [] } = useQuery({
@@ -607,6 +616,7 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
       tempId: `new-${Date.now()}`,
       moduleId: pm.id,
       moduleName: pm.name,
+      moduleSlug: pm.slug,
       monthlyPrice: '0',
       annualMonthlyPrice: '0',
       status: 'active',
@@ -722,7 +732,7 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
           limits: m.limits.map((l) => ({
             title: l.title,
             description: l.description || null,
-            limit_key: l.limitKey || null,
+            code: l.code ? `${plan.code}.${m.moduleSlug}.${l.code}` : null,
             limit_value: l.limitValue || null,
             unit: l.unit || null,
             sort_order: parseInt(l.sortOrder) || 99,
@@ -1040,9 +1050,9 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
                                   />
                                 </div>
                                 <div>
-                                  <input placeholder="Chave técnica (opcional)" value={addLimitForm.limitKey}
-                                    onChange={(e) => setAddLimitForm((f) => ({ ...f, limitKey: e.target.value }))}
-                                    className="w-full rounded-lg bg-gray-800 border border-gray-600 px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                                  <input placeholder="Código (ex: max-file-size)" value={addLimitForm.code}
+                                    onChange={(e) => setAddLimitForm((f) => ({ ...f, code: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '') }))}
+                                    className="w-full rounded-lg bg-gray-800 border border-gray-600 px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-blue-500"
                                   />
                                 </div>
                                 <div>
@@ -1051,6 +1061,12 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
                                     className="w-full rounded-lg bg-gray-800 border border-gray-600 px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
                                   />
                                 </div>
+                                {addLimitForm.code && (
+                                  <div className="col-span-2 rounded-lg bg-gray-950 border border-gray-700 px-3 py-2">
+                                    <p className="text-xs text-gray-500 mb-0.5">Código gerado</p>
+                                    <p className="text-xs font-mono text-blue-400">{plan.code}.{mod.moduleSlug}.{addLimitForm.code}</p>
+                                  </div>
+                                )}
                               </div>
                               <div className="flex gap-2">
                                 <button type="button"
@@ -1074,7 +1090,7 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
                               <thead>
                                 <tr className="text-gray-500">
                                   <th className="text-left py-1 pr-3">Título</th>
-                                  <th className="text-left py-1 pr-3">Descrição</th>
+                                  <th className="text-left py-1 pr-3">Código</th>
                                   <th className="text-right py-1 pr-3">Valor</th>
                                   <th className="text-left py-1 pr-3">Unidade</th>
                                   <th className="text-right py-1">Ações</th>
@@ -1111,11 +1127,17 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
                                             />
                                           </div>
                                           <div>
-                                            <input placeholder="Chave técnica" value={editLimitForm.limitKey}
-                                              onChange={(e) => setEditLimitForm((f) => ({ ...f, limitKey: e.target.value }))}
-                                              className="w-full rounded-lg bg-gray-800 border border-gray-600 px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                                            <input placeholder="Código (ex: max-file-size)" value={editLimitForm.code}
+                                              onChange={(e) => setEditLimitForm((f) => ({ ...f, code: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '') }))}
+                                              className="w-full rounded-lg bg-gray-800 border border-gray-600 px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-blue-500"
                                             />
                                           </div>
+                                          {editLimitForm.code && (
+                                            <div className="col-span-2 rounded-lg bg-gray-950 border border-gray-700 px-3 py-2">
+                                              <p className="text-xs text-gray-500 mb-0.5">Código gerado</p>
+                                              <p className="text-xs font-mono text-blue-400">{plan.code}.{mod.moduleSlug}.{editLimitForm.code}</p>
+                                            </div>
+                                          )}
                                           <div>
                                             <input type="number" placeholder="Ordem" value={editLimitForm.sortOrder}
                                               onChange={(e) => setEditLimitForm((f) => ({ ...f, sortOrder: e.target.value }))}
@@ -1140,7 +1162,9 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
                                   ) : (
                                     <tr key={limit.tempId} className="hover:bg-gray-700/20">
                                       <td className="py-1.5 pr-3 text-white font-medium">{limit.title}</td>
-                                      <td className="py-1.5 pr-3 text-gray-400 max-w-[200px] truncate">{limit.description || '—'}</td>
+                                      <td className="py-1.5 pr-3 font-mono text-xs text-blue-400 max-w-[220px] truncate">
+                                        {limit.code ? `${plan.code}.${mod.moduleSlug}.${limit.code}` : '—'}
+                                      </td>
                                       <td className="py-1.5 pr-3 text-gray-300 text-right font-mono">{limit.limitValue || '—'}</td>
                                       <td className="py-1.5 pr-3 text-gray-400">{limit.unit || '—'}</td>
                                       <td className="py-1.5 text-right whitespace-nowrap">

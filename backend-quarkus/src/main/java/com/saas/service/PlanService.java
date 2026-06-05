@@ -63,7 +63,7 @@ public class PlanService {
         "      'id', pvml.id::text," +
         "      'title', pvml.title," +
         "      'description', pvml.description," +
-        "      'limit_key', pvml.limit_key," +
+        "      'code', pvml.code," +
         "      'limit_value', pvml.limit_value," +
         "      'unit', pvml.unit," +
         "      'sort_order', pvml.sort_order" +
@@ -412,7 +412,7 @@ public class PlanService {
                 "pvm.created_at::text, pvm.updated_at::text, " +
                 "COALESCE((SELECT json_agg(json_build_object(" +
                 "  'id', pvml.id::text, 'title', pvml.title, 'description', pvml.description, " +
-                "  'limit_key', pvml.limit_key, 'limit_value', pvml.limit_value, " +
+                "  'code', pvml.code, 'limit_value', pvml.limit_value, " +
                 "  'unit', pvml.unit, 'sort_order', pvml.sort_order" +
                 ") ORDER BY pvml.sort_order) FROM plan_version_module_limits pvml " +
                 "WHERE pvml.plan_version_module_id = pvm.id), '[]'::json)::text AS limits_json " +
@@ -538,14 +538,14 @@ public class PlanService {
         UUID id = UUID.randomUUID();
         em.createNativeQuery(
                 "INSERT INTO plan_version_module_limits " +
-                "(id, plan_version_module_id, title, description, limit_key, limit_value, unit, sort_order) " +
-                "VALUES (:id, CAST(:pvmId AS uuid), :title, :description, :limitKey, :limitValue, :unit, :sortOrder)"
+                "(id, plan_version_module_id, title, description, code, limit_value, unit, sort_order) " +
+                "VALUES (:id, CAST(:pvmId AS uuid), :title, :description, :code, :limitValue, :unit, :sortOrder)"
         )
         .setParameter("id", id)
         .setParameter("pvmId", pvmId)
         .setParameter("title", req.title())
         .setParameter("description", req.description())
-        .setParameter("limitKey", req.limitKey())
+        .setParameter("code", req.code())
         .setParameter("limitValue", req.limitValue())
         .setParameter("unit", req.unit())
         .setParameter("sortOrder", req.sortOrder() != null ? req.sortOrder() : 99)
@@ -565,13 +565,13 @@ public class PlanService {
 
         int updated = em.createNativeQuery(
                 "UPDATE plan_version_module_limits SET " +
-                "title = :title, description = :description, limit_key = :limitKey, " +
+                "title = :title, description = :description, code = :code, " +
                 "limit_value = :limitValue, unit = :unit, sort_order = :sortOrder, updated_at = NOW() " +
                 "WHERE id::text = :id"
         )
         .setParameter("title", req.title())
         .setParameter("description", req.description())
-        .setParameter("limitKey", req.limitKey())
+        .setParameter("code", req.code())
         .setParameter("limitValue", req.limitValue())
         .setParameter("unit", req.unit())
         .setParameter("sortOrder", req.sortOrder() != null ? req.sortOrder() : 99)
@@ -608,8 +608,8 @@ public class PlanService {
 
         em.createNativeQuery(
                 "INSERT INTO plan_version_module_limits " +
-                "(plan_version_module_id, title, description, limit_key, limit_value, unit, sort_order) " +
-                "SELECT new_pvm.id, old_l.title, old_l.description, old_l.limit_key, old_l.limit_value, old_l.unit, old_l.sort_order " +
+                "(plan_version_module_id, title, description, code, limit_value, unit, sort_order) " +
+                "SELECT new_pvm.id, old_l.title, old_l.description, old_l.code, old_l.limit_value, old_l.unit, old_l.sort_order " +
                 "FROM plan_version_module_limits old_l " +
                 "JOIN plan_version_modules old_pvm ON old_pvm.id = old_l.plan_version_module_id " +
                 "JOIN plan_version_modules new_pvm " +
@@ -695,7 +695,7 @@ public class PlanService {
     public record PlanVersionModuleLimitRequest(
         String title,
         String description,
-        String limitKey,
+        String code,
         String limitValue,
         String unit,
         Integer sortOrder
@@ -787,14 +787,14 @@ public class PlanService {
                     for (PlanVersionModuleLimitRequest lim : mod.limits()) {
                         em.createNativeQuery(
                                 "INSERT INTO plan_version_module_limits " +
-                                "(id, plan_version_module_id, title, description, limit_key, limit_value, unit, sort_order) " +
-                                "VALUES (:id, :pvmId, :title, :description, :limitKey, :limitValue, :unit, :sortOrder)"
+                                "(id, plan_version_module_id, title, description, code, limit_value, unit, sort_order) " +
+                                "VALUES (:id, :pvmId, :title, :description, :code, :limitValue, :unit, :sortOrder)"
                         )
                         .setParameter("id", UUID.randomUUID())
                         .setParameter("pvmId", pvmId)
                         .setParameter("title", lim.title())
                         .setParameter("description", lim.description())
-                        .setParameter("limitKey", lim.limitKey())
+                        .setParameter("code", lim.code())
                         .setParameter("limitValue", lim.limitValue())
                         .setParameter("unit", lim.unit())
                         .setParameter("sortOrder", lim.sortOrder() != null ? lim.sortOrder() : 99)

@@ -39,7 +39,8 @@
       "Bash(Get-ChildItem -Path \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\backend-quarkus\\\\src\\\\main\\\\java\\\\com\\\\saas\" -Directory)",
       "Bash(node -e \"const v = 'Imobiliária'; const result = v.normalize\\('NFD'\\).replace\\(/[̀-ͯ]/g,''\\).toLowerCase\\(\\).replace\\(/[^a-z0-9\\\\s_-]/g,''\\).trim\\(\\).replace\\(/\\\\s+/g,'-'\\).replace\\(/-+/g,'-'\\).replace\\(/^-+|-+$/g,''\\); console.log\\(result\\);\")",
       "PowerShell(cd \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\frontend\"; npx tsc --noEmit 2>&1 | Where-Object { $_ -match \"AdminModulesPage\" } | Select-Object -First 30)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(xargs cat)"
     ]
   }
 }

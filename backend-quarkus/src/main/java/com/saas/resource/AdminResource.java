@@ -912,7 +912,7 @@ public class AdminResource {
         List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
             "SELECT s.id::text, s.module_id::text, s.name, s.slug, s.description, " +
             "  s.icon_path, s.is_active, s.sort_order, s.created_at::text, s.updated_at::text, " +
-            "  s.service_group_id::text, g.name AS group_name " +
+            "  s.service_group_id::text, g.name AS group_name, g.slug AS group_slug " +
             "FROM platform_module_services s " +
             "LEFT JOIN platform_module_service_groups g ON g.id = s.service_group_id " +
             "WHERE s.module_id::text = :moduleId " +
@@ -925,6 +925,7 @@ public class AdminResource {
             m.put("icon_path", row[5]); m.put("is_active", row[6]); m.put("sort_order", row[7]);
             m.put("created_at", row[8]); m.put("updated_at", row[9]);
             m.put("service_group_id", row[10]); m.put("service_group_name", row[11]);
+            m.put("service_group_slug", row[12]);
             return m;
         }).toList();
         return Response.ok(services).build();
@@ -1108,7 +1109,7 @@ public class AdminResource {
     public Response listModuleServiceGroups(@PathParam("moduleId") String moduleId) {
         requireAdminPermission("admin.services.groups.manage");
         List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
-            "SELECT g.id::text, g.module_id::text, g.name, g.description, g.icon_path, " +
+            "SELECT g.id::text, g.module_id::text, g.name, g.slug, g.description, g.icon_path, " +
             "  g.sort_order, g.status, g.created_at::text, g.updated_at::text, " +
             "  (SELECT COUNT(*) FROM platform_module_services s WHERE s.service_group_id = g.id)::int " +
             "FROM platform_module_service_groups g " +
@@ -1118,10 +1119,10 @@ public class AdminResource {
         var groups = rows.stream().map(row -> {
             Map<String, Object> m = new java.util.LinkedHashMap<>();
             m.put("id", row[0]); m.put("module_id", row[1]); m.put("name", row[2]);
-            m.put("description", row[3]); m.put("icon_path", row[4]);
-            m.put("sort_order", row[5]); m.put("status", row[6]);
-            m.put("created_at", row[7]); m.put("updated_at", row[8]);
-            m.put("service_count", row[9]);
+            m.put("slug", row[3]); m.put("description", row[4]); m.put("icon_path", row[5]);
+            m.put("sort_order", row[6]); m.put("status", row[7]);
+            m.put("created_at", row[8]); m.put("updated_at", row[9]);
+            m.put("service_count", row[10]);
             return m;
         }).toList();
         return Response.ok(groups).build();
@@ -1134,8 +1135,13 @@ public class AdminResource {
     public Response createModuleServiceGroup(@PathParam("moduleId") String moduleId, Map<String, Object> body) {
         requireAdminPermission("admin.services.groups.manage");
         String name = (String) body.get("name");
+        String slug = (String) body.get("slug");
         if (name == null || name.isBlank())
             return Response.status(400).entity(Map.of("error", "name é obrigatório")).build();
+        if (slug == null || slug.isBlank())
+            return Response.status(400).entity(Map.of("error", "slug é obrigatório")).build();
+        if (!isValidSlug(slug))
+            return Response.status(400).entity(Map.of("error", "Slug inválido. Use apenas letras minúsculas, números e hífen")).build();
 
         long moduleExists = ((Number) em.createNativeQuery(
             "SELECT COUNT(*) FROM platform_modules WHERE id::text = :id"
@@ -1143,15 +1149,21 @@ public class AdminResource {
         if (moduleExists == 0)
             return Response.status(404).entity(Map.of("error", "Módulo não encontrado")).build();
 
+        long slugExists = ((Number) em.createNativeQuery(
+            "SELECT COUNT(*) FROM platform_module_service_groups WHERE module_id::text = :moduleId AND slug = :slug"
+        ).setParameter("moduleId", moduleId).setParameter("slug", slug).getSingleResult()).longValue();
+        if (slugExists > 0)
+            return Response.status(400).entity(Map.of("error", "Já existe um grupo com este slug neste módulo")).build();
+
         int sortOrder = body.get("sort_order") != null ? ((Number) body.get("sort_order")).intValue() : 99;
         String status = body.get("status") instanceof String s ? s : "ACTIVE";
 
         List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
-            "INSERT INTO platform_module_service_groups (module_id, name, description, icon_path, sort_order, status) " +
-            "VALUES (CAST(:moduleId AS uuid), :name, :description, :iconPath, :sortOrder, :status) " +
-            "RETURNING id::text, module_id::text, name, description, icon_path, sort_order, status, created_at::text, updated_at::text"
+            "INSERT INTO platform_module_service_groups (module_id, name, slug, description, icon_path, sort_order, status) " +
+            "VALUES (CAST(:moduleId AS uuid), :name, :slug, :description, :iconPath, :sortOrder, :status) " +
+            "RETURNING id::text, module_id::text, name, slug, description, icon_path, sort_order, status, created_at::text, updated_at::text"
         )
-        .setParameter("moduleId", moduleId).setParameter("name", name.trim())
+        .setParameter("moduleId", moduleId).setParameter("name", name.trim()).setParameter("slug", slug)
         .setParameter("description", body.get("description")).setParameter("iconPath", body.get("icon_path"))
         .setParameter("sortOrder", sortOrder).setParameter("status", status)
         .getResultList();
@@ -1159,9 +1171,9 @@ public class AdminResource {
         Object[] r = rows.get(0);
         Map<String, Object> result = new java.util.LinkedHashMap<>();
         result.put("id", r[0]); result.put("module_id", r[1]); result.put("name", r[2]);
-        result.put("description", r[3]); result.put("icon_path", r[4]);
-        result.put("sort_order", r[5]); result.put("status", r[6]);
-        result.put("created_at", r[7]); result.put("updated_at", r[8]);
+        result.put("slug", r[3]); result.put("description", r[4]); result.put("icon_path", r[5]);
+        result.put("sort_order", r[6]); result.put("status", r[7]);
+        result.put("created_at", r[8]); result.put("updated_at", r[9]);
         result.put("service_count", 0);
         return Response.status(201).entity(result).build();
     }
@@ -1175,16 +1187,27 @@ public class AdminResource {
             Map<String, Object> body) {
         requireAdminPermission("admin.services.groups.manage");
         String name = (String) body.get("name");
+        String slug = (String) body.get("slug");
         if (name == null || name.isBlank())
             return Response.status(400).entity(Map.of("error", "name é obrigatório")).build();
+        if (slug == null || slug.isBlank())
+            return Response.status(400).entity(Map.of("error", "slug é obrigatório")).build();
+        if (!isValidSlug(slug))
+            return Response.status(400).entity(Map.of("error", "Slug inválido. Use apenas letras minúsculas, números e hífen")).build();
+
+        long slugExists = ((Number) em.createNativeQuery(
+            "SELECT COUNT(*) FROM platform_module_service_groups WHERE module_id::text = :moduleId AND slug = :slug AND id::text != :id"
+        ).setParameter("moduleId", moduleId).setParameter("slug", slug).setParameter("id", id).getSingleResult()).longValue();
+        if (slugExists > 0)
+            return Response.status(400).entity(Map.of("error", "Já existe outro grupo com este slug neste módulo")).build();
 
         int updated = em.createNativeQuery(
-            "UPDATE platform_module_service_groups SET name = :name, description = :description, " +
+            "UPDATE platform_module_service_groups SET name = :name, slug = :slug, description = :description, " +
             "icon_path = :iconPath, sort_order = :sortOrder " +
             "WHERE id::text = :id AND module_id::text = :moduleId"
         )
-        .setParameter("name", name.trim()).setParameter("description", body.get("description"))
-        .setParameter("iconPath", body.get("icon_path"))
+        .setParameter("name", name.trim()).setParameter("slug", slug)
+        .setParameter("description", body.get("description")).setParameter("iconPath", body.get("icon_path"))
         .setParameter("sortOrder", body.get("sort_order") != null ? ((Number) body.get("sort_order")).intValue() : 99)
         .setParameter("id", id).setParameter("moduleId", moduleId)
         .executeUpdate();
@@ -1373,7 +1396,7 @@ public class AdminResource {
         return new PlanService.PlanVersionModuleLimitRequest(
             (String) body.get("title"),
             (String) body.get("description"),
-            (String) body.get("limit_key"),
+            (String) body.get("code"),
             (String) body.get("limit_value"),
             (String) body.get("unit"),
             body.get("sort_order") != null ? ((Number) body.get("sort_order")).intValue() : null
@@ -1393,7 +1416,7 @@ public class AdminResource {
                     return new PlanService.PlanVersionModuleLimitRequest(
                         (String) l.get("title"),
                         (String) l.get("description"),
-                        (String) l.get("limit_key"),
+                        (String) l.get("code"),
                         (String) l.get("limit_value"),
                         (String) l.get("unit"),
                         l.get("sort_order") != null ? ((Number) l.get("sort_order")).intValue() : null

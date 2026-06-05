@@ -118,7 +118,7 @@ export interface PlanVersionModuleLimit {
   id: string
   title: string
   description: string | null
-  limit_key: string | null
+  code: string | null
   limit_value: string | null
   unit: string | null
   sort_order: number
@@ -289,6 +289,7 @@ export interface AvailableService {
 export interface AvailableServiceGroup {
   groupId: string
   groupName: string
+  groupSlug: string
   groupDescription: string | null
   groupIconPath: string | null
   sortOrder: number | null

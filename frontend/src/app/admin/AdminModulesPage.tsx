@@ -23,6 +23,7 @@ interface ServiceGroup {
   id: string
   module_id: string
   name: string
+  slug: string
   description: string | null
   icon_path: string | null
   sort_order: number
@@ -43,6 +44,7 @@ interface ModuleService {
   sort_order: number
   service_group_id: string | null
   service_group_name: string | null
+  service_group_slug: string | null
   created_at: string
   updated_at: string
 }
@@ -71,6 +73,8 @@ interface ServiceFormData {
 
 interface GroupFormData {
   name: string
+  slug: string
+  slugManuallyEdited: boolean
   description: string
   icon_path: string
   sort_order: string
@@ -90,12 +94,10 @@ function normalizeSlug(value: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
-function modulePermissionKey(slug: string): string {
-  return slug ? `module.${slug}` : ''
-}
-
-function servicePermissionKey(moduleSlug: string, serviceSlug: string): string {
-  return moduleSlug && serviceSlug ? `module.${moduleSlug}.${serviceSlug}` : ''
+function serviceCode(moduleSlug: string, serviceSlug: string, groupSlug?: string | null): string {
+  if (!moduleSlug || !serviceSlug) return ''
+  if (groupSlug) return `${moduleSlug}.${groupSlug}.${serviceSlug}`
+  return `${moduleSlug}.${serviceSlug}`
 }
 
 const EMPTY_MODULE: ModuleFormData = {
@@ -107,7 +109,7 @@ const EMPTY_SERVICE: ServiceFormData = {
 }
 
 const EMPTY_GROUP: GroupFormData = {
-  name: '', description: '', icon_path: '', sort_order: '99',
+  name: '', slug: '', slugManuallyEdited: false, description: '', icon_path: '', sort_order: '99',
 }
 
 function moduleToForm(m: PlatformModule): ModuleFormData {
@@ -130,7 +132,8 @@ function serviceToForm(s: ModuleService): ServiceFormData {
 
 function groupToForm(g: ServiceGroup): GroupFormData {
   return {
-    name: g.name, description: g.description ?? '',
+    name: g.name, slug: g.slug, slugManuallyEdited: true,
+    description: g.description ?? '',
     icon_path: g.icon_path ?? '', sort_order: String(g.sort_order),
   }
 }
@@ -194,6 +197,35 @@ function IconPathField({ value, onChange, placeholder }: { value: string; onChan
           <span className="text-xs text-gray-500">Pré-visualização</span>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── caixa de código gerado ────────────────────────────────────────────────────
+
+function CodeBox({ label, code }: { label: string; code: string }) {
+  const [copied, setCopied] = useState(false)
+  function handleCopy() {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+  return (
+    <div className="rounded-lg bg-gray-950 border border-gray-700 px-3 py-2.5 space-y-1">
+      <p className="text-xs text-gray-500">{label}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-mono text-blue-400 break-all">{code || <span className="text-gray-600 italic">—</span>}</p>
+        {code && (
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="shrink-0 text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+          >
+            {copied ? 'Copiado!' : 'Copiar'}
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -268,10 +300,7 @@ function ModuleForm({ module, onClose, onSaved }: { module?: PlatformModule; onC
             </div>
           </div>
           {form.slug && (
-            <div className="rounded-lg bg-gray-800/80 border border-gray-700 px-3 py-2 space-y-1">
-              <p className="text-xs text-gray-500">Código de permissão</p>
-              <p className="text-xs font-mono text-blue-400">{modulePermissionKey(form.slug)}</p>
-            </div>
+            <CodeBox label="Código do módulo" code={form.slug} />
           )}
           {module && form.slugManuallyEdited && form.slug !== module.slug && (
             <div className="rounded-lg bg-yellow-900/30 border border-yellow-700 px-3 py-2 text-xs text-yellow-300">
@@ -342,6 +371,18 @@ function GroupForm({
     setForm((f) => ({ ...f, [key]: value }))
   }
 
+  function handleNameChange(value: string) {
+    setForm((f) => ({
+      ...f,
+      name: value,
+      slug: f.slugManuallyEdited ? f.slug : normalizeSlug(value),
+    }))
+  }
+
+  function handleSlugChange(value: string) {
+    setForm((f) => ({ ...f, slug: normalizeSlug(value), slugManuallyEdited: true }))
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
@@ -349,6 +390,7 @@ function GroupForm({
     try {
       const payload = {
         name: form.name,
+        slug: form.slug,
         description: form.description || null,
         icon_path: form.icon_path || null,
         sort_order: parseInt(form.sort_order) || 99,
@@ -375,12 +417,25 @@ function GroupForm({
           <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none">✕</button>
         </div>
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">Nome *</label>
-            <input required value={form.name} onChange={(e) => field('name', e.target.value)}
-              className="w-full rounded-lg bg-gray-800 border border-gray-600 px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-              placeholder="Ex: Cadastro de Imóveis" />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">Nome *</label>
+              <input required value={form.name} onChange={(e) => handleNameChange(e.target.value)}
+                className="w-full rounded-lg bg-gray-800 border border-gray-600 px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                placeholder="Ex: Imóvel" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">Slug *</label>
+              <input required value={form.slug} onChange={(e) => handleSlugChange(e.target.value)}
+                className="w-full rounded-lg bg-gray-800 border border-gray-600 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-blue-500"
+                placeholder="Ex: imovel" />
+            </div>
           </div>
+          {group && form.slugManuallyEdited && form.slug !== group.slug && (
+            <div className="rounded-lg bg-yellow-900/30 border border-yellow-700 px-3 py-2 text-xs text-yellow-300">
+              Atenção: alterar o slug recalcula os códigos dos serviços vinculados a este grupo.
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Descrição</label>
             <textarea value={form.description} onChange={(e) => field('description', e.target.value)} rows={2}
@@ -434,6 +489,9 @@ function ServiceForm({
   const [error, setError] = useState<string | null>(null)
 
   const activeGroups = groups.filter((g) => g.status === 'ACTIVE')
+
+  const selectedGroup = activeGroups.find((g) => g.id === form.service_group_id) ?? null
+  const generatedCode = serviceCode(moduleSlug, form.slug, selectedGroup?.slug)
 
   function field<K extends keyof ServiceFormData>(key: K, value: ServiceFormData[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -492,26 +550,15 @@ function ServiceForm({
               <label className="block text-xs font-medium text-gray-400 mb-1">Nome *</label>
               <input required value={form.name} onChange={(e) => handleNameChange(e.target.value)}
                 className="w-full rounded-lg bg-gray-800 border border-gray-600 px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                placeholder="Ex: PDF Merge" />
+                placeholder="Ex: Criar" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1">Slug *</label>
               <input required value={form.slug} onChange={(e) => handleSlugChange(e.target.value)}
                 className="w-full rounded-lg bg-gray-800 border border-gray-600 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-blue-500"
-                placeholder="Ex: pdf-merge" />
+                placeholder="Ex: criar" />
             </div>
           </div>
-          {form.slug && (
-            <div className="rounded-lg bg-gray-800/80 border border-gray-700 px-3 py-2 space-y-1">
-              <p className="text-xs text-gray-500">Código de permissão</p>
-              <p className="text-xs font-mono text-blue-400">{servicePermissionKey(moduleSlug, form.slug)}</p>
-            </div>
-          )}
-          {service && form.slugManuallyEdited && form.slug !== service.slug && (
-            <div className="rounded-lg bg-yellow-900/30 border border-yellow-700 px-3 py-2 text-xs text-yellow-300">
-              Atenção: alterar o slug pode impactar permissões já configuradas para este serviço.
-            </div>
-          )}
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Grupo de Serviços</label>
             <select
@@ -528,13 +575,21 @@ function ServiceForm({
               <p className="text-xs text-gray-500 mt-1">Nenhum grupo ativo neste módulo.</p>
             )}
           </div>
+          {form.slug && (
+            <CodeBox label="Código gerado" code={generatedCode} />
+          )}
+          {service && form.slugManuallyEdited && form.slug !== service.slug && (
+            <div className="rounded-lg bg-yellow-900/30 border border-yellow-700 px-3 py-2 text-xs text-yellow-300">
+              Atenção: alterar o slug pode impactar permissões já configuradas para este serviço.
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Descrição</label>
             <textarea value={form.description} onChange={(e) => field('description', e.target.value)} rows={2}
               className="w-full rounded-lg bg-gray-800 border border-gray-600 px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
               placeholder="Descrição curta do serviço" />
           </div>
-          <IconPathField value={form.icon_path} onChange={(v) => field('icon_path', v)} placeholder="/icons/services/pdf-merge.svg" />
+          <IconPathField value={form.icon_path} onChange={(v) => field('icon_path', v)} placeholder="/icons/services/criar.svg" />
           <div className="flex items-center gap-6">
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1">Ordem</label>
@@ -625,6 +680,7 @@ function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () 
     setShowCreateGroup(false)
     setEditGroup(null)
     qc.invalidateQueries({ queryKey: ['admin-module-service-groups', module.id] })
+    qc.invalidateQueries({ queryKey: ['admin-module-services', module.id] })
   }
 
   return (
@@ -680,7 +736,7 @@ function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () 
             <table className="min-w-full divide-y divide-gray-700 text-sm">
               <thead>
                 <tr className="bg-gray-800/80">
-                  {['Nome', 'Serviços', 'Ordem', 'Status', 'Ações'].map((h) => (
+                  {['Nome', 'Slug', 'Serviços', 'Ordem', 'Status', 'Ações'].map((h) => (
                     <th key={h} className="px-3 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -692,6 +748,7 @@ function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () 
                       <div className="text-white font-medium">{grp.name}</div>
                       {grp.description && <div className="text-xs text-gray-500 mt-0.5">{grp.description}</div>}
                     </td>
+                    <td className="px-3 py-3 font-mono text-gray-400 text-xs">{grp.slug}</td>
                     <td className="px-3 py-3 text-gray-400">{grp.service_count} serviço{grp.service_count !== 1 ? 's' : ''}</td>
                     <td className="px-3 py-3 text-gray-400">{grp.sort_order}</td>
                     <td className="px-3 py-3">
@@ -760,7 +817,7 @@ function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () 
             <table className="min-w-full divide-y divide-gray-700 text-sm">
               <thead>
                 <tr className="bg-gray-800/80">
-                  {['Ícone', 'Nome', 'Grupo', 'Slug', 'Ordem', 'Status', 'Ações'].map((h) => (
+                  {['Ícone', 'Nome', 'Grupo', 'Código', 'Ordem', 'Status', 'Ações'].map((h) => (
                     <th key={h} className="px-3 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -781,9 +838,10 @@ function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () 
                         <span className="text-xs text-gray-600">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-3 font-mono text-gray-400 text-xs">
-                      <div>{svc.slug}</div>
-                      <div className="text-blue-500 text-xs mt-0.5">{servicePermissionKey(module.slug, svc.slug)}</div>
+                    <td className="px-3 py-3 font-mono text-xs">
+                      <span className="text-blue-400">
+                        {serviceCode(module.slug, svc.slug, svc.service_group_slug)}
+                      </span>
                     </td>
                     <td className="px-3 py-3 text-gray-400">{svc.sort_order}</td>
                     <td className="px-3 py-3">
@@ -934,10 +992,7 @@ export function AdminModulesPage() {
                 <tr key={mod.id} className="hover:bg-gray-700/30 transition-colors">
                   <td className="px-3 py-3"><ModuleIcon iconPath={mod.icon_path} size={8} /></td>
                   <td className="px-3 py-3 text-white font-medium whitespace-nowrap">{mod.name}</td>
-                  <td className="px-3 py-3 font-mono text-gray-400 text-xs">
-                    <div>{mod.slug}</div>
-                    <div className="text-blue-500 text-xs mt-0.5">{modulePermissionKey(mod.slug)}</div>
-                  </td>
+                  <td className="px-3 py-3 font-mono text-gray-400 text-xs">{mod.slug}</td>
                   <td className="px-3 py-3 text-gray-400 text-xs whitespace-nowrap max-w-[160px] truncate">{mod.module_url}</td>
                   <td className="px-3 py-3">
                     <span className="text-gray-300 font-semibold">{mod.service_count}</span>
