@@ -59,17 +59,21 @@ public class AdminAccessLevelsResource {
                 perm("admin.subscriptions.reactivate", "Reativar assinatura")
             )),
             group("modules", "Módulos", List.of(
-                perm("admin.modules.view",       "Visualizar módulos"),
-                perm("admin.modules.create",     "Criar módulo"),
-                perm("admin.modules.edit",       "Editar módulo"),
-                perm("admin.modules.activate",   "Ativar/inativar módulo")
-            )),
-            group("services", "Serviços", List.of(
-                perm("admin.services.view",          "Visualizar serviços"),
-                perm("admin.services.create",        "Criar serviço"),
-                perm("admin.services.edit",          "Editar serviço"),
-                perm("admin.services.activate",      "Ativar/inativar serviço"),
-                perm("admin.services.groups.manage", "Gerenciar grupos de serviços")
+                perm("admin.modules.view",               "Visualizar módulos"),
+                perm("admin.modules.create",             "Criar módulo"),
+                perm("admin.modules.edit",               "Editar módulo"),
+                perm("admin.modules.activate",           "Ativar módulo"),
+                perm("admin.modules.deactivate",         "Inativar módulo"),
+                perm("admin.services.groups.view",       "Visualizar grupos de serviços"),
+                perm("admin.services.groups.create",     "Criar grupo de serviço"),
+                perm("admin.services.groups.edit",       "Editar grupo de serviço"),
+                perm("admin.services.groups.activate",   "Ativar grupo de serviço"),
+                perm("admin.services.groups.deactivate", "Inativar grupo de serviço"),
+                perm("admin.services.view",              "Visualizar serviços"),
+                perm("admin.services.create",            "Criar serviço"),
+                perm("admin.services.edit",              "Editar serviço"),
+                perm("admin.services.activate",          "Ativar serviço"),
+                perm("admin.services.deactivate",        "Inativar serviço")
             )),
             group("users", "Usuários Administrativos", List.of(
                 perm("admin.users.view",           "Visualizar usuários administrativos"),
@@ -103,6 +107,36 @@ public class AdminAccessLevelsResource {
     }
 
     // ─── Endpoints ───────────────────────────────────────────────────────────
+
+    /**
+     * Retorna as permissões do próprio usuário autenticado.
+     * Não exige nenhuma permissão específica além de ser um ADMIN_USER ativo —
+     * evita o ciclo onde carregar permissões no login exige uma permissão que
+     * ainda não foi carregada.
+     */
+    @GET
+    @Path("/my-permissions")
+    @SuppressWarnings("unchecked")
+    public Response getMyPermissions() {
+        adminResource.requireAdminPermission(null);
+        String userId = jwt.getSubject();
+
+        List<String> accessLevelIds = (List<String>) em.createNativeQuery(
+            "SELECT admin_access_level_id::text FROM user_profiles WHERE id::text = :id"
+        ).setParameter("id", userId).getResultList();
+
+        if (accessLevelIds.isEmpty() || accessLevelIds.get(0) == null) {
+            return Response.ok(Map.of("permissionKeys", List.of())).build();
+        }
+
+        String accessLevelId = accessLevelIds.get(0);
+        List<String> perms = (List<String>) em.createNativeQuery(
+            "SELECT permission_key FROM admin_access_level_permissions " +
+            "WHERE access_level_id::text = :id ORDER BY permission_key"
+        ).setParameter("id", accessLevelId).getResultList();
+
+        return Response.ok(Map.of("permissionKeys", perms)).build();
+    }
 
     @GET
     @Path("/permission-tree")

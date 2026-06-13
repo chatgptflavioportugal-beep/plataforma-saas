@@ -78,6 +78,22 @@ function PermGroupCard({ group, selectedKeys, onConfigure }: {
   )
 }
 
+// ─── Sub-seções para o grupo Módulos ─────────────────────────────────────────
+
+type ModulesSubsection = 'module' | 'groups' | 'services'
+
+function getModulesSubsection(permKey: string): ModulesSubsection {
+  if (permKey.startsWith('admin.services.groups.')) return 'groups'
+  if (permKey.startsWith('admin.services.')) return 'services'
+  return 'module'
+}
+
+const MODULES_SUBSECTION_LABELS: Record<ModulesSubsection, string> = {
+  module: 'Permissões do Módulo',
+  groups: 'Grupos de Serviços',
+  services: 'Serviços',
+}
+
 // ─── Modal de permissões de grupo ────────────────────────────────────────────
 
 function PermGroupModal({ group, selectedKeys, onClose, onSave }: {
@@ -91,6 +107,18 @@ function PermGroupModal({ group, selectedKeys, onClose, onSave }: {
   const allSelected = groupKeys.every(k => local.has(k))
   const someSelected = groupKeys.some(k => local.has(k))
 
+  const isModulesGroup = group.groupKey === 'modules'
+
+  const subsections: { key: ModulesSubsection; label: string; perms: typeof group.permissions }[] = isModulesGroup
+    ? (['module', 'groups', 'services'] as ModulesSubsection[])
+        .map(key => ({
+          key,
+          label: MODULES_SUBSECTION_LABELS[key],
+          perms: group.permissions.filter(p => getModulesSubsection(p.permissionKey) === key),
+        }))
+        .filter(s => s.perms.length > 0)
+    : []
+
   function toggleGroup() {
     setLocal(prev => {
       const next = new Set(prev)
@@ -98,6 +126,20 @@ function PermGroupModal({ group, selectedKeys, onClose, onSave }: {
         groupKeys.forEach(k => next.delete(k))
       } else {
         groupKeys.forEach(k => next.add(k))
+      }
+      return next
+    })
+  }
+
+  function toggleSubsection(subsectionPerms: typeof group.permissions) {
+    const keys = subsectionPerms.map(p => p.permissionKey)
+    const allSub = keys.every(k => local.has(k))
+    setLocal(prev => {
+      const next = new Set(prev)
+      if (allSub) {
+        keys.forEach(k => next.delete(k))
+      } else {
+        keys.forEach(k => next.add(k))
       }
       return next
     })
@@ -116,14 +158,31 @@ function PermGroupModal({ group, selectedKeys, onClose, onSave }: {
     onClose()
   }
 
+  function renderPermission(p: { permissionKey: string; label: string }) {
+    return (
+      <label key={p.permissionKey} className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-gray-700 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={local.has(p.permissionKey)}
+          onChange={() => togglePerm(p.permissionKey)}
+          className="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 cursor-pointer"
+        />
+        <span className="text-sm text-gray-300 flex-1">
+          {p.label}
+          <span className="ml-1.5 text-xs text-gray-500 font-mono">({p.permissionKey})</span>
+        </span>
+      </label>
+    )
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-sm rounded-xl bg-gray-800 border border-gray-700 shadow-2xl">
+      <div className={`w-full rounded-xl bg-gray-800 border border-gray-700 shadow-2xl flex flex-col ${isModulesGroup ? 'max-w-md' : 'max-w-sm'}`}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700">
           <h3 className="text-sm font-semibold text-white">{group.groupName}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
         </div>
-        <div className="p-4">
+        <div className={`p-4 ${isModulesGroup ? 'overflow-y-auto max-h-[70vh]' : ''}`}>
           <label className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-700 cursor-pointer mb-2">
             <TreeCheckbox
               checked={allSelected}
@@ -133,23 +192,32 @@ function PermGroupModal({ group, selectedKeys, onClose, onSave }: {
             <span className="text-sm font-medium text-white">Selecionar todos</span>
           </label>
           <div className="border-t border-gray-700 pt-2 space-y-1">
-            {group.permissions.map(p => (
-              <label key={p.permissionKey} className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-gray-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={local.has(p.permissionKey)}
-                  onChange={() => togglePerm(p.permissionKey)}
-                  className="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 cursor-pointer"
-                />
-                <span className="text-sm text-gray-300 flex-1">
-                  {p.label}
-                  <span className="ml-1.5 text-xs text-gray-500 font-mono">({p.permissionKey})</span>
-                </span>
-              </label>
-            ))}
+            {isModulesGroup ? (
+              subsections.map((sub, i) => {
+                const subKeys = sub.perms.map(p => p.permissionKey)
+                const allSub = subKeys.every(k => local.has(k))
+                const someSub = subKeys.some(k => local.has(k))
+                return (
+                  <div key={sub.key}>
+                    {i > 0 && <hr className="border-gray-700 my-3" />}
+                    <label className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-gray-700/50 cursor-pointer mb-1">
+                      <TreeCheckbox
+                        checked={allSub}
+                        indeterminate={!allSub && someSub}
+                        onChange={() => toggleSubsection(sub.perms)}
+                      />
+                      <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{sub.label}</span>
+                    </label>
+                    {sub.perms.map(renderPermission)}
+                  </div>
+                )
+              })
+            ) : (
+              group.permissions.map(renderPermission)
+            )}
           </div>
         </div>
-        <div className="flex gap-3 px-5 pb-5">
+        <div className="flex gap-3 px-5 pb-5 pt-1">
           <button onClick={onClose} className="flex-1 rounded-lg border border-gray-600 text-gray-300 text-sm py-2 hover:bg-gray-700">
             Cancelar
           </button>
@@ -170,6 +238,7 @@ function AccessLevelModal({ level, permissionGroups, onClose }: {
   onClose: () => void
 }) {
   const qc = useQueryClient()
+  const { refreshAdminPermissions } = useAuth()
   const isEdit = !!level
 
   const [name, setName] = useState(level?.name ?? '')
@@ -204,7 +273,8 @@ function AccessLevelModal({ level, permissionGroups, onClose }: {
         await api.post('/api/v1/admin/access-levels', body)
       }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      await refreshAdminPermissions()
       qc.invalidateQueries({ queryKey: ['admin-access-levels'] })
       onClose()
     },
@@ -382,6 +452,7 @@ export function AdminAccessLevelsPage() {
     },
     enabled: !!editingLevel && editingLevel !== 'new',
     staleTime: 0,
+    gcTime: 0,
   })
 
   const toggleStatus = useMutation({

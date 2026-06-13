@@ -14,6 +14,7 @@ interface AuthContextValue {
   isAdminUser: boolean
   adminPermissions: Set<string>
   hasAdminPermission: (key: string) => boolean
+  refreshAdminPermissions: () => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -52,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Carregar permissões se for ADMIN_USER
     if (data?.system_role === 'ADMIN_USER' && data?.admin_access_level_id) {
-      await loadAdminPermissions(data.admin_access_level_id)
+      await loadAdminPermissions()
     } else {
       setAdminPermissions(new Set())
     }
@@ -60,10 +61,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false)
   }
 
-  async function loadAdminPermissions(accessLevelId: string) {
+  async function loadAdminPermissions() {
     try {
       const { data } = await api.get<{ permissionKeys: string[] }>(
-        `/api/v1/admin/access-levels/${accessLevelId}`
+        '/api/v1/admin/access-levels/my-permissions'
       )
       setAdminPermissions(new Set(data.permissionKeys ?? []))
     } catch {
@@ -96,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdminUser,
       adminPermissions,
       hasAdminPermission,
+      refreshAdminPermissions: loadAdminPermissions,
       signOut,
     }}>
       {children}

@@ -702,13 +702,14 @@ function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () 
       </div>
 
       {/* ── Grupos de Serviços ─────────────────────────────────────── */}
+      {hasAdminPermission('admin.services.groups.view') && (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-white">Grupos de Serviços</h2>
             <p className="text-xs text-gray-400 mt-0.5">Organizam serviços em categorias dentro do módulo</p>
           </div>
-          {hasAdminPermission('admin.services.groups.manage') && (
+          {hasAdminPermission('admin.services.groups.create') && (
             <button
               onClick={() => setShowCreateGroup(true)}
               className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-700 text-gray-200 text-sm hover:bg-gray-600 transition-colors"
@@ -759,13 +760,13 @@ function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () 
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-2">
-                        {hasAdminPermission('admin.services.groups.manage') && (
+                        {hasAdminPermission('admin.services.groups.edit') && (
                           <button onClick={() => setEditGroup(grp)}
                             className="px-2.5 py-1 rounded-md bg-gray-700 text-gray-200 text-xs hover:bg-gray-600 transition-colors">
                             Editar
                           </button>
                         )}
-                        {hasAdminPermission('admin.services.groups.manage') && (
+                        {hasAdminPermission(grp.status === 'ACTIVE' ? 'admin.services.groups.deactivate' : 'admin.services.groups.activate') && (
                           <button
                             onClick={() => toggleGroupStatus.mutate({
                               id: grp.id,
@@ -790,8 +791,10 @@ function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () 
           )}
         </div>
       </div>
+      )}
 
       {/* ── Serviços ───────────────────────────────────────────────── */}
+      {hasAdminPermission('admin.services.view') && (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -849,7 +852,7 @@ function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () 
                         <Toggle
                           checked={svc.is_active}
                           onChange={() => toggleServiceStatus.mutate(svc.id)}
-                          disabled={toggleServiceStatus.isPending || !hasAdminPermission('admin.services.activate')}
+                          disabled={toggleServiceStatus.isPending || !hasAdminPermission(svc.is_active ? 'admin.services.deactivate' : 'admin.services.activate')}
                         />
                         <Badge label={svc.is_active ? 'Ativo' : 'Inativo'} variant={svc.is_active ? 'green' : 'gray'} />
                       </div>
@@ -869,6 +872,7 @@ function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () 
           )}
         </div>
       </div>
+      )}
 
       {showCreateService && (
         <ServiceForm moduleId={module.id} moduleSlug={module.slug} groups={groups} onClose={() => setShowCreateService(false)} onSaved={handleSavedService} />
@@ -995,8 +999,14 @@ export function AdminModulesPage() {
                   <td className="px-3 py-3 font-mono text-gray-400 text-xs">{mod.slug}</td>
                   <td className="px-3 py-3 text-gray-400 text-xs whitespace-nowrap max-w-[160px] truncate">{mod.module_url}</td>
                   <td className="px-3 py-3">
-                    <span className="text-gray-300 font-semibold">{mod.service_count}</span>
-                    <span className="text-xs text-gray-600 ml-1">serviço{mod.service_count !== 1 ? 's' : ''}</span>
+                    {hasAdminPermission('admin.services.view') ? (
+                      <>
+                        <span className="text-gray-300 font-semibold">{mod.service_count}</span>
+                        <span className="text-xs text-gray-600 ml-1">serviço{mod.service_count !== 1 ? 's' : ''}</span>
+                      </>
+                    ) : (
+                      <span className="text-xs text-gray-600">—</span>
+                    )}
                   </td>
                   <td className="px-3 py-3 text-gray-400">{mod.sort_order}</td>
                   <td className="px-3 py-3">
@@ -1004,7 +1014,7 @@ export function AdminModulesPage() {
                       <Toggle
                         checked={mod.is_active}
                         onChange={() => toggleStatus.mutate(mod.id)}
-                        disabled={toggleStatus.isPending || !hasAdminPermission('admin.modules.activate')}
+                        disabled={toggleStatus.isPending || !hasAdminPermission(mod.is_active ? 'admin.modules.deactivate' : 'admin.modules.activate')}
                       />
                       <Badge label={mod.is_active ? 'Ativo' : 'Inativo'} variant={mod.is_active ? 'green' : 'gray'} />
                     </div>

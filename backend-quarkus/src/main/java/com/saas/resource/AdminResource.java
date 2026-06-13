@@ -1107,7 +1107,7 @@ public class AdminResource {
     @Path("/modules/{moduleId}/service-groups")
     @SuppressWarnings("unchecked")
     public Response listModuleServiceGroups(@PathParam("moduleId") String moduleId) {
-        requireAdminPermission("admin.services.groups.manage");
+        requireAdminPermission("admin.services.groups.view");
         List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
             "SELECT g.id::text, g.module_id::text, g.name, g.slug, g.description, g.icon_path, " +
             "  g.sort_order, g.status, g.created_at::text, g.updated_at::text, " +
@@ -1133,7 +1133,7 @@ public class AdminResource {
     @Transactional
     @SuppressWarnings("unchecked")
     public Response createModuleServiceGroup(@PathParam("moduleId") String moduleId, Map<String, Object> body) {
-        requireAdminPermission("admin.services.groups.manage");
+        requireAdminPermission("admin.services.groups.create");
         String name = (String) body.get("name");
         String slug = (String) body.get("slug");
         if (name == null || name.isBlank())
@@ -1185,7 +1185,7 @@ public class AdminResource {
             @PathParam("moduleId") String moduleId,
             @PathParam("id") String id,
             Map<String, Object> body) {
-        requireAdminPermission("admin.services.groups.manage");
+        requireAdminPermission("admin.services.groups.edit");
         String name = (String) body.get("name");
         String slug = (String) body.get("slug");
         if (name == null || name.isBlank())
@@ -1225,10 +1225,10 @@ public class AdminResource {
             @PathParam("moduleId") String moduleId,
             @PathParam("id") String id,
             Map<String, Object> body) {
-        requireAdminPermission("admin.services.groups.manage");
         String newStatus = body instanceof Map<?,?> ? (String) body.get("status") : null;
         if (!List.of("ACTIVE", "INACTIVE").contains(newStatus))
             return Response.status(400).entity(Map.of("error", "Status inválido. Use ACTIVE ou INACTIVE")).build();
+        requireAdminPermission("ACTIVE".equals(newStatus) ? "admin.services.groups.activate" : "admin.services.groups.deactivate");
 
         if ("INACTIVE".equals(newStatus)) {
             long activeCount = ((Number) em.createNativeQuery(
