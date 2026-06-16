@@ -45,6 +45,7 @@ interface ModuleService {
   service_group_id: string | null
   service_group_name: string | null
   service_group_slug: string | null
+  route_key: string
   created_at: string
   updated_at: string
 }
@@ -98,6 +99,14 @@ function serviceCode(moduleSlug: string, serviceSlug: string, groupSlug?: string
   if (!moduleSlug || !serviceSlug) return ''
   if (groupSlug) return `${moduleSlug}.${groupSlug}.${serviceSlug}`
   return `${moduleSlug}.${serviceSlug}`
+}
+
+function generateRouteKey(permissionKey: string): string {
+  return permissionKey
+    .toLowerCase()
+    .replace(/[._\s]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
 
 const EMPTY_MODULE: ModuleFormData = {
@@ -576,7 +585,10 @@ function ServiceForm({
             )}
           </div>
           {form.slug && (
-            <CodeBox label="Código gerado" code={generatedCode} />
+            <div className="space-y-2">
+              <CodeBox label="Código Técnico" code={generatedCode} />
+              <CodeBox label="Route Key" code={generateRouteKey(generatedCode)} />
+            </div>
           )}
           {service && form.slugManuallyEdited && form.slug !== service.slug && (
             <div className="rounded-lg bg-yellow-900/30 border border-yellow-700 px-3 py-2 text-xs text-yellow-300">

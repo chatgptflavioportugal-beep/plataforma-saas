@@ -93,6 +93,16 @@ public class AdminResource {
         return slug != null && !slug.isBlank() && SLUG_PATTERN.matcher(slug).matches();
     }
 
+    private static String generateRouteKey(String moduleSlug, String groupSlug, String serviceSlug) {
+        String permKey = (groupSlug != null && !groupSlug.isBlank())
+            ? moduleSlug + "." + groupSlug + "." + serviceSlug
+            : moduleSlug + "." + serviceSlug;
+        return permKey.toLowerCase()
+            .replaceAll("[._\\s]+", "-")
+            .replaceAll("-+", "-")
+            .replaceAll("^-+|-+$", "");
+    }
+
     // ----------------------------------------------------------------
     // Dashboard stats
     // ----------------------------------------------------------------
@@ -912,7 +922,7 @@ public class AdminResource {
         List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
             "SELECT s.id::text, s.module_id::text, s.name, s.slug, s.description, " +
             "  s.icon_path, s.is_active, s.sort_order, s.created_at::text, s.updated_at::text, " +
-            "  s.service_group_id::text, g.name AS group_name, g.slug AS group_slug " +
+            "  s.service_group_id::text, g.name AS group_name, g.slug AS group_slug, s.route_key " +
             "FROM platform_module_services s " +
             "LEFT JOIN platform_module_service_groups g ON g.id = s.service_group_id " +
             "WHERE s.module_id::text = :moduleId " +
@@ -925,7 +935,7 @@ public class AdminResource {
             m.put("icon_path", row[5]); m.put("is_active", row[6]); m.put("sort_order", row[7]);
             m.put("created_at", row[8]); m.put("updated_at", row[9]);
             m.put("service_group_id", row[10]); m.put("service_group_name", row[11]);
-            m.put("service_group_slug", row[12]);
+            m.put("service_group_slug", row[12]); m.put("route_key", row[13]);
             return m;
         }).toList();
         return Response.ok(services).build();
@@ -975,28 +985,47 @@ public class AdminResource {
         boolean isActive = body.get("is_active") == null || Boolean.TRUE.equals(body.get("is_active"));
         int sortOrder = body.get("sort_order") != null ? ((Number) body.get("sort_order")).intValue() : 99;
 
+        String moduleSlug = (String) em.createNativeQuery(
+            "SELECT slug FROM platform_modules WHERE id::text = :id"
+        ).setParameter("id", moduleId).getSingleResult();
+
+        String groupSlug = null;
         final java.util.UUID finalGroupId = serviceGroupId;
+        if (finalGroupId != null) {
+            groupSlug = (String) em.createNativeQuery(
+                "SELECT slug FROM platform_module_service_groups WHERE id = CAST(:gid AS uuid)"
+            ).setParameter("gid", finalGroupId.toString()).getSingleResult();
+        }
+
+        String routeKey = generateRouteKey(moduleSlug, groupSlug, slug);
+
+        long routeKeyExists = ((Number) em.createNativeQuery(
+            "SELECT COUNT(*) FROM platform_module_services WHERE route_key = :routeKey"
+        ).setParameter("routeKey", routeKey).getSingleResult()).longValue();
+        if (routeKeyExists > 0)
+            return Response.status(400).entity(Map.of("error", "Já existe um serviço com este Route Key: " + routeKey)).build();
+
         List<Object[]> rows;
         if (finalGroupId != null) {
             rows = (List<Object[]>) em.createNativeQuery(
-                "INSERT INTO platform_module_services (module_id, service_group_id, name, slug, description, icon_path, is_active, sort_order) " +
-                "VALUES (CAST(:moduleId AS uuid), CAST(:serviceGroupId AS uuid), :name, :slug, :description, :iconPath, :isActive, :sortOrder) " +
-                "RETURNING id::text, module_id::text, name, slug, description, icon_path, is_active, sort_order, created_at::text, updated_at::text, service_group_id::text"
+                "INSERT INTO platform_module_services (module_id, service_group_id, name, slug, description, icon_path, is_active, sort_order, route_key) " +
+                "VALUES (CAST(:moduleId AS uuid), CAST(:serviceGroupId AS uuid), :name, :slug, :description, :iconPath, :isActive, :sortOrder, :routeKey) " +
+                "RETURNING id::text, module_id::text, name, slug, description, icon_path, is_active, sort_order, created_at::text, updated_at::text, service_group_id::text, route_key"
             )
             .setParameter("moduleId", moduleId).setParameter("serviceGroupId", finalGroupId.toString())
             .setParameter("name", name).setParameter("slug", slug)
             .setParameter("description", body.get("description")).setParameter("iconPath", body.get("icon_path"))
-            .setParameter("isActive", isActive).setParameter("sortOrder", sortOrder)
+            .setParameter("isActive", isActive).setParameter("sortOrder", sortOrder).setParameter("routeKey", routeKey)
             .getResultList();
         } else {
             rows = (List<Object[]>) em.createNativeQuery(
-                "INSERT INTO platform_module_services (module_id, service_group_id, name, slug, description, icon_path, is_active, sort_order) " +
-                "VALUES (CAST(:moduleId AS uuid), NULL, :name, :slug, :description, :iconPath, :isActive, :sortOrder) " +
-                "RETURNING id::text, module_id::text, name, slug, description, icon_path, is_active, sort_order, created_at::text, updated_at::text, service_group_id::text"
+                "INSERT INTO platform_module_services (module_id, service_group_id, name, slug, description, icon_path, is_active, sort_order, route_key) " +
+                "VALUES (CAST(:moduleId AS uuid), NULL, :name, :slug, :description, :iconPath, :isActive, :sortOrder, :routeKey) " +
+                "RETURNING id::text, module_id::text, name, slug, description, icon_path, is_active, sort_order, created_at::text, updated_at::text, service_group_id::text, route_key"
             )
             .setParameter("moduleId", moduleId).setParameter("name", name).setParameter("slug", slug)
             .setParameter("description", body.get("description")).setParameter("iconPath", body.get("icon_path"))
-            .setParameter("isActive", isActive).setParameter("sortOrder", sortOrder)
+            .setParameter("isActive", isActive).setParameter("sortOrder", sortOrder).setParameter("routeKey", routeKey)
             .getResultList();
         }
 
@@ -1007,6 +1036,7 @@ public class AdminResource {
         result.put("icon_path", r[5]); result.put("is_active", r[6]); result.put("sort_order", r[7]);
         result.put("created_at", r[8]); result.put("updated_at", r[9]);
         result.put("service_group_id", r[10]); result.put("service_group_name", null);
+        result.put("route_key", r[11]);
         return Response.status(201).entity(result).build();
     }
 
@@ -1047,32 +1077,52 @@ public class AdminResource {
                 return Response.status(400).entity(Map.of("error", "Grupo não encontrado neste módulo")).build();
         }
 
+        String moduleSlug = (String) em.createNativeQuery(
+            "SELECT slug FROM platform_modules WHERE id::text = :id"
+        ).setParameter("id", moduleId).getSingleResult();
+
+        String groupSlug = null;
+        if (serviceGroupId != null) {
+            groupSlug = (String) em.createNativeQuery(
+                "SELECT slug FROM platform_module_service_groups WHERE id = CAST(:gid AS uuid)"
+            ).setParameter("gid", serviceGroupId.toString()).getSingleResult();
+        }
+
+        String routeKey = generateRouteKey(moduleSlug, groupSlug, slug);
+
+        long routeKeyExists = ((Number) em.createNativeQuery(
+            "SELECT COUNT(*) FROM platform_module_services WHERE route_key = :routeKey AND id::text != :id"
+        ).setParameter("routeKey", routeKey).setParameter("id", id).getSingleResult()).longValue();
+        if (routeKeyExists > 0)
+            return Response.status(400).entity(Map.of("error", "Já existe outro serviço com este Route Key: " + routeKey)).build();
+
         int updated;
         if (serviceGroupId != null) {
             updated = em.createNativeQuery(
                 "UPDATE platform_module_services SET name = :name, slug = :slug, description = :description, " +
                 "icon_path = :iconPath, is_active = :isActive, sort_order = :sortOrder, " +
-                "service_group_id = CAST(:serviceGroupId AS uuid) " +
+                "service_group_id = CAST(:serviceGroupId AS uuid), route_key = :routeKey " +
                 "WHERE id::text = :id AND module_id::text = :moduleId"
             )
             .setParameter("name", name).setParameter("slug", slug)
             .setParameter("description", body.get("description")).setParameter("iconPath", body.get("icon_path"))
             .setParameter("isActive", body.get("is_active") == null || Boolean.TRUE.equals(body.get("is_active")))
             .setParameter("sortOrder", body.get("sort_order") != null ? ((Number) body.get("sort_order")).intValue() : 99)
-            .setParameter("serviceGroupId", serviceGroupId.toString())
+            .setParameter("serviceGroupId", serviceGroupId.toString()).setParameter("routeKey", routeKey)
             .setParameter("id", id).setParameter("moduleId", moduleId)
             .executeUpdate();
         } else {
             updated = em.createNativeQuery(
                 "UPDATE platform_module_services SET name = :name, slug = :slug, description = :description, " +
                 "icon_path = :iconPath, is_active = :isActive, sort_order = :sortOrder, " +
-                "service_group_id = NULL " +
+                "service_group_id = NULL, route_key = :routeKey " +
                 "WHERE id::text = :id AND module_id::text = :moduleId"
             )
             .setParameter("name", name).setParameter("slug", slug)
             .setParameter("description", body.get("description")).setParameter("iconPath", body.get("icon_path"))
             .setParameter("isActive", body.get("is_active") == null || Boolean.TRUE.equals(body.get("is_active")))
             .setParameter("sortOrder", body.get("sort_order") != null ? ((Number) body.get("sort_order")).intValue() : 99)
+            .setParameter("routeKey", routeKey)
             .setParameter("id", id).setParameter("moduleId", moduleId)
             .executeUpdate();
         }

@@ -212,6 +212,45 @@ export interface ModuleBillingOption {
   available_plans: ModulePlan[]
 }
 
+export interface DashboardModuleService {
+  serviceId: string
+  serviceName: string
+  serviceSlug: string
+  serviceDescription: string | null
+  serviceIconPath: string | null
+  serviceGroupId: string | null
+  serviceGroupName: string | null
+  routeKey: string
+  hasAccess: boolean
+}
+
+export type ServiceAccessStatus = 'ALLOWED' | 'DENIED' | 'NOT_FOUND'
+
+export interface ResolvedServiceRoute {
+  serviceId?: string
+  serviceName?: string
+  routeKey: string
+  permissionKey?: string
+  moduleId?: string
+  moduleName?: string
+  accessStatus: ServiceAccessStatus
+}
+
+export interface DashboardModuleItem {
+  moduleId: string
+  moduleName: string
+  moduleSlug: string
+  moduleDescription: string | null
+  moduleIconPath: string | null
+  accessStatus: 'SUBSCRIBED' | 'FREE' | 'LOCKED'
+  planName: string | null
+  planSlug: string | null
+  planVersionId: string | null
+  badgeLabel: string
+  serviceCount: number
+  services: DashboardModuleService[]
+}
+
 export interface ApiError {
   error: string
   message?: string

@@ -4,11 +4,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 
-import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class TenantSubscriptionRepository {
@@ -24,12 +24,9 @@ public class TenantSubscriptionRepository {
     ) {}
 
     public Optional<SubscriptionResult> findActiveByTenant(UUID tenantId) {
-        var result = em.createNativeQuery(
-                "SELECT ts.id, ts.status, p.code, " +
-                "  (SELECT COALESCE(string_agg(pm.slug, ','), '') " +
-                "   FROM plan_version_modules pvm " +
-                "   JOIN platform_modules pm ON pm.id = pvm.module_id AND pm.is_active = true " +
-                "   WHERE pvm.plan_id = p.id AND pvm.status = 'active') AS module_slugs " +
+        // Verifica status da conta do tenant (trial/active/suspended/cancelled)
+        var accountRows = em.createNativeQuery(
+                "SELECT ts.id, ts.status, p.code " +
                 "FROM tenant_subscriptions ts " +
                 "JOIN plans p ON p.id = ts.plan_id " +
                 "WHERE ts.tenant_id = :tenantId " +
@@ -40,13 +37,35 @@ public class TenantSubscriptionRepository {
         .setParameter("tenantId", tenantId)
         .getResultList();
 
-        if (result.isEmpty()) return Optional.empty();
-        Object[] row = (Object[]) result.get(0);
+        if (accountRows.isEmpty()) return Optional.empty();
+        Object[] row = (Object[]) accountRows.get(0);
 
-        String slugsCsv = row[3] != null ? (String) row[3] : "";
-        Set<String> moduleSlugSet = slugsCsv.isBlank()
-                ? Set.of()
-                : Arrays.stream(slugsCsv.split(",")).collect(Collectors.toSet());
+        // Constrói moduleSlugSet a partir de:
+        // 1. Assinaturas de módulo ativas do perfil (profile_module_subscriptions)
+        // 2. Módulos com plano Free disponível (plan_version_modules.monthly_price = 0)
+        @SuppressWarnings("unchecked")
+        List<String> slugRows = em.createNativeQuery(
+                "SELECT DISTINCT pm.slug " +
+                "FROM platform_modules pm " +
+                "WHERE pm.is_active = TRUE " +
+                "  AND (" +
+                "    EXISTS (" +
+                "      SELECT 1 FROM profile_module_subscriptions pms " +
+                "      WHERE pms.tenant_id = :tenantId " +
+                "        AND pms.module_id = pm.id " +
+                "        AND pms.status = 'ACTIVE'" +
+                "    ) OR EXISTS (" +
+                "      SELECT 1 FROM plan_version_modules pvm " +
+                "      WHERE pvm.module_id = pm.id " +
+                "        AND pvm.status = 'active' " +
+                "        AND pvm.monthly_price = 0" +
+                "    )" +
+                "  )"
+        )
+        .setParameter("tenantId", tenantId)
+        .getResultList();
+
+        Set<String> moduleSlugSet = new HashSet<>(slugRows);
 
         return Optional.of(new SubscriptionResult(
                 (UUID) row[0],

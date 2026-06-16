@@ -15,7 +15,7 @@ import { AcceptInvitePage } from '@/app/auth/AcceptInvitePage'
 
 import { AppLayout } from '@/shared/layouts/AppLayout'
 import { DashboardPage } from '@/app/client/DashboardPage'
-import { PdfMergePage } from '@/modules/pdf/PdfMergePage'
+import { ServicePage } from '@/app/client/services/ServicePage'
 import { PlansPage } from '@/app/client/billing/PlansPage'
 import { SubscriptionsPage } from '@/app/client/billing/SubscriptionsPage'
 import { TrialExpiredPage } from '@/app/client/billing/TrialExpiredPage'
@@ -118,7 +118,10 @@ export function AppRouter() {
           }>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="pdf/merge" element={<PdfMergePage />} />
+            {/* Rota dinâmica de serviços — usa routeKey do cadastro */}
+            <Route path=":routeKey" element={<ServicePage />} />
+            {/* Redirect de rota legada */}
+            <Route path="pdf/merge" element={<Navigate to="/app/pdf-pdf-merge" replace />} />
             <Route path="billing/plans" element={<PlansPage />} />
             <Route path="billing/subscriptions" element={<SubscriptionsPage />} />
             <Route path="billing/trial-expired" element={<TrialExpiredPage />} />

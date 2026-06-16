@@ -33,7 +33,7 @@ public class PdfResource {
 
     @GET
     @Path("/jobs")
-    @RequiresPlanFeature("pdf.merge")
+    @RequiresPlanFeature("pdf")
     public Response listJobs(@Context SecurityContext ctx) {
         TenantContext tenantCtx = TenantContext.from(ctx);
         List<PdfJob> jobs = pdfService.listJobs(tenantCtx.getTenantId());
@@ -43,7 +43,7 @@ public class PdfResource {
     @POST
     @Path("/merge")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
-    @RequiresPlanFeature("pdf.merge")
+    @RequiresPlanFeature("pdf")
     public Response merge(
             @RestForm("file_a") FileUpload fileA,
             @RestForm("file_b") FileUpload fileB,
@@ -70,7 +70,7 @@ public class PdfResource {
     @GET
     @Path("/jobs/{jobId}/download")
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @RequiresPlanFeature("pdf.merge")
+    @RequiresPlanFeature("pdf")
     public Response download(@PathParam("jobId") UUID jobId, @Context SecurityContext ctx) {
         TenantContext tenantCtx = TenantContext.from(ctx);
 
