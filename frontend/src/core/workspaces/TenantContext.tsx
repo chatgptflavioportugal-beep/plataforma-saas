@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { api, setActiveTenant } from '@/shared/services/api'
+import { fetchProfileToken, clearAllTokens } from '@/shared/services/tokenService'
 import type { TenantProfile, UserTenant } from '@/shared/types'
 import { useAuth } from '@/core/auth/AuthContext'
 
@@ -15,6 +16,8 @@ interface TenantContextValue {
   trialDaysRemaining: number | null
   individualTenant: UserTenant | null
   businessTenants: UserTenant[]
+  /** ProfileAccessToken vigente para o perfil ativo (null enquanto carrega). */
+  profileAccessToken: string | null
 }
 
 const TenantCtx = createContext<TenantContextValue | null>(null)
@@ -27,6 +30,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const [activeTenantId, setActiveTenantIdState] = useState<string | null>(
     sessionStorage.getItem('active_tenant_id')
   )
+  const [profileAccessToken, setProfileAccessToken] = useState<string | null>(null)
 
   const { data: userTenants = [], isLoading: tenantsLoading, isFetching: tenantsFetching, isError: tenantsError } = useQuery({
     queryKey: ['user-tenants', user?.id],
@@ -43,9 +47,20 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
   // Definido antes do useEffect para evitar TDZ nas deps do effect
   const switchTenant = useCallback((tenantId: string) => {
+    // Limpa tokens do perfil anterior ao trocar de perfil
+    clearAllTokens()
+    setProfileAccessToken(null)
     setActiveTenantIdState(tenantId)
     setActiveTenant(tenantId)
   }, [])
+
+  // Busca o ProfileAccessToken sempre que o perfil ativo mudar
+  useEffect(() => {
+    if (!activeTenantId) return
+    fetchProfileToken(activeTenantId)
+      .then(setProfileAccessToken)
+      .catch(() => setProfileAccessToken(null))
+  }, [activeTenantId])
 
   useEffect(() => {
     if (tenantsLoading || tenantsFetching) return
@@ -110,6 +125,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       trialDaysRemaining,
       individualTenant,
       businessTenants,
+      profileAccessToken,
     }}>
       {children}
     </TenantCtx.Provider>

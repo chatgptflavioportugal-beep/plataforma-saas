@@ -19,7 +19,7 @@ public interface PythonAiClient {
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     Response mergePdf(
-            @HeaderParam("X-Internal-Token") String internalToken,
+            @HeaderParam("Authorization") String authorization,
             @HeaderParam("X-Tenant-ID") String tenantId,
             @HeaderParam("X-User-ID") String userId,
             @MultipartForm PdfMergeForm form

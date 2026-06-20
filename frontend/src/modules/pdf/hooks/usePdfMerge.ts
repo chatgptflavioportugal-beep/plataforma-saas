@@ -1,18 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/shared/services/api'
 import { useTenant } from '@/core/workspaces/TenantContext'
+import { useModule } from '@/core/modules/ModuleContext'
 import type { PdfJob } from '@/shared/types'
 
 export function usePdfJobs() {
   const { activeTenantId } = useTenant()
+  const { moduleApi } = useModule()
 
   return useQuery({
     queryKey: ['pdf-jobs', activeTenantId],
     queryFn: async () => {
-      const { data } = await api.get<PdfJob[]>('/api/v1/pdf/jobs')
+      const { data } = await moduleApi!.get<PdfJob[]>('/api/v1/modules/pdf/jobs')
       return data
     },
-    enabled: !!activeTenantId,
+    enabled: !!activeTenantId && !!moduleApi,
     staleTime: 30 * 1000,
   })
 }
@@ -20,6 +21,7 @@ export function usePdfJobs() {
 export function usePdfMerge() {
   const queryClient = useQueryClient()
   const { activeTenantId } = useTenant()
+  const { moduleApi } = useModule()
 
   return useMutation({
     mutationFn: async (files: { fileA: File; fileB: File }) => {
@@ -27,7 +29,7 @@ export function usePdfMerge() {
       form.append('file_a', files.fileA)
       form.append('file_b', files.fileB)
 
-      const { data } = await api.post<PdfJob>('/api/v1/pdf/merge', form, {
+      const { data } = await moduleApi!.post<PdfJob>('/api/v1/modules/pdf/merge', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       return data
@@ -39,9 +41,11 @@ export function usePdfMerge() {
 }
 
 export function usePdfDownload() {
+  const { moduleApi } = useModule()
+
   return useMutation({
     mutationFn: async (jobId: string) => {
-      const response = await api.get(`/api/v1/pdf/jobs/${jobId}/download`, {
+      const response = await moduleApi!.get(`/api/v1/modules/pdf/jobs/${jobId}/download`, {
         responseType: 'blob',
       })
       const url = window.URL.createObjectURL(new Blob([response.data as BlobPart]))

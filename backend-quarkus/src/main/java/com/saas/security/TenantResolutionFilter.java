@@ -47,6 +47,13 @@ public class TenantResolutionFilter implements ContainerRequestFilter {
             return;
         }
 
+        // APIs de módulo (/api/v1/modules/{slug}/...) usam ModuleAccessToken (ModuleTokenFilter).
+        // A única exceção é o endpoint de geração: /api/v1/modules/{slug}/access-token,
+        // que precisa do Supabase JWT para emitir o token de módulo.
+        if (path.startsWith("/api/v1/modules/") && !path.endsWith("/access-token")) {
+            return;
+        }
+
         if (identity.isAnonymous()) {
             return;
         }

@@ -1,8 +1,10 @@
+import { Suspense } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/shared/services/api'
 import type { ResolvedServiceRoute } from '@/shared/types'
 import { getServiceComponent } from '@/modules/serviceRegistry'
+import { ModuleProvider, useModule } from '@/core/modules/ModuleContext'
 
 export function ServicePage() {
   const { routeKey = '' } = useParams<{ routeKey: string }>()
@@ -54,7 +56,54 @@ export function ServicePage() {
     )
   }
 
-  return <ServiceComponent />
+  // Envolve com ModuleProvider para que o componente tenha acesso ao ModuleAccessToken
+  const moduleSlug = data.moduleSlug ?? routeKey.split('-')[0]
+
+  return (
+    <ModuleProvider moduleSlug={moduleSlug}>
+      <ModuleGate navigate={navigate}>
+        <Suspense fallback={<LoadingSpinner />}>
+          <ServiceComponent />
+        </Suspense>
+      </ModuleGate>
+    </ModuleProvider>
+  )
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function LoadingSpinner() {
+  return (
+    <div className="flex items-center justify-center py-24">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+    </div>
+  )
+}
+
+/** Aguarda o ModuleAccessToken e exibe erro de acesso se não conseguir. */
+function ModuleGate({
+  children,
+  navigate,
+}: {
+  children: React.ReactNode
+  navigate: (path: string) => void
+}) {
+  const { isLoading, error } = useModule()
+
+  if (isLoading) return <LoadingSpinner />
+
+  if (error) {
+    return (
+      <ServiceFeedback
+        icon="🚫"
+        title="Acesso não permitido"
+        description={error}
+        onBack={() => navigate('/app/dashboard')}
+      />
+    )
+  }
+
+  return <>{children}</>
 }
 
 // ─── Feedback helper ──────────────────────────────────────────────────────────

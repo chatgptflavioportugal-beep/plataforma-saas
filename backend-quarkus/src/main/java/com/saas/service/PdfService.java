@@ -38,7 +38,7 @@ public class PdfService {
     }
 
     @Transactional
-    public PdfJob submitMerge(TenantContext ctx, FileUpload fileA, FileUpload fileB) throws IOException {
+    public PdfJob submitMerge(TenantContext ctx, FileUpload fileA, FileUpload fileB, String moduleToken) throws IOException {
         Path storageDir = Paths.get(storagePath, ctx.getTenantId().toString());
         Files.createDirectories(storageDir);
 
@@ -61,25 +61,27 @@ public class PdfService {
 
         auditService.log(ctx, "pdf.merge.submitted", "pdf_jobs", job.id.toString(), null, null);
 
-        processMergeAsync(job.id);
+        processMergeAsync(job.id, moduleToken);
 
         return job;
     }
 
     @Transactional
-    void processMergeAsync(UUID jobId) {
+    void processMergeAsync(UUID jobId, String moduleToken) {
         PdfJob job = PdfJob.findById(jobId);
         if (job == null) return;
 
         job.status = "processing";
         job.persist();
 
+        String authorization = moduleToken != null ? "Bearer " + moduleToken : "Bearer " + internalToken;
+
         try {
             var form = new com.saas.proxy.PdfMergeForm();
             form.fileA = new java.io.File(job.fileAPath);
             form.fileB = new java.io.File(job.fileBPath);
             Response response = pythonAiClient.mergePdf(
-                    internalToken,
+                    authorization,
                     job.tenantId.toString(),
                     job.userId.toString(),
                     form

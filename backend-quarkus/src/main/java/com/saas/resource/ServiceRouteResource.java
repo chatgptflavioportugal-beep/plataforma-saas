@@ -115,7 +115,7 @@ public class ServiceRouteResource {
 
         if (!hasModuleAccess) {
             return Response.ok(buildResult(serviceId, serviceName, sRouteKey, permKey,
-                    moduleId, moduleName, "DENIED")).build();
+                    moduleId, moduleName, moduleSlug, "DENIED")).build();
         }
 
         // 3. Para membros com nível de acesso, verificar permissão no serviço (subscribed ou free)
@@ -137,18 +137,18 @@ public class ServiceRouteResource {
 
             if (permRows.isEmpty()) {
                 return Response.ok(buildResult(serviceId, serviceName, sRouteKey, permKey,
-                        moduleId, moduleName, "DENIED")).build();
+                        moduleId, moduleName, moduleSlug, "DENIED")).build();
             }
         }
 
         return Response.ok(buildResult(serviceId, serviceName, sRouteKey, permKey,
-                moduleId, moduleName, "ALLOWED")).build();
+                moduleId, moduleName, moduleSlug, "ALLOWED")).build();
     }
 
     private Map<String, Object> buildResult(String serviceId, String serviceName,
                                              String routeKey, String permissionKey,
                                              String moduleId, String moduleName,
-                                             String accessStatus) {
+                                             String moduleSlug, String accessStatus) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("serviceId",     serviceId);
         result.put("serviceName",   serviceName);
@@ -156,6 +156,7 @@ public class ServiceRouteResource {
         result.put("permissionKey", permissionKey);
         result.put("moduleId",      moduleId);
         result.put("moduleName",    moduleName);
+        result.put("moduleSlug",    moduleSlug);
         result.put("accessStatus",  accessStatus);
         return result;
     }

@@ -233,6 +233,7 @@ export interface ResolvedServiceRoute {
   permissionKey?: string
   moduleId?: string
   moduleName?: string
+  moduleSlug?: string
   accessStatus: ServiceAccessStatus
 }
 

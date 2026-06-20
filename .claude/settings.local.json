@@ -40,7 +40,11 @@
       "Bash(node -e \"const v = 'Imobiliária'; const result = v.normalize\\('NFD'\\).replace\\(/[̀-ͯ]/g,''\\).toLowerCase\\(\\).replace\\(/[^a-z0-9\\\\s_-]/g,''\\).trim\\(\\).replace\\(/\\\\s+/g,'-'\\).replace\\(/-+/g,'-'\\).replace\\(/^-+|-+$/g,''\\); console.log\\(result\\);\")",
       "PowerShell(cd \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\frontend\"; npx tsc --noEmit 2>&1 | Where-Object { $_ -match \"AdminModulesPage\" } | Select-Object -First 30)",
       "Bash(node -e ' *)",
-      "Bash(xargs cat)"
+      "Bash(xargs cat)",
+      "Bash(New-Item -ItemType Directory -Force \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\backend-python\\\\auth\")",
+      "Bash(Out-Null)",
+      "Bash(New-Item -ItemType File -Path \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\backend-python\\\\auth\\\\__init__.py\" -Force)",
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\backend-python\\\\auth\")"
     ]
   }
 }
