@@ -58,7 +58,7 @@ public class PdfResource {
         }
 
         try {
-            PdfJob job = pdfService.submitMerge(tenantCtx, fileA, fileB);
+            PdfJob job = pdfService.submitMerge(tenantCtx, fileA, fileB, null);
             return Response.ok(job).build();
         } catch (IOException e) {
             return Response.serverError()
