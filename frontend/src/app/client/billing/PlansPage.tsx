@@ -5,7 +5,7 @@ import { api } from '@/shared/services/api'
 import { Button } from '@/shared/components/Button'
 import { Spinner } from '@/shared/components/Spinner'
 import { useTenant } from '@/core/workspaces/TenantContext'
-import type { ModuleBillingOption, ModulePlan, ModuleService } from '@/shared/types'
+import type { ModuleBillingOption, ModulePlan, ModuleService, ProfileModuleSubscription } from '@/shared/types'
 
 // Raw shape returned by the API (JSON strings not yet parsed)
 type ModuleBillingOptionRaw = {
@@ -32,12 +32,29 @@ function planAnnualTotal(plan: ModulePlan): number {
   return plan.annual_total_price > 0 ? plan.annual_total_price : plan.annual_monthly_price * 12
 }
 
+/** Acha, dentro do catálogo do módulo, o plano correspondente à assinatura ativa (casando por plan_id). */
+function findCurrentPlan(module: ModuleBillingOption, activeSub: ProfileModuleSubscription | undefined): ModulePlan | undefined {
+  if (!activeSub) return undefined
+  return module.available_plans.find(p => p.plan_id === activeSub.planId)
+}
+
+type PlanComparison = 'current' | 'upgrade' | 'downgrade' | 'none'
+
+/** Compara um plano do catálogo com o plano atualmente contratado, usando a ordem cadastrada (plan_sort_order). */
+function comparePlan(plan: ModulePlan, currentPlan: ModulePlan | undefined): PlanComparison {
+  if (!currentPlan) return 'none'
+  if (plan.plan_id === currentPlan.plan_id) return 'current'
+  return plan.plan_sort_order > currentPlan.plan_sort_order ? 'upgrade' : 'downgrade'
+}
+
 type SubscribeState = 'idle' | 'success' | 'error'
 
 type SelectedConfig = {
   module: ModuleBillingOption
   plan: ModulePlan
   isAnnual: boolean
+  /** Plano atualmente contratado antes desta seleção (undefined = contratação nova) */
+  previousPlan?: ModulePlan
 }
 
 // ─── Profile Banner ───────────────────────────────────────────────────────────
@@ -78,13 +95,19 @@ function ProfileBanner({ profileName, profileType }: ProfileBannerProps) {
 type ModuleCardProps = {
   module: ModuleBillingOption
   selected: SelectedConfig | undefined
+  currentPlan: ModulePlan | undefined
   onChoose: () => void
 }
 
-function ModuleCard({ module, selected, onChoose }: ModuleCardProps) {
+function ModuleCard({ module, selected, currentPlan, onChoose }: ModuleCardProps) {
   const plans = module.available_plans
   const hasPlans = plans.length > 0
   const planNames = plans.map(p => p.plan_name).join(', ')
+  const isFreePlan = currentPlan ? currentPlan.monthly_price === 0 : false
+
+  let mainButtonLabel = 'Contratar'
+  if (selected) mainButtonLabel = 'Trocar plano'
+  else if (currentPlan) mainButtonLabel = 'Upgrade'
 
   let mainPrice: string | null = null
   let subPrice: string | null = null
@@ -135,6 +158,17 @@ function ModuleCard({ module, selected, onChoose }: ModuleCardProps) {
           <h3 className="text-lg font-bold text-gray-900">{module.module_name}</h3>
         </div>
 
+        {currentPlan && (
+          <div className="mt-3 flex items-center gap-2">
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+              isFreePlan ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+            }`}>
+              Plano atual: {currentPlan.plan_name}
+            </span>
+            <span className="text-xs font-medium text-gray-400">Assinatura ativa</span>
+          </div>
+        )}
+
         {module.module_description && (
           <p className="mt-2 text-sm text-gray-500 min-h-[2rem]">{module.module_description}</p>
         )}
@@ -181,7 +215,7 @@ function ModuleCard({ module, selected, onChoose }: ModuleCardProps) {
           onClick={onChoose}
           disabled={!hasPlans}
         >
-          {selected ? 'Trocar plano' : 'Escolher plano'}
+          {mainButtonLabel}
         </Button>
       </div>
     </div>
@@ -193,12 +227,15 @@ function ModuleCard({ module, selected, onChoose }: ModuleCardProps) {
 type PlanModalProps = {
   module: ModuleBillingOption
   initialIsAnnual: boolean
-  currentPlanId: string | undefined
+  /** Plano selecionado localmente (ainda não confirmado) — usado apenas quando o módulo não tem assinatura ativa */
+  pendingPlanId: string | undefined
+  /** Plano realmente contratado no perfil ativo (fonte da verdade para Upgrade/Downgrade) */
+  currentPlan: ModulePlan | undefined
   onSelect: (plan: ModulePlan, isAnnual: boolean) => void
   onClose: () => void
 }
 
-function PlanModal({ module, initialIsAnnual, currentPlanId, onSelect, onClose }: PlanModalProps) {
+function PlanModal({ module, initialIsAnnual, pendingPlanId, currentPlan, onSelect, onClose }: PlanModalProps) {
   const [isAnnual, setIsAnnual] = useState(initialIsAnnual)
 
   return (
@@ -242,16 +279,46 @@ function PlanModal({ module, initialIsAnnual, currentPlanId, onSelect, onClose }
           </div>
         </div>
 
+        {currentPlan && (
+          <div className="px-6 pt-2">
+            <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3">
+              <p className="text-sm font-semibold text-blue-900">Plano atual: {currentPlan.plan_name}</p>
+              <p className="mt-1 text-xs text-blue-700 leading-relaxed">
+                Você pode fazer upgrade ou downgrade deste módulo a qualquer momento.
+                As alterações respeitarão as regras de cobrança da plataforma.
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="overflow-y-auto p-6 space-y-4">
           {module.available_plans.map(plan => {
-            const isCurrent = plan.plan_id === currentPlanId && isAnnual === initialIsAnnual
+            const comparison = comparePlan(plan, currentPlan)
+            const isPendingSelection = comparison === 'none' && plan.plan_id === pendingPlanId && isAnnual === initialIsAnnual
             const total = planAnnualTotal(plan)
+
+            let buttonLabel = isPendingSelection ? 'Selecionado' : 'Selecionar'
+            let buttonVariant: 'primary' | 'secondary' = isPendingSelection ? 'secondary' : 'primary'
+            if (comparison === 'current') {
+              buttonLabel = '✓ Plano Atual'
+              buttonVariant = 'secondary'
+            } else if (comparison === 'upgrade') {
+              buttonLabel = 'Upgrade'
+              buttonVariant = 'primary'
+            } else if (comparison === 'downgrade') {
+              buttonLabel = 'Downgrade'
+              buttonVariant = 'secondary'
+            }
+
+            const isHighlighted = comparison === 'current' || isPendingSelection
 
             return (
               <div
                 key={plan.plan_id}
                 className={`rounded-xl border p-4 transition-all ${
-                  isCurrent
+                  comparison === 'current'
+                    ? 'border-green-500 bg-green-50 ring-1 ring-green-400'
+                    : isHighlighted
                     ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-400'
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
@@ -308,12 +375,13 @@ function PlanModal({ module, initialIsAnnual, currentPlanId, onSelect, onClose }
                   </div>
 
                   <Button
-                    variant={isCurrent ? 'secondary' : 'primary'}
+                    variant={buttonVariant}
                     size="sm"
                     onClick={() => onSelect(plan, isAnnual)}
+                    disabled={comparison === 'current'}
                     className="shrink-0 mt-1"
                   >
-                    {isCurrent ? 'Selecionado' : 'Selecionar'}
+                    {buttonLabel}
                   </Button>
                 </div>
               </div>
@@ -350,20 +418,39 @@ function ConfirmSubscriptionModal({
 
   const isIndividual = profileType === 'individual'
 
+  const isSingle = selected.length === 1
+  const single = isSingle ? selected[0] : null
+  const singleIsChange = !!single?.previousPlan
+
+  const confirmButtonLabel = isSingle
+    ? (singleIsChange ? 'Atualizar plano do módulo' : 'Contratar módulo')
+    : 'Confirmar assinatura'
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="border-b border-gray-100 px-6 py-5 shrink-0">
-          <h2 className="text-lg font-bold text-gray-900">Confirmar assinatura</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            {isIndividual
-              ? 'Você está prestes a adicionar os módulos selecionados ao seu Perfil Individual.'
-              : `Você está prestes a adicionar os módulos selecionados ao perfil:`}
-          </p>
-          {!isIndividual && (
-            <p className="mt-1 text-sm font-bold text-gray-800">{profileName}</p>
+          <h2 className="text-lg font-bold text-gray-900">
+            {singleIsChange ? `Alterar plano do módulo ${single!.module.module_name}` : 'Confirmar assinatura'}
+          </h2>
+          {singleIsChange ? (
+            <div className="mt-2 space-y-0.5 text-sm text-gray-600">
+              <p>Plano atual: <strong className="text-gray-800">{single!.previousPlan!.plan_name}</strong></p>
+              <p>Novo plano: <strong className="text-gray-800">{single!.plan.plan_name}</strong></p>
+            </div>
+          ) : (
+            <>
+              <p className="mt-1 text-sm text-gray-500">
+                {isIndividual
+                  ? 'Você está prestes a adicionar os módulos selecionados ao seu Perfil Individual.'
+                  : `Você está prestes a adicionar os módulos selecionados ao perfil:`}
+              </p>
+              {!isIndividual && (
+                <p className="mt-1 text-sm font-bold text-gray-800">{profileName}</p>
+              )}
+            </>
           )}
         </div>
 
@@ -389,7 +476,7 @@ function ConfirmSubscriptionModal({
               Módulos selecionados
             </p>
             <ul className="space-y-2">
-              {selected.map(({ module, plan, isAnnual }) => {
+              {selected.map(({ module, plan, isAnnual, previousPlan }) => {
                 const price = isAnnual
                   ? `${brl(planAnnualTotal(plan))}/ano`
                   : `${brl(plan.monthly_price)}/mês`
@@ -400,6 +487,11 @@ function ConfirmSubscriptionModal({
                       <p className="text-gray-500">
                         Plano {plan.plan_name} · {isAnnual ? 'Anual' : 'Mensal'}
                       </p>
+                      <span className={`inline-block mt-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                        previousPlan ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {previousPlan ? `Alterando: ${previousPlan.plan_name} → ${plan.plan_name}` : 'Novo módulo'}
+                      </span>
                     </div>
                     <span className="font-bold text-gray-900 whitespace-nowrap">{price}</span>
                   </li>
@@ -448,7 +540,7 @@ function ConfirmSubscriptionModal({
             Cancelar
           </Button>
           <Button variant="primary" className="flex-1" onClick={onConfirm}>
-            Confirmar assinatura
+            {confirmButtonLabel}
           </Button>
         </div>
       </div>
@@ -577,7 +669,7 @@ function ConfigPanel({ selected, onRemove, onConfirm }: ConfigPanelProps) {
         <div className="space-y-3">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cobranças mensais</p>
           <ul className="space-y-4">
-            {monthlyItems.map(({ module, plan }) => (
+            {monthlyItems.map(({ module, plan, previousPlan }) => (
               <li key={module.module_id} className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-gray-800 truncate">{module.module_name}</p>
@@ -588,9 +680,16 @@ function ConfigPanel({ selected, onRemove, onConfirm }: ConfigPanelProps) {
                   {plan.monthly_price > 0 && (
                     <p className="text-xs text-gray-400">cobrança mensal</p>
                   )}
-                  <span className="inline-block mt-1.5 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
-                    Mensal
-                  </span>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    <span className="inline-block rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+                      Mensal
+                    </span>
+                    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                      previousPlan ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+                    }`}>
+                      {previousPlan ? `${previousPlan.plan_name} → ${plan.plan_name}` : 'Novo módulo'}
+                    </span>
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -612,7 +711,7 @@ function ConfigPanel({ selected, onRemove, onConfirm }: ConfigPanelProps) {
         <div className="space-y-3">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cobranças anuais</p>
           <ul className="space-y-4">
-            {annualItems.map(({ module, plan }) => {
+            {annualItems.map(({ module, plan, previousPlan }) => {
               const total = planAnnualTotal(plan)
               return (
                 <li key={module.module_id} className="flex items-start justify-between gap-3">
@@ -627,9 +726,16 @@ function ConfigPanel({ selected, onRemove, onConfirm }: ConfigPanelProps) {
                         <p className="text-xs text-gray-500">em até 12x de {brl(plan.annual_monthly_price)}</p>
                       </>
                     )}
-                    <span className="inline-block mt-1.5 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                      Anual
-                    </span>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      <span className="inline-block rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                        Anual
+                      </span>
+                      <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                        previousPlan ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {previousPlan ? `${previousPlan.plan_name} → ${plan.plan_name}` : 'Novo módulo'}
+                      </span>
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -714,6 +820,25 @@ export function PlansPage() {
     },
   })
 
+  // Assinaturas do perfil ativo — nunca cacheia entre perfis (staleTime 0 + refetch no mount)
+  const { data: subscriptions = [] } = useQuery({
+    queryKey: ['profile-subscriptions', currentTenant?.tenant.id],
+    queryFn: async () => {
+      const { data } = await api.get<ProfileModuleSubscription[]>('/api/v1/subscriptions/modules')
+      return data
+    },
+    enabled: !!currentTenant,
+    staleTime: 0,
+    refetchOnMount: 'always',
+  })
+
+  const activeSubByModuleId = subscriptions
+    .filter(s => s.status === 'ACTIVE')
+    .reduce<Record<string, ProfileModuleSubscription>>((acc, s) => {
+      acc[s.moduleId] = s
+      return acc
+    }, {})
+
   const confirmMutation = useMutation({
     mutationFn: async () => {
       const payload = {
@@ -736,7 +861,8 @@ export function PlansPage() {
   })
 
   function selectPlan(module: ModuleBillingOption, plan: ModulePlan, isAnnual: boolean) {
-    setConfiguration(prev => ({ ...prev, [module.module_id]: { module, plan, isAnnual } }))
+    const previousPlan = findCurrentPlan(module, activeSubByModuleId[module.module_id])
+    setConfiguration(prev => ({ ...prev, [module.module_id]: { module, plan, isAnnual, previousPlan } }))
     setModalModule(null)
   }
 
@@ -794,6 +920,7 @@ export function PlansPage() {
                   key={module.module_id}
                   module={module}
                   selected={configuration[module.module_id]}
+                  currentPlan={findCurrentPlan(module, activeSubByModuleId[module.module_id])}
                   onChoose={() => setModalModule(module)}
                 />
               ))}
@@ -820,7 +947,8 @@ export function PlansPage() {
         <PlanModal
           module={modalModule}
           initialIsAnnual={configuration[modalModule.module_id]?.isAnnual ?? false}
-          currentPlanId={configuration[modalModule.module_id]?.plan.plan_id}
+          pendingPlanId={configuration[modalModule.module_id]?.plan.plan_id}
+          currentPlan={findCurrentPlan(modalModule, activeSubByModuleId[modalModule.module_id])}
           onSelect={(plan, isAnnual) => selectPlan(modalModule, plan, isAnnual)}
           onClose={() => setModalModule(null)}
         />

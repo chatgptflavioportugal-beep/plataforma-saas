@@ -46,7 +46,8 @@
       "Bash(New-Item -ItemType File -Path \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\backend-python\\\\auth\\\\__init__.py\" -Force)",
       "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\backend-python\\\\auth\")",
       "Bash(openssl rand *)",
-      "Bash(git -C \"c:/desenvolvimento/sistema/saas-plataforma\" diff -- backend-python/auth/module_auth.py)"
+      "Bash(git -C \"c:/desenvolvimento/sistema/saas-plataforma\" diff -- backend-python/auth/module_auth.py)",
+      "Bash(npx tsc *)"
     ]
   }
 }

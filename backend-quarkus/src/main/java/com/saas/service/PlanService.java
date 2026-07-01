@@ -824,6 +824,7 @@ public class PlanService {
             "COALESCE((SELECT json_agg(json_build_object(" +
             "  'plan_id', p.id::text, 'plan_name', p.name, 'plan_slug', p.code," +
             "  'plan_version_id', pvm.id::text, 'plan_version', p.version," +
+            "  'plan_sort_order', p.sort_order," +
             "  'monthly_price', pvm.monthly_price, 'annual_monthly_price', pvm.annual_monthly_price," +
             "  'annual_total_price', pvm.annual_monthly_price * 12," +
             "  'limits', COALESCE((SELECT json_agg(json_build_object(" +
@@ -831,7 +832,7 @@ public class PlanService {
             "    'limit_value', pvml.limit_value, 'unit', pvml.unit, 'sort_order', pvml.sort_order" +
             "  ) ORDER BY pvml.sort_order) FROM plan_version_module_limits pvml" +
             "  WHERE pvml.plan_version_module_id = pvm.id), '[]'::json)" +
-            ") ORDER BY pvm.monthly_price, p.sort_order) FROM plan_version_modules pvm" +
+            ") ORDER BY p.sort_order, pvm.monthly_price) FROM plan_version_modules pvm" +
             " JOIN plans p ON p.id = pvm.plan_id" +
             " WHERE pvm.module_id = pm.id AND pvm.status = 'active'" +
             " AND p.is_active = TRUE AND p.is_current_version = TRUE), '[]'::json)::text AS available_plans_json " +

@@ -189,6 +189,8 @@ export interface ModulePlan {
   plan_slug: string
   plan_version_id: string
   plan_version: number
+  /** Ordem cadastrada do plano (usada para comparação de upgrade/downgrade) */
+  plan_sort_order: number
   monthly_price: number
   annual_monthly_price: number
   annual_total_price: number
