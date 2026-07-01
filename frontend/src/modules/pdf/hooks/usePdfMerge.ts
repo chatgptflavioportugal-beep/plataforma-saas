@@ -10,7 +10,7 @@ export function usePdfJobs() {
   return useQuery({
     queryKey: ['pdf-jobs', activeTenantId],
     queryFn: async () => {
-      const { data } = await moduleApi!.get<PdfJob[]>('/api/v1/modules/pdf/jobs')
+      const { data } = await moduleApi!.get<PdfJob[]>('/pdf/jobs')
       return data
     },
     enabled: !!activeTenantId && !!moduleApi,
@@ -29,9 +29,7 @@ export function usePdfMerge() {
       form.append('file_a', files.fileA)
       form.append('file_b', files.fileB)
 
-      const { data } = await moduleApi!.post<PdfJob>('/api/v1/modules/pdf/merge', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
+      const { data } = await moduleApi!.post<PdfJob>('/pdf/merge', form)
       return data
     },
     onSuccess: () => {
@@ -44,15 +42,17 @@ export function usePdfDownload() {
   const { moduleApi } = useModule()
 
   return useMutation({
-    mutationFn: async (jobId: string) => {
-      const response = await moduleApi!.get(`/api/v1/modules/pdf/jobs/${jobId}/download`, {
+    mutationFn: async (job: PdfJob) => {
+      const response = await moduleApi!.get(`/pdf/jobs/${job.id}/download`, {
         responseType: 'blob',
       })
-      const url = window.URL.createObjectURL(new Blob([response.data as BlobPart]))
+      const url = window.URL.createObjectURL(new Blob([response.data as BlobPart], { type: 'application/pdf' }))
       const link = document.createElement('a')
       link.href = url
-      link.download = `merged-${jobId}.pdf`
+      link.download = job.result_name ?? `merged-${job.id}.pdf`
+      document.body.appendChild(link)
       link.click()
+      document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
     },
   })

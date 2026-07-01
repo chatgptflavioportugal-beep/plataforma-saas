@@ -52,20 +52,20 @@ export function PdfMergePage() {
   }
 
   function statusBadge(status: PdfJob['status']) {
-    const map = {
-      pending: 'bg-gray-100 text-gray-600',
+    const styles = {
+      pending:    'bg-gray-100 text-gray-600',
       processing: 'bg-blue-100 text-blue-700',
-      completed: 'bg-green-100 text-green-700',
-      failed: 'bg-red-100 text-red-700',
+      completed:  'bg-green-100 text-green-700',
+      failed:     'bg-red-100 text-red-700',
     }
     const labels = {
-      pending: 'Aguardando',
+      pending:    'Aguardando',
       processing: 'Processando',
-      completed: 'Concluído',
-      failed: 'Erro',
+      completed:  'Concluído',
+      failed:     'Erro',
     }
     return (
-      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${map[status]}`}>
+      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[status]}`}>
         {labels[status]}
       </span>
     )
@@ -81,9 +81,7 @@ export function PdfMergePage() {
       <form onSubmit={handleSubmit} className="rounded-xl bg-white border border-gray-100 p-6 shadow-sm space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              PDF A
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">PDF A</label>
             <input
               ref={refA}
               type="file"
@@ -96,9 +94,7 @@ export function PdfMergePage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              PDF B
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">PDF B</label>
             <input
               ref={refB}
               type="file"
@@ -157,7 +153,7 @@ export function PdfMergePage() {
                           variant="secondary"
                           size="sm"
                           isLoading={downloadMutation.isPending}
-                          onClick={() => downloadMutation.mutate(job.id)}
+                          onClick={() => downloadMutation.mutate(job)}
                         >
                           Baixar
                         </Button>

@@ -18,6 +18,7 @@ services:
       - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
       - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
       - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080}
+      - VITE_PDF_API_URL=${VITE_PDF_API_URL:-http://localhost:8001}
     depends_on:
       - backend-quarkus
 
@@ -47,6 +48,7 @@ services:
       - PYTHON_AI_INTERNAL_TOKEN=${PYTHON_AI_INTERNAL_TOKEN}
       # ModuleAccessToken
       - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
+      - PROFILE_ACCESS_TOKEN_SECRET=${PROFILE_ACCESS_TOKEN_SECRET}
       # CORS
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
       # Trial
@@ -71,6 +73,11 @@ services:
       - INTERNAL_TOKEN=${INTERNAL_TOKEN}
       - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DATABASE_URL=${DATABASE_URL}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - PDF_STORAGE_PATH=/tmp/saas-pdf
+    volumes:
+      - pdf-storage:/tmp/saas-pdf
 
 volumes:
   pdf-storage:

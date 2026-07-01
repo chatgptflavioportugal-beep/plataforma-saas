@@ -1,7 +1,11 @@
 import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from config import settings
+from db.database import close_pool, init_pool
 from routers import pdf_router
 
 logging.basicConfig(
@@ -9,19 +13,29 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",
 )
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_pool()
+    yield
+    await close_pool()
+
+
 app = FastAPI(
     title="SaaS Platform — Backend Python",
-    description="Serviço de processamento especializado. Acesso restrito ao Quarkus via X-Internal-Token.",
-    version="1.0.0",
+    description="Serviço de processamento PDF. Aceita exclusivamente ModuleAccessToken.",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[],
-    allow_methods=["POST"],
-    allow_headers=["X-Internal-Token", "X-Tenant-ID", "X-User-ID", "Content-Type"],
+    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",")],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(pdf_router.router)

@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -5,6 +6,8 @@ import jwt
 from fastapi import Depends, Header, HTTPException
 
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -50,8 +53,11 @@ def validate_module_access_token(token: str, expected_module_slug: str) -> Modul
             algorithms=["HS256"],
         )
     except jwt.ExpiredSignatureError:
+        logger.warning("ModuleAccessToken expirado")
         raise HTTPException(status_code=401, detail="Token de acesso do módulo expirado.")
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as e:
+        logger.warning("ModuleAccessToken inválido — secret_prefix=%s... erro=%s",
+                       settings.MODULE_ACCESS_TOKEN_SECRET[:6], str(e))
         raise HTTPException(status_code=401, detail="Token de acesso do módulo inválido.")
 
     if payload.get("tokenType") != "MODULE_ACCESS":
