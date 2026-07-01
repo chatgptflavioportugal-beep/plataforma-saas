@@ -76,7 +76,7 @@ public class TokenService {
                 .claim(ACCESS_LEVEL_CLAIM,  accessLevelId)
                 .claim(PERMISSIONS_CLAIM,   permissions)
                 .claim(PERM_VERSION_CLAIM,  permissionsVersion)
-                .signWith(profileKey())
+                .signWith(profileKey(), Jwts.SIG.HS256)
                 .compact();
     }
 
@@ -107,7 +107,7 @@ public class TokenService {
                 .claim(PERMISSIONS_CLAIM,  permissions)
                 .claim(LIMITS_CLAIM,       limits)
                 .claim(PERM_VERSION_CLAIM, permissionsVersion)
-                .signWith(moduleKey())
+                .signWith(moduleKey(), Jwts.SIG.HS256)
                 .compact();
     }
 
