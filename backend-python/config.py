@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     MAX_PDF_SIZE_MB: int = 50
 
     class Config:
-        env_file = ".env"
+        env_file = ("../.env", ".env")
 
 
 settings = Settings()

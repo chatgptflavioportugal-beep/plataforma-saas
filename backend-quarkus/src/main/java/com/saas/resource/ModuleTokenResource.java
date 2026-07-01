@@ -24,7 +24,7 @@ import java.util.UUID;
  * O MAT carrega apenas permissões e limites do módulo solicitado.
  * Validade curta (padrão 30 min), renovável pelo frontend.
  */
-@Path("/api/v1/modules/{moduleSlug}/access-token")
+@Path("/api/v1/module-token/{moduleSlug}")
 @Authenticated
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)

@@ -45,6 +45,8 @@ services:
       # Python
       - PYTHON_AI_BASE_URL=http://backend-python:8001
       - PYTHON_AI_INTERNAL_TOKEN=${PYTHON_AI_INTERNAL_TOKEN}
+      # ModuleAccessToken
+      - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
       # CORS
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
       # Trial
@@ -67,6 +69,7 @@ services:
       - "8001:8001"
     environment:
       - INTERNAL_TOKEN=${INTERNAL_TOKEN}
+      - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
 
 volumes:

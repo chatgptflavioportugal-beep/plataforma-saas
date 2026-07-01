@@ -59,7 +59,7 @@ export async function fetchModuleToken(
   tenantId: string
 ): Promise<ModuleTokenResponse> {
   const { data } = await api.post<ModuleTokenResponse>(
-    `/api/v1/modules/${moduleSlug}/access-token`,
+    `/api/v1/module-token/${moduleSlug}`,
     null,
     { headers: { 'X-Tenant-ID': tenantId } }
   )
