@@ -1,17 +1,14 @@
-import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from config import settings
+from app_logging.logger import configure_logging
+from config.config import settings
 from db.database import close_pool, init_pool
-from routers import pdf_router
+from modules.pdf.api import routes as pdf_routes
 
-logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
-    format="%(asctime)s %(levelname)s %(name)s — %(message)s",
-)
+configure_logging(settings.LOG_LEVEL)
 
 
 @asynccontextmanager
@@ -38,7 +35,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-app.include_router(pdf_router.router)
+app.include_router(pdf_routes.router)
 
 
 @app.get("/health", tags=["Health"])

@@ -14,7 +14,10 @@
       "Bash(grep -E \"\\\\.\\(tsx?|jsx?|java|sql\\)$\")",
       "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
       "Read(//c/desenvolupament/sistema/saas-plataforma/frontend/src/shared/services/**)",
-      "Read(//c/desenvolup/sistema/saas-plataforma/database/migrations/**)"
+      "Read(//c/desenvolup/sistema/saas-plataforma/database/migrations/**)",
+      "Bash(./.venv_verify/Scripts/python.exe -m pytest -q)",
+      "Bash(MODULE_ACCESS_TOKEN_SECRET=placeholder DATABASE_URL=postgresql://user:pass@localhost:5432/db ./.venv_verify/Scripts/python.exe -m pytest -q)",
+      "Bash(MODULE_ACCESS_TOKEN_SECRET=placeholder DATABASE_URL=postgresql://user:pass@localhost:5432/db ./.venv_verify/Scripts/python.exe -c ' *)"
     ]
   }
 }

@@ -1,8 +1,7 @@
+import os
 from pydantic_settings import BaseSettings
 
-
 class Settings(BaseSettings):
-    INTERNAL_TOKEN: str = ""
     MODULE_ACCESS_TOKEN_SECRET: str
     LOG_LEVEL: str = "INFO"
     MAX_PDF_SIZE_MB: int = 50
@@ -11,7 +10,8 @@ class Settings(BaseSettings):
     PDF_STORAGE_PATH: str = "/tmp/saas-pdf"
 
     class Config:
-        env_file = ("../.env", ".env")
+        APP_ENV = os.getenv("AMBIENTE", "dev")
+        env_file = (".env.global", f".env.{APP_ENV}")
 
 
 settings = Settings()

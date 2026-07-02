@@ -1,6 +1,7 @@
 # Secrets — nunca commitar
 .env
 *.env.local
+backend-python/config/.env.*
 
 # Frontend
 frontend/node_modules/

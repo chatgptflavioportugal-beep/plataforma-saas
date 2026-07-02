@@ -47,7 +47,13 @@
       "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\backend-python\\\\auth\")",
       "Bash(openssl rand *)",
       "Bash(git -C \"c:/desenvolvimento/sistema/saas-plataforma\" diff -- backend-python/auth/module_auth.py)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(pip show *)",
+      "Bash(where python *)",
+      "Bash(py -3 --version)",
+      "Bash(py -3 -c \"import fastapi\")",
+      "Bash(py -3 -m venv .venv_verify)",
+      "Bash(./.venv_verify/Scripts/python.exe -m pip install -q -r requirements.txt)"
     ]
   }
 }
