@@ -121,7 +121,7 @@ public class ModuleTokenResource {
         List<String> permissions = loadModulePermissions(userId, tenantId, moduleId, moduleSlug, role);
 
         // 4. Carrega limites do plano (plan_version_module_limits)
-        List<Map<String, Object>> limits = loadPlanLimits(moduleId, planVersionId);
+        Map<String, Object> limits = loadPlanLimits(moduleId, planVersionId, moduleSlug);
 
         // 5. Versão de permissões para invalidação
         int permissionsVersion = resolvePermissionsVersion(userId, tenantId);
@@ -157,35 +157,26 @@ public class ModuleTokenResource {
     @SuppressWarnings("unchecked")
     private List<String> loadModulePermissions(UUID userId, UUID tenantId,
                                                 String moduleId, String moduleSlug, String role) {
+        // moduleSlug já é conhecido pelo token (claim moduleSlug); a permissão
+        // carrega apenas o identificador do serviço dentro do módulo.
         List<String> permissions = new ArrayList<>();
 
         if (List.of("owner", "admin").contains(role)) {
             // Owner/admin tem acesso a todos os serviços do módulo
-            List<Object[]> svcRows = em.createNativeQuery("""
-                SELECT s.slug,
-                       CASE WHEN g.status = 'ACTIVE' THEN g.slug ELSE NULL END AS group_slug
+            List<String> svcRows = em.createNativeQuery("""
+                SELECT s.slug
                 FROM platform_module_services s
-                LEFT JOIN platform_module_service_groups g ON g.id = s.service_group_id AND g.status = 'ACTIVE'
                 WHERE s.module_id = :moduleId AND s.is_active = TRUE
             """).setParameter("moduleId", UUID.fromString(moduleId)).getResultList();
 
-            for (Object[] row : svcRows) {
-                String serviceSlug = (String) row[0];
-                String groupSlug   = (String) row[1];
-                String key = (groupSlug != null)
-                        ? "module." + moduleSlug + "." + groupSlug + "." + serviceSlug
-                        : "module." + moduleSlug + "." + serviceSlug;
-                permissions.add(key);
-            }
+            permissions.addAll(svcRows);
         } else {
             // Membro: filtra pelos serviços do nível de acesso
-            List<Object[]> svcRows = em.createNativeQuery("""
-                SELECT s.slug,
-                       CASE WHEN g.status = 'ACTIVE' THEN g.slug ELSE NULL END AS group_slug
+            List<String> svcRows = em.createNativeQuery("""
+                SELECT s.slug
                 FROM profile_access_level_permissions palp
                 JOIN user_tenants ut ON ut.access_level_id = palp.access_level_id
                 JOIN platform_module_services s ON s.id = palp.service_id
-                LEFT JOIN platform_module_service_groups g ON g.id = s.service_group_id AND g.status = 'ACTIVE'
                 WHERE ut.user_id = :userId
                   AND ut.tenant_id = :tenantId
                   AND ut.is_active = TRUE
@@ -197,39 +188,34 @@ public class ModuleTokenResource {
             .setParameter("moduleId", UUID.fromString(moduleId))
             .getResultList();
 
-            for (Object[] row : svcRows) {
-                String serviceSlug = (String) row[0];
-                String groupSlug   = (String) row[1];
-                String key = (groupSlug != null)
-                        ? "module." + moduleSlug + "." + groupSlug + "." + serviceSlug
-                        : "module." + moduleSlug + "." + serviceSlug;
-                permissions.add(key);
-            }
+            permissions.addAll(svcRows);
         }
 
         return permissions;
     }
 
     @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> loadPlanLimits(String moduleId, String planVersionId) {
-        if (planVersionId == null) return List.of();
+    private Map<String, Object> loadPlanLimits(String moduleId, String planVersionId, String moduleSlug) {
+        if (planVersionId == null) return Map.of();
 
         // planVersionId é o id de plan_version_modules (não de plan_versions)
         List<Object[]> limitRows = em.createNativeQuery("""
-            SELECT pvml.code, pvml.limit_value, pvml.unit
+            SELECT pvml.code, pvml.limit_value
             FROM plan_version_module_limits pvml
             WHERE pvml.plan_version_module_id = :planVersionId
         """)
         .setParameter("planVersionId", UUID.fromString(planVersionId))
         .getResultList();
 
-        List<Map<String, Object>> limits = new ArrayList<>();
+        // pvml.code é persistido como "<moduleSlug>.<limitCode>" (estável entre
+        // upgrades/downgrades de plano); o token remove o prefixo pois já
+        // carrega o moduleSlug em sua própria claim.
+        String prefix = moduleSlug + ".";
+        Map<String, Object> limits = new java.util.LinkedHashMap<>();
         for (Object[] row : limitRows) {
-            limits.add(Map.of(
-                    "key",   row[0],
-                    "value", row[1],
-                    "unit",  row[2] != null ? row[2] : ""
-            ));
+            String code = (String) row[0];
+            String key = (code != null && code.startsWith(prefix)) ? code.substring(prefix.length()) : code;
+            limits.put(key, row[1]);
         }
         return limits;
     }

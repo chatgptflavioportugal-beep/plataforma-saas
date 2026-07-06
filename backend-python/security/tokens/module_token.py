@@ -43,7 +43,7 @@ def validate_module_access_token(token: str, expected_module_slug: str) -> Curre
         plan_name=payload.get("planName", ""),
         access_source=payload.get("accessSource", ""),
         permissions=payload.get("permissions", []),
-        limits=payload.get("limits", []),
+        limits=payload.get("limits", {}),
         permissions_version=payload.get("permissionsVersion", 1),
         issued_at=payload.get("iat", 0),
         expires_at=payload.get("exp", 0),

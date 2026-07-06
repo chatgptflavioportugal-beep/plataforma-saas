@@ -5,6 +5,7 @@ from pypdf import PdfReader
 
 from exceptions.validation import ValidationError
 from security.dependencies.current_user import CurrentUser
+from modules.pdf.permissions.constants import LIMITE_PDF_MAX_FILE_SIZE
 
 
 def validate_request(file_a: UploadFile, file_b: UploadFile) -> None:
@@ -15,7 +16,7 @@ def validate_request(file_a: UploadFile, file_b: UploadFile) -> None:
 
 
 def validate_limits(auth: CurrentUser, content_a: bytes, content_b: bytes) -> None:
-    max_size_mb = int(auth.get_limit("pdf.max-file-size", default=50))
+    max_size_mb = int(auth.get_limit(LIMITE_PDF_MAX_FILE_SIZE, default=50))
     max_bytes = max_size_mb * 1024 * 1024
 
     if len(content_a) > max_bytes or len(content_b) > max_bytes:

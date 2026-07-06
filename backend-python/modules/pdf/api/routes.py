@@ -5,7 +5,7 @@ from fastapi.responses import StreamingResponse
 
 from exceptions.business import BusinessRuleError
 from exceptions.validation import ValidationError
-from modules.pdf.permissions.constants import PDF_MERGE
+from modules.pdf.permissions.constants import MODULE_PDF_MERGE
 from modules.pdf.repository import pdf_jobs_repository
 from modules.pdf.schemas.pdf_job import PdfJobOut, job_to_out
 from modules.pdf.services.merge import merge_service
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/pdf", tags=["PDF"])
 async def merge_pdf(
     file_a: UploadFile = File(..., alias="file_a"),
     file_b: UploadFile = File(..., alias="file_b"),
-    auth: CurrentUser = Depends(require_permission("pdf", PDF_MERGE)),
+    auth: CurrentUser = Depends(require_permission("pdf", MODULE_PDF_MERGE)),
 ) -> PdfJobOut:
     return await merge_service.execute(file_a, file_b, auth)
 

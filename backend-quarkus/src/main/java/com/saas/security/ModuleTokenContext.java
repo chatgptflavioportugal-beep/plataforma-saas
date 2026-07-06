@@ -17,7 +17,7 @@ public class ModuleTokenContext {
     private final String planName;
     private final String accessSource;
     private final List<String> permissions;
-    private final List<Map<String, Object>> limits;
+    private final Map<String, Object> limits;
     private final int permissionsVersion;
 
     public ModuleTokenContext(
@@ -28,7 +28,7 @@ public class ModuleTokenContext {
             String planName,
             String accessSource,
             List<String> permissions,
-            List<Map<String, Object>> limits,
+            Map<String, Object> limits,
             int permissionsVersion
     ) {
         this.userId             = userId;
@@ -38,7 +38,7 @@ public class ModuleTokenContext {
         this.planName           = planName;
         this.accessSource       = accessSource;
         this.permissions        = permissions;
-        this.limits             = limits != null ? limits : List.of();
+        this.limits             = limits != null ? limits : Map.of();
         this.permissionsVersion = permissionsVersion;
     }
 
@@ -49,11 +49,15 @@ public class ModuleTokenContext {
     public String getPlanName()                    { return planName; }
     public String getAccessSource()                { return accessSource; }
     public List<String> getPermissions()           { return permissions; }
-    public List<Map<String, Object>> getLimits()   { return limits; }
+    public Map<String, Object> getLimits()         { return limits; }
     public int getPermissionsVersion()             { return permissionsVersion; }
 
     public boolean hasPermission(String key) {
         return permissions != null && permissions.contains(key);
+    }
+
+    public Object getLimit(String code) {
+        return limits != null ? limits.get(code) : null;
     }
 
     public void requirePermission(String key) {

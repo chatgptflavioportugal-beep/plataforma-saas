@@ -101,7 +101,7 @@ export function ModuleProvider({ moduleSlug, children }: ModuleProviderProps) {
       moduleSlug,
       moduleToken,
       permissions: tokenData?.permissions ?? [],
-      limits:      tokenData?.limits ?? [],
+      limits:      tokenData?.limits ?? {},
       planName:    tokenData?.planName ?? null,
       isLoading,
       error,

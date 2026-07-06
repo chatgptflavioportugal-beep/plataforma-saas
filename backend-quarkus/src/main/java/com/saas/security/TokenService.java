@@ -88,7 +88,7 @@ public class TokenService {
             String planName,
             String accessSource,
             List<String> permissions,
-            List<Map<String, Object>> limits,
+            Map<String, Object> limits,
             int permissionsVersion
     ) {
         long now = System.currentTimeMillis();
@@ -139,7 +139,7 @@ public class TokenService {
                 claims.get(PLAN_NAME_CLAIM,    String.class),
                 claims.get(ACCESS_SRC_CLAIM,   String.class),
                 claims.get(PERMISSIONS_CLAIM,  List.class),
-                claims.get(LIMITS_CLAIM,       List.class),
+                claims.get(LIMITS_CLAIM,       Map.class),
                 claims.get(PERM_VERSION_CLAIM, Integer.class),
                 claims.getExpiration()
         );
@@ -165,12 +165,16 @@ public class TokenService {
             String planName,
             String accessSource,
             List<String> permissions,
-            List<Map<String, Object>> limits,
+            Map<String, Object> limits,
             int permissionsVersion,
             Date expiresAt
     ) {
         public boolean hasPermission(String key) {
             return permissions != null && permissions.contains(key);
+        }
+
+        public Object getLimit(String code) {
+            return limits != null ? limits.get(code) : null;
         }
 
         /** Milissegundos até expiração (negativo se expirado). */

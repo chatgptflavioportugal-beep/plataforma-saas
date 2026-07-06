@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Any
 
 from exceptions.authorization import AuthorizationError
 
@@ -13,7 +14,7 @@ class CurrentUser:
     plan_name: str
     access_source: str
     permissions: list[str] = field(default_factory=list)
-    limits: list[dict] = field(default_factory=list)
+    limits: dict[str, Any] = field(default_factory=dict)
     permissions_version: int = 1
     issued_at: int = 0
     expires_at: int = 0
@@ -28,7 +29,4 @@ class CurrentUser:
             )
 
     def get_limit(self, code: str, default=None):
-        for limit in self.limits:
-            if limit.get("key") == code:
-                return limit.get("value", default)
-        return default
+        return self.limits.get(code, default)

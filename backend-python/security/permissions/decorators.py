@@ -13,7 +13,7 @@ def require_permission(module_slug: str, permission: str | None = None) -> Calla
     e, se `permission` for informado, garante que o usuário a possui.
 
     Uso:
-        auth: CurrentUser = Depends(require_permission("pdf", "module.pdf.pdf-merge"))
+        auth: CurrentUser = Depends(require_permission("pdf", "pdf-merge"))
     """
     async def dependency(
         authorization: str = Header(..., alias="Authorization"),

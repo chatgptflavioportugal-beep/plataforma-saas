@@ -28,8 +28,8 @@ import java.util.Set;
 @Produces(MediaType.APPLICATION_JSON)
 public class PdfModuleResource {
 
-    private static final String PERM_MERGE  = "module.pdf.merge-pdf";
-    private static final String PERM_JOBS   = "module.pdf.merge-pdf";
+    private static final String PERM_MERGE  = "merge-pdf";
+    private static final String PERM_JOBS   = "merge-pdf";
 
     @Inject
     ModuleTokenContextHolder tokenContextHolder;

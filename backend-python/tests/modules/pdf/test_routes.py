@@ -26,7 +26,7 @@ def make_module_token(*, permissions: list[str], module_slug: str = "pdf") -> st
         "planName": "pro",
         "accessSource": "plan",
         "permissions": permissions,
-        "limits": [{"key": "pdf.max-file-size", "value": 50}],
+        "limits": {"max-file-size": 50},
         "permissionsVersion": 1,
         "iat": now,
         "exp": now + 300,
@@ -94,7 +94,7 @@ def mock_repository():
 
 def test_merge_success(client):
     pdf = make_minimal_pdf()
-    token = make_module_token(permissions=["module.pdf.pdf-merge"])
+    token = make_module_token(permissions=["pdf-merge"])
 
     response = client.post(
         "/pdf/merge",

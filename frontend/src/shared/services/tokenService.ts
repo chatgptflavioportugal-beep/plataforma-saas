@@ -51,7 +51,7 @@ export interface ModuleTokenResponse {
   planName: string
   expiresAt: string
   permissions: string[]
-  limits: { key: string; value: string | number; unit?: string }[]
+  limits: Record<string, string | number>
 }
 
 export async function fetchModuleToken(
