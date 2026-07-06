@@ -17,7 +17,22 @@
       "Read(//c/desenvolup/sistema/saas-plataforma/database/migrations/**)",
       "Bash(./.venv_verify/Scripts/python.exe -m pytest -q)",
       "Bash(MODULE_ACCESS_TOKEN_SECRET=placeholder DATABASE_URL=postgresql://user:pass@localhost:5432/db ./.venv_verify/Scripts/python.exe -m pytest -q)",
-      "Bash(MODULE_ACCESS_TOKEN_SECRET=placeholder DATABASE_URL=postgresql://user:pass@localhost:5432/db ./.venv_verify/Scripts/python.exe -c ' *)"
+      "Bash(MODULE_ACCESS_TOKEN_SECRET=placeholder DATABASE_URL=postgresql://user:pass@localhost:5432/db ./.venv_verify/Scripts/python.exe -c ' *)",
+      "Bash(python -c \"from pypdf.errors import PdfReadError; print\\('ok'\\)\")",
+      "Bash(python3 -c \"import pypdf; print\\(pypdf.__version__\\)\")",
+      "Bash(where python *)",
+      "Bash(where py *)",
+      "Read(//c/Users/fmportugal/AppData/Local/Programs/Python/**)",
+      "Bash(\"/c/Users/fmportugal/AppData/Local/Programs/Python/Python313/python.exe\" -c \"import pypdf; print\\(pypdf.__version__\\)\")",
+      "Bash(\"/c/Users/fmportugal/AppData/Local/Programs/Python/Python313/python.exe\" -c \"from pypdf.errors import PdfReadError; print\\('ok'\\)\")",
+      "Bash(\"/c/Users/fmportugal/AppData/Local/Programs/Python/Python313/python.exe\" -m pytest tests/modules/pdf/ -v)",
+      "Bash(\"/c/Users/fmportugal/AppData/Local/Programs/Python/Python313/python.exe\" -m pip install -q -r requirements.txt)",
+      "Bash(MODULE_ACCESS_TOKEN_SECRET=test-secret DATABASE_URL=postgresql://user:pass@localhost/db \"/c/Users/fmportugal/AppData/Local/Programs/Python/Python313/python.exe\" -m pytest tests/modules/pdf/ -v)",
+      "Bash(MODULE_ACCESS_TOKEN_SECRET=test-secret DATABASE_URL=postgresql://user:pass@localhost/db \"/c/Users/fmportugal/AppData/Local/Programs/Python/Python313/python.exe\" -m pytest)",
+      "Bash(python -m pytest tests/utils/test_text.py tests/modules/pdf/test_routes.py -q)",
+      "Bash(python -m pytest tests/utils/test_text.py -q)",
+      "Bash(grep -rln \"plano\\\\.\\\\|modulo\\\\.\\\\|limite\" docs)",
+      "Bash(grep -rln \"limit\" docs --include=*.md -il)"
     ]
   }
 }

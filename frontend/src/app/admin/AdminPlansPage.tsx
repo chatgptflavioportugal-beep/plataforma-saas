@@ -82,14 +82,14 @@ interface LocalModule {
   limits: LocalLimit[]
 }
 
-function extractLimitCode(fullCode: string | null, planCode: string, moduleSlug: string): string {
+function extractLimitCode(fullCode: string | null, moduleSlug: string): string {
   if (!fullCode) return ''
-  const prefix = `${planCode}.${moduleSlug}.`
+  const prefix = `${moduleSlug}.`
   if (fullCode.startsWith(prefix)) return fullCode.slice(prefix.length)
   return fullCode
 }
 
-function pvmToLocalModule(pvm: PlanVersionModule, planCode: string): LocalModule {
+function pvmToLocalModule(pvm: PlanVersionModule): LocalModule {
   const limits = parseLimits(pvm.limits_json)
   return {
     tempId: pvm.id,
@@ -104,7 +104,7 @@ function pvmToLocalModule(pvm: PlanVersionModule, planCode: string): LocalModule
       tempId: l.id,
       title: l.title,
       description: l.description ?? '',
-      code: extractLimitCode(l.code, planCode, pvm.module_slug),
+      code: extractLimitCode(l.code, pvm.module_slug),
       limitValue: l.limit_value ?? '',
       unit: l.unit ?? '',
       sortOrder: String(l.sort_order ?? 99),
@@ -583,7 +583,7 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
 
   useEffect(() => {
     if (fetchedModules && !modulesReady) {
-      setLocalModules(fetchedModules.map((pvm) => pvmToLocalModule(pvm, plan.code)))
+      setLocalModules(fetchedModules.map((pvm) => pvmToLocalModule(pvm)))
       setModulesReady(true)
     }
   }, [fetchedModules, modulesReady, plan.code])
@@ -732,7 +732,7 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
           limits: m.limits.map((l) => ({
             title: l.title,
             description: l.description || null,
-            code: l.code ? `${plan.code}.${m.moduleSlug}.${l.code}` : null,
+            code: l.code ? `${m.moduleSlug}.${l.code}` : null,
             limit_value: l.limitValue || null,
             unit: l.unit || null,
             sort_order: parseInt(l.sortOrder) || 99,
@@ -1064,7 +1064,7 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
                                 {addLimitForm.code && (
                                   <div className="col-span-2 rounded-lg bg-gray-950 border border-gray-700 px-3 py-2">
                                     <p className="text-xs text-gray-500 mb-0.5">Código gerado</p>
-                                    <p className="text-xs font-mono text-blue-400">{plan.code}.{mod.moduleSlug}.{addLimitForm.code}</p>
+                                    <p className="text-xs font-mono text-blue-400">{mod.moduleSlug}.{addLimitForm.code}</p>
                                   </div>
                                 )}
                               </div>
@@ -1135,7 +1135,7 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
                                           {editLimitForm.code && (
                                             <div className="col-span-2 rounded-lg bg-gray-950 border border-gray-700 px-3 py-2">
                                               <p className="text-xs text-gray-500 mb-0.5">Código gerado</p>
-                                              <p className="text-xs font-mono text-blue-400">{plan.code}.{mod.moduleSlug}.{editLimitForm.code}</p>
+                                              <p className="text-xs font-mono text-blue-400">{mod.moduleSlug}.{editLimitForm.code}</p>
                                             </div>
                                           )}
                                           <div>
@@ -1163,7 +1163,7 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
                                     <tr key={limit.tempId} className="hover:bg-gray-700/20">
                                       <td className="py-1.5 pr-3 text-white font-medium">{limit.title}</td>
                                       <td className="py-1.5 pr-3 font-mono text-xs text-blue-400 max-w-[220px] truncate">
-                                        {limit.code ? `${plan.code}.${mod.moduleSlug}.${limit.code}` : '—'}
+                                        {limit.code ? `${mod.moduleSlug}.${limit.code}` : '—'}
                                       </td>
                                       <td className="py-1.5 pr-3 text-gray-300 text-right font-mono">{limit.limitValue || '—'}</td>
                                       <td className="py-1.5 pr-3 text-gray-400">{limit.unit || '—'}</td>

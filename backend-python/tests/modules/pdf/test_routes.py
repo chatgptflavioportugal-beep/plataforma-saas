@@ -26,7 +26,7 @@ def make_module_token(*, permissions: list[str], module_slug: str = "pdf") -> st
         "planName": "pro",
         "accessSource": "plan",
         "permissions": permissions,
-        "limits": [{"key": "max_file_size_mb", "value": 50}],
+        "limits": [{"key": "pdf.max-file-size", "value": 50}],
         "permissionsVersion": 1,
         "iat": now,
         "exp": now + 300,

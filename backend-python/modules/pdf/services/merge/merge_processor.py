@@ -3,7 +3,7 @@ import io
 from pypdf import PdfReader, PdfWriter
 
 
-def merge_pdfs(content_a: bytes, content_b: bytes) -> bytes:
+def process_merge(content_a: bytes, content_b: bytes) -> bytes:
     reader_a = PdfReader(io.BytesIO(content_a))
     reader_b = PdfReader(io.BytesIO(content_b))
 
