@@ -18,6 +18,11 @@ type ModuleBillingOptionRaw = {
   available_plans_json: string
 }
 
+// Raw shape returned by GET /api/v1/subscriptions/modules (limitsJson not yet parsed)
+type ProfileModuleSubscriptionRaw = Omit<ProfileModuleSubscription, 'limits'> & {
+  limitsJson: string
+}
+
 function parseJson<T>(json?: string | null): T | null {
   if (!json) return null
   try { return JSON.parse(json) as T } catch { return null }
@@ -33,22 +38,38 @@ function planAnnualTotal(plan: ModulePlan): number {
 }
 
 /**
- * Acha, dentro do catálogo do módulo, o plano correspondente à assinatura ativa.
- * Compara por plan_slug (plans.code), que é estável entre versões do plano —
- * comparar por plan_id quebraria assim que uma nova versão do plano fosse criada,
- * pois o plan_id da assinatura fica congelado na versão contratada.
+ * Constrói o "plano atual" a partir dos dados congelados da própria assinatura —
+ * nunca a partir do catálogo de planos. Uma nova versão do plano não altera
+ * automaticamente uma assinatura existente: o cliente permanece na versão que
+ * contratou (mesmo preço e mesmos limites) até um upgrade, downgrade ou renovação.
  */
-function findCurrentPlan(module: ModuleBillingOption, activeSub: ProfileModuleSubscription | undefined): ModulePlan | undefined {
+function currentPlanFromSubscription(activeSub: ProfileModuleSubscription | undefined): ModulePlan | undefined {
   if (!activeSub) return undefined
-  return module.available_plans.find(p => p.plan_slug === activeSub.planCode)
+  return {
+    plan_id: activeSub.planId,
+    plan_name: activeSub.planName,
+    plan_slug: activeSub.planCode,
+    plan_version_id: activeSub.planVersionId,
+    plan_version: activeSub.planVersion,
+    plan_sort_order: activeSub.planSortOrder,
+    monthly_price: activeSub.monthlyPrice,
+    annual_monthly_price: activeSub.annualMonthlyPrice,
+    annual_total_price: activeSub.annualMonthlyPrice * 12,
+    limits: activeSub.limits,
+  }
 }
 
 type PlanComparison = 'current' | 'upgrade' | 'downgrade' | 'none'
 
-/** Compara um plano do catálogo com o plano atualmente contratado, usando a ordem cadastrada (plan_sort_order). */
+/**
+ * Compara um plano do catálogo (sempre a última versão publicada) com o plano
+ * atualmente contratado. A comparação de identidade usa plan_slug (plans.code),
+ * estável entre versões — plan_id muda a cada nova versão, pois cada versão é
+ * uma nova linha em `plans`.
+ */
 function comparePlan(plan: ModulePlan, currentPlan: ModulePlan | undefined): PlanComparison {
   if (!currentPlan) return 'none'
-  if (plan.plan_id === currentPlan.plan_id) return 'current'
+  if (plan.plan_slug === currentPlan.plan_slug) return 'current'
   return plan.plan_sort_order > currentPlan.plan_sort_order ? 'upgrade' : 'downgrade'
 }
 
@@ -284,23 +305,14 @@ function PlanModal({ module, initialIsAnnual, pendingPlanId, currentPlan, onSele
           </div>
         </div>
 
-        {currentPlan && (
-          <div className="px-6 pt-2">
-            <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3">
-              <p className="text-sm font-semibold text-blue-900">Plano atual: {currentPlan.plan_name}</p>
-              <p className="mt-1 text-xs text-blue-700 leading-relaxed">
-                Você pode fazer upgrade ou downgrade deste módulo a qualquer momento.
-                As alterações respeitarão as regras de cobrança da plataforma.
-              </p>
-            </div>
-          </div>
-        )}
-
         <div className="overflow-y-auto p-6 space-y-4">
           {module.available_plans.map(plan => {
             const comparison = comparePlan(plan, currentPlan)
             const isPendingSelection = comparison === 'none' && plan.plan_id === pendingPlanId && isAnnual === initialIsAnnual
-            const total = planAnnualTotal(plan)
+            // No card do plano atual, sempre exibe os valores congelados da assinatura
+            // (versão contratada) — nunca os valores mais recentes do catálogo.
+            const displayPlan = comparison === 'current' && currentPlan ? currentPlan : plan
+            const total = planAnnualTotal(displayPlan)
 
             let buttonLabel = isPendingSelection ? 'Selecionado' : 'Selecionar'
             let buttonVariant: 'primary' | 'secondary' = isPendingSelection ? 'secondary' : 'primary'
@@ -330,7 +342,7 @@ function PlanModal({ module, initialIsAnnual, pendingPlanId, currentPlan, onSele
               >
                 <div className="flex items-start gap-4">
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900">{plan.plan_name}</p>
+                    <p className="font-semibold text-gray-900">{displayPlan.plan_name}</p>
 
                     {isAnnual ? (
                       <>
@@ -342,27 +354,27 @@ function PlanModal({ module, initialIsAnnual, pendingPlanId, currentPlan, onSele
                         </p>
                         {total > 0 && (
                           <p className="text-sm text-gray-500 mt-0.5">
-                            em até 12x de {brl(plan.annual_monthly_price)}
+                            em até 12x de {brl(displayPlan.annual_monthly_price)}
                           </p>
                         )}
                       </>
                     ) : (
                       <>
                         <p className="mt-1 text-2xl font-bold text-gray-900">
-                          {plan.monthly_price === 0
+                          {displayPlan.monthly_price === 0
                             ? 'Grátis'
-                            : <>{brl(plan.monthly_price)}<span className="text-sm font-normal text-gray-400">/mês</span></>
+                            : <>{brl(displayPlan.monthly_price)}<span className="text-sm font-normal text-gray-400">/mês</span></>
                           }
                         </p>
-                        {plan.monthly_price > 0 && (
+                        {displayPlan.monthly_price > 0 && (
                           <p className="text-xs text-gray-400 mt-0.5">cobrança mensal</p>
                         )}
                       </>
                     )}
 
-                    {plan.limits.length > 0 && (
+                    {displayPlan.limits.length > 0 && (
                       <ul className="mt-3 space-y-1.5">
-                        {plan.limits.map((limit, i) => (
+                        {displayPlan.limits.map((limit, i) => (
                           <li key={i} className="text-xs text-gray-600 flex items-start gap-1.5">
                             <span className="text-green-500 shrink-0 mt-px">✓</span>
                             <span>
@@ -829,8 +841,11 @@ export function PlansPage() {
   const { data: subscriptions = [] } = useQuery({
     queryKey: ['profile-subscriptions', currentTenant?.tenant.id],
     queryFn: async () => {
-      const { data } = await api.get<ProfileModuleSubscription[]>('/api/v1/subscriptions/modules')
-      return data
+      const { data } = await api.get<ProfileModuleSubscriptionRaw[]>('/api/v1/subscriptions/modules')
+      return data.map(raw => ({
+        ...raw,
+        limits: parseJson<ProfileModuleSubscription['limits']>(raw.limitsJson) ?? [],
+      })) as ProfileModuleSubscription[]
     },
     enabled: !!currentTenant,
     staleTime: 0,
@@ -866,7 +881,7 @@ export function PlansPage() {
   })
 
   function selectPlan(module: ModuleBillingOption, plan: ModulePlan, isAnnual: boolean) {
-    const previousPlan = findCurrentPlan(module, activeSubByModuleId[module.module_id])
+    const previousPlan = currentPlanFromSubscription(activeSubByModuleId[module.module_id])
     setConfiguration(prev => ({ ...prev, [module.module_id]: { module, plan, isAnnual, previousPlan } }))
     setModalModule(null)
   }
@@ -925,7 +940,7 @@ export function PlansPage() {
                   key={module.module_id}
                   module={module}
                   selected={configuration[module.module_id]}
-                  currentPlan={findCurrentPlan(module, activeSubByModuleId[module.module_id])}
+                  currentPlan={currentPlanFromSubscription(activeSubByModuleId[module.module_id])}
                   onChoose={() => setModalModule(module)}
                 />
               ))}
@@ -953,7 +968,7 @@ export function PlansPage() {
           module={modalModule}
           initialIsAnnual={configuration[modalModule.module_id]?.isAnnual ?? false}
           pendingPlanId={configuration[modalModule.module_id]?.plan.plan_id}
-          currentPlan={findCurrentPlan(modalModule, activeSubByModuleId[modalModule.module_id])}
+          currentPlan={currentPlanFromSubscription(activeSubByModuleId[modalModule.module_id])}
           onSelect={(plan, isAnnual) => selectPlan(modalModule, plan, isAnnual)}
           onClose={() => setModalModule(null)}
         />

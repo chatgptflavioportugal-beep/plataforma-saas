@@ -365,13 +365,17 @@ export interface ProfileModuleSubscription {
   /** Código estável do plano (plans.code), não muda entre versões — use para comparar com plan_slug do catálogo */
   planCode: string
   planVersion: number
+  /** Ordem cadastrada do plano na versão contratada (congelada) */
+  planSortOrder: number
   billingCycle: 'MONTHLY' | 'ANNUAL'
-  /** Preço mensal do plano para este módulo */
+  /** Preço mensal do plano para este módulo — sempre da versão contratada (congelado) */
   monthlyPrice: number
-  /** Preço mensal equivalente no ciclo anual (total anual = annualMonthlyPrice × 12) */
+  /** Preço mensal equivalente no ciclo anual (total anual = annualMonthlyPrice × 12) — congelado */
   annualMonthlyPrice: number
   status: 'ACTIVE' | 'PENDING_PAYMENT' | 'CANCELED' | 'EXPIRED'
   startedAt: string
   expiresAt: string | null
   canceledAt: string | null
+  /** Limites da versão contratada (congelada), nunca da versão vigente do plano */
+  limits: ModulePlanLimit[]
 }

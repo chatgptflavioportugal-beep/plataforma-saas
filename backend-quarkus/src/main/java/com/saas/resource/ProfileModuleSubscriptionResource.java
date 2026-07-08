@@ -179,13 +179,19 @@ public class ProfileModuleSubscriptionResource {
             "  p.name AS plan_name, " +
             "  p.code AS plan_code, " +
             "  p.version AS plan_version, " +
+            "  p.sort_order AS plan_sort_order, " +
             "  pms.billing_cycle, " +
             "  pvm.monthly_price, " +
             "  pvm.annual_monthly_price, " +
             "  pms.status, " +
             "  pms.started_at::text, " +
             "  pms.expires_at::text, " +
-            "  pms.canceled_at::text " +
+            "  pms.canceled_at::text, " +
+            "  COALESCE((SELECT json_agg(json_build_object(" +
+            "    'title', pvml.title, 'description', pvml.description," +
+            "    'limit_value', pvml.limit_value, 'unit', pvml.unit, 'sort_order', pvml.sort_order" +
+            "  ) ORDER BY pvml.sort_order) FROM plan_version_module_limits pvml" +
+            "  WHERE pvml.plan_version_module_id = pvm.id), '[]'::json)::text AS limits_json " +
             "FROM profile_module_subscriptions pms " +
             "JOIN platform_modules pm ON pm.id = pms.module_id " +
             "JOIN plan_version_modules pvm ON pvm.id = pms.plan_version_id " +
@@ -212,13 +218,15 @@ public class ProfileModuleSubscriptionResource {
             m.put("planName",             row[8]);
             m.put("planCode",             row[9]);
             m.put("planVersion",          row[10] != null ? ((Number) row[10]).intValue() : null);
-            m.put("billingCycle",         row[11]);
-            m.put("monthlyPrice",         row[12]);
-            m.put("annualMonthlyPrice",   row[13]);
-            m.put("status",               row[14]);
-            m.put("startedAt",            row[15]);
-            m.put("expiresAt",            row[16]);
-            m.put("canceledAt",           row[17]);
+            m.put("planSortOrder",        row[11] != null ? ((Number) row[11]).intValue() : null);
+            m.put("billingCycle",         row[12]);
+            m.put("monthlyPrice",         row[13]);
+            m.put("annualMonthlyPrice",   row[14]);
+            m.put("status",               row[15]);
+            m.put("startedAt",            row[16]);
+            m.put("expiresAt",            row[17]);
+            m.put("canceledAt",           row[18]);
+            m.put("limitsJson",           row[19]);
             return m;
         }).collect(Collectors.toList());
 
