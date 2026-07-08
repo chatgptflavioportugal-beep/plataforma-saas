@@ -177,6 +177,7 @@ public class ProfileModuleSubscriptionResource {
             "  pms.plan_version_id::text, " +
             "  p.id::text AS plan_id, " +
             "  p.name AS plan_name, " +
+            "  p.code AS plan_code, " +
             "  p.version AS plan_version, " +
             "  pms.billing_cycle, " +
             "  pvm.monthly_price, " +
@@ -209,14 +210,15 @@ public class ProfileModuleSubscriptionResource {
             m.put("planVersionId",        row[6]);
             m.put("planId",               row[7]);
             m.put("planName",             row[8]);
-            m.put("planVersion",          row[9] != null ? ((Number) row[9]).intValue() : null);
-            m.put("billingCycle",         row[10]);
-            m.put("monthlyPrice",         row[11]);
-            m.put("annualMonthlyPrice",   row[12]);
-            m.put("status",               row[13]);
-            m.put("startedAt",            row[14]);
-            m.put("expiresAt",            row[15]);
-            m.put("canceledAt",           row[16]);
+            m.put("planCode",             row[9]);
+            m.put("planVersion",          row[10] != null ? ((Number) row[10]).intValue() : null);
+            m.put("billingCycle",         row[11]);
+            m.put("monthlyPrice",         row[12]);
+            m.put("annualMonthlyPrice",   row[13]);
+            m.put("status",               row[14]);
+            m.put("startedAt",            row[15]);
+            m.put("expiresAt",            row[16]);
+            m.put("canceledAt",           row[17]);
             return m;
         }).collect(Collectors.toList());
 

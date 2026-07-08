@@ -362,6 +362,8 @@ export interface ProfileModuleSubscription {
   planVersionId: string
   planId: string
   planName: string
+  /** Código estável do plano (plans.code), não muda entre versões — use para comparar com plan_slug do catálogo */
+  planCode: string
   planVersion: number
   billingCycle: 'MONTHLY' | 'ANNUAL'
   /** Preço mensal do plano para este módulo */

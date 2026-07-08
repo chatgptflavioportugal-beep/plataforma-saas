@@ -32,10 +32,15 @@ function planAnnualTotal(plan: ModulePlan): number {
   return plan.annual_total_price > 0 ? plan.annual_total_price : plan.annual_monthly_price * 12
 }
 
-/** Acha, dentro do catálogo do módulo, o plano correspondente à assinatura ativa (casando por plan_id). */
+/**
+ * Acha, dentro do catálogo do módulo, o plano correspondente à assinatura ativa.
+ * Compara por plan_slug (plans.code), que é estável entre versões do plano —
+ * comparar por plan_id quebraria assim que uma nova versão do plano fosse criada,
+ * pois o plan_id da assinatura fica congelado na versão contratada.
+ */
 function findCurrentPlan(module: ModuleBillingOption, activeSub: ProfileModuleSubscription | undefined): ModulePlan | undefined {
   if (!activeSub) return undefined
-  return module.available_plans.find(p => p.plan_id === activeSub.planId)
+  return module.available_plans.find(p => p.plan_slug === activeSub.planCode)
 }
 
 type PlanComparison = 'current' | 'upgrade' | 'downgrade' | 'none'

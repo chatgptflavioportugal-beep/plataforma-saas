@@ -45,7 +45,8 @@
       "Bash(python -c \"import asyncpg\")",
       "Bash(python -c \"import psycopg2\")",
       "Bash(python -c \"import asyncpg; print\\('asyncpg OK'\\)\")",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(xargs grep -liE \"plan\")"
     ]
   }
 }
