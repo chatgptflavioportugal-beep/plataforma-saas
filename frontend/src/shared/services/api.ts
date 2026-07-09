@@ -30,6 +30,7 @@ const SKIP_SIGNOUT_URLS = [
   '/api/v1/tenants/',
   '/api/v1/public/individual-tenant',
   '/api/v1/public/onboarding',
+  '/api/v1/profile/access-token',
 ]
 
 api.interceptors.response.use(

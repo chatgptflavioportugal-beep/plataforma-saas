@@ -46,7 +46,20 @@
       "Bash(python -c \"import psycopg2\")",
       "Bash(python -c \"import asyncpg; print\\('asyncpg OK'\\)\")",
       "Bash(python -c ' *)",
-      "Bash(xargs grep -liE \"plan\")"
+      "Bash(xargs grep -liE \"plan\")",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "PowerShell(Set-Location \"c:\\\\desenvolvimento\\\\sistema\\\\saas-plataforma\\\\frontend\"; if \\(Test-Path \"node_modules\\\\.bin\\\\tsc.cmd\"\\) { & \"node_modules\\\\.bin\\\\tsc.cmd\" --noEmit } else { \"tsc not found; node_modules count:\"; \\(Get-ChildItem node_modules -ErrorAction SilentlyContinue | Measure-Object\\).Count })",
+      "Bash(find backend-quarkus *)",
+      "Bash(ls database *)",
+      "Bash(ls supabase *)",
+      "Bash(mvn -v)",
+      "Bash(ls /c/Users/fmportugal/.jdks 2>&1)",
+      "Read(//c/Users/fmportugal/.jdks/**)",
+      "Bash(JAVA_HOME=/c/Users/fmportugal/.jdks/openjdk-22.0.2 PATH=/c/Users/fmportugal/.jdks/openjdk-22.0.2/bin:__TRACKED_VAR__ mvn -q -o compile)",
+      "Bash(JAVA_HOME=/c/Users/fmportugal/.jdks/openjdk-22.0.2 PATH=/c/Users/fmportugal/.jdks/openjdk-22.0.2/bin:__TRACKED_VAR__ mvn -q compile)",
+      "Bash(npm -v)",
+      "Bash(mkdir -p \"/c/Users/fmportugal/AppData/Roaming/npm\")",
+      "Bash(npm install *)"
     ]
   }
 }

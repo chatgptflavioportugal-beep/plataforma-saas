@@ -42,6 +42,18 @@ export function ServicePage() {
     return <ServiceFeedback icon="🚫" title="Acesso não permitido" description={`Você não possui permissão para acessar "${data.serviceName ?? routeKey}". Entre em contato com o administrador da conta.`} onBack={() => navigate('/app/dashboard')} />
   }
 
+  if (data.accessStatus === 'EXPIRED') {
+    return (
+      <ServiceFeedback
+        icon="⚠️"
+        title="Assinatura expirada"
+        description={`Sua assinatura do módulo "${data.moduleName ?? routeKey}" expirou. Para continuar utilizando este módulo, renove sua assinatura ou escolha outro plano.`}
+        onBack={() => navigate('/app/dashboard')}
+        primaryAction={{ label: 'Renovar assinatura', onClick: () => navigate('/app/billing/plans') }}
+      />
+    )
+  }
+
   // ALLOWED — tenta carregar o componente do registry
   const ServiceComponent = getServiceComponent(routeKey)
 
@@ -113,23 +125,40 @@ function ServiceFeedback({
   title,
   description,
   onBack,
+  primaryAction,
 }: {
   icon: string
   title: string
   description: string
   onBack: () => void
+  /** Ação em destaque, exibida acima do botão de voltar (ex.: "Renovar assinatura"). */
+  primaryAction?: { label: string; onClick: () => void }
 }) {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center max-w-md mx-auto">
       <div className="text-5xl mb-4">{icon}</div>
       <h2 className="text-xl font-bold text-gray-900 mb-2">{title}</h2>
       <p className="text-sm text-gray-500 mb-6">{description}</p>
-      <button
-        onClick={onBack}
-        className="rounded-lg bg-primary-600 px-5 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
-      >
-        Voltar ao Dashboard
-      </button>
+      <div className="flex flex-col gap-3 w-full max-w-xs">
+        {primaryAction && (
+          <button
+            onClick={primaryAction.onClick}
+            className="rounded-lg bg-red-600 px-5 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
+          >
+            {primaryAction.label}
+          </button>
+        )}
+        <button
+          onClick={onBack}
+          className={
+            primaryAction
+              ? 'rounded-lg border border-gray-200 px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors'
+              : 'rounded-lg bg-primary-600 px-5 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors'
+          }
+        >
+          Voltar ao Dashboard
+        </button>
+      </div>
     </div>
   )
 }

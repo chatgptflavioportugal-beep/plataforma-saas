@@ -27,6 +27,7 @@ public class ServiceRouteResource {
      * accessStatus:
      *   ALLOWED         — serviço existe, módulo acessível e perfil tem permissão
      *   DENIED          — serviço existe, mas módulo não acessível ou membro sem permissão
+     *   EXPIRED         — serviço existe, mas a assinatura do módulo venceu
      *   NOT_FOUND       — routeKey não corresponde a nenhum serviço ativo
      */
     @GET
@@ -81,22 +82,32 @@ public class ServiceRouteResource {
             ? moduleSlug + "." + groupSlug + "." + serviceSlug
             : moduleSlug + "." + serviceSlug;
 
-        // 2. Verifica se o módulo é acessível para o tenant (SUBSCRIBED ou FREE)
+        // 2. Verifica se o módulo é acessível para o tenant (SUBSCRIBED, EXPIRED ou FREE)
         List<Object[]> accessRows = em.createNativeQuery("""
             SELECT
               pms.id::text,
-              pms.status
+              pms.status,
+              (pms.status = 'ACTIVE' AND pms.expires_at IS NOT NULL AND pms.expires_at < NOW())
+                AS past_expiry
             FROM profile_module_subscriptions pms
             WHERE pms.module_id = :moduleId
               AND pms.tenant_id = :tenantId
-              AND pms.status = 'ACTIVE'
+              AND pms.status IN ('ACTIVE', 'EXPIRED')
             LIMIT 1
         """)
         .setParameter("moduleId", UUID.fromString(moduleId))
         .setParameter("tenantId", tenantId)
         .getResultList();
 
-        boolean isSubscribed = !accessRows.isEmpty();
+        boolean isExpiredSub = false;
+        boolean isSubscribed = false;
+        if (!accessRows.isEmpty()) {
+            Object[] arow = accessRows.get(0);
+            String subStatus  = (String) arow[1];
+            boolean pastExpiry = Boolean.TRUE.equals(arow[2]);
+            isExpiredSub = "EXPIRED".equals(subStatus) || pastExpiry;
+            isSubscribed = "ACTIVE".equals(subStatus) && !pastExpiry;
+        }
 
         // Verifica se módulo possui plano free
         boolean hasFreePlan = false;
@@ -114,8 +125,9 @@ public class ServiceRouteResource {
         boolean hasModuleAccess = isSubscribed || hasFreePlan;
 
         if (!hasModuleAccess) {
+            String status = isExpiredSub ? "EXPIRED" : "DENIED";
             return Response.ok(buildResult(serviceId, serviceName, sRouteKey, permKey,
-                    moduleId, moduleName, moduleSlug, "DENIED")).build();
+                    moduleId, moduleName, moduleSlug, status)).build();
         }
 
         // 3. Para membros com nível de acesso, verificar permissão no serviço (subscribed ou free)

@@ -395,9 +395,10 @@ type SubscriptionCardProps = {
   subscription: ProfileModuleSubscription
   onCancel: () => void
   onReactivate: () => void
+  onRenew: () => void
 }
 
-function SubscriptionCard({ subscription, onCancel, onReactivate }: SubscriptionCardProps) {
+function SubscriptionCard({ subscription, onCancel, onReactivate, onRenew }: SubscriptionCardProps) {
   const isAnnual       = subscription.billingCycle === 'ANNUAL'
   const annualTotal    = subscription.annualMonthlyPrice * 12
   const canCancel      = subscription.status === 'ACTIVE'
@@ -492,8 +493,17 @@ function SubscriptionCard({ subscription, onCancel, onReactivate }: Subscription
       )}
 
       {/* Ações */}
-      {(canCancel || canReactivate) && (
+      {(canCancel || canReactivate || isExpired) && (
         <div className="border-t border-gray-100 pt-3 flex flex-col gap-2">
+          {isExpired && (
+            <Button
+              variant="primary"
+              className="w-full !bg-red-600 hover:!bg-red-700 focus:!ring-red-500"
+              onClick={onRenew}
+            >
+              Renovar
+            </Button>
+          )}
           {canReactivate && (
             <Button
               variant="primary"
@@ -717,6 +727,7 @@ export function SubscriptionsPage() {
               subscription={sub}
               onCancel={() => setCancelTarget(sub)}
               onReactivate={() => setReactivateTarget(sub)}
+              onRenew={() => navigate('/app/billing/plans')}
             />
           ))}
         </div>

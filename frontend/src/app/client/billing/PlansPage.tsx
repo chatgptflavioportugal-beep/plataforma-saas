@@ -37,6 +37,13 @@ function planAnnualTotal(plan: ModulePlan): number {
   return plan.annual_total_price > 0 ? plan.annual_total_price : plan.annual_monthly_price * 12
 }
 
+/** Rótulo do badge de mudança: distingue renovação (mesmo plano) de troca de plano. */
+function changeLabel(previousPlan: ModulePlan | undefined, plan: ModulePlan): string {
+  if (!previousPlan) return 'Novo módulo'
+  if (previousPlan.plan_slug === plan.plan_slug) return `Renovando: ${plan.plan_name}`
+  return `${previousPlan.plan_name} → ${plan.plan_name}`
+}
+
 /**
  * Constrói o "plano atual" a partir dos dados congelados da própria assinatura —
  * nunca a partir do catálogo de planos. Uma nova versão do plano não altera
@@ -59,17 +66,25 @@ function currentPlanFromSubscription(activeSub: ProfileModuleSubscription | unde
   }
 }
 
-type PlanComparison = 'current' | 'upgrade' | 'downgrade' | 'none'
+type PlanComparison = 'current' | 'renew' | 'upgrade' | 'downgrade' | 'none'
 
 /**
  * Compara um plano do catálogo (sempre a última versão publicada) com o plano
  * atualmente contratado. A comparação de identidade usa plan_slug (plans.code),
  * estável entre versões — plan_id muda a cada nova versão, pois cada versão é
- * uma nova linha em `plans`.
+ * uma nova linha em `plans`. Quando o plano contratado é o mesmo mas a
+ * assinatura está EXPIRED, o resultado é 'renew' em vez de 'current' — o botão
+ * fica habilitado para permitir recontratar o mesmo plano.
  */
-function comparePlan(plan: ModulePlan, currentPlan: ModulePlan | undefined): PlanComparison {
+function comparePlan(
+  plan: ModulePlan,
+  currentPlan: ModulePlan | undefined,
+  currentSubStatus: ProfileModuleSubscription['status'] | undefined
+): PlanComparison {
   if (!currentPlan) return 'none'
-  if (plan.plan_slug === currentPlan.plan_slug) return 'current'
+  if (plan.plan_slug === currentPlan.plan_slug) {
+    return currentSubStatus === 'EXPIRED' ? 'renew' : 'current'
+  }
   return plan.plan_sort_order > currentPlan.plan_sort_order ? 'upgrade' : 'downgrade'
 }
 
@@ -122,17 +137,20 @@ type ModuleCardProps = {
   module: ModuleBillingOption
   selected: SelectedConfig | undefined
   currentPlan: ModulePlan | undefined
+  currentSubStatus: ProfileModuleSubscription['status'] | undefined
   onChoose: () => void
 }
 
-function ModuleCard({ module, selected, currentPlan, onChoose }: ModuleCardProps) {
+function ModuleCard({ module, selected, currentPlan, currentSubStatus, onChoose }: ModuleCardProps) {
   const plans = module.available_plans
   const hasPlans = plans.length > 0
   const planNames = plans.map(p => p.plan_name).join(', ')
   const isFreePlan = currentPlan ? currentPlan.monthly_price === 0 : false
+  const isExpired = currentSubStatus === 'EXPIRED'
 
   let mainButtonLabel = 'Contratar'
   if (selected) mainButtonLabel = 'Trocar plano'
+  else if (isExpired) mainButtonLabel = 'Renovar'
   else if (currentPlan) mainButtonLabel = 'Upgrade'
 
   let mainPrice: string | null = null
@@ -187,11 +205,13 @@ function ModuleCard({ module, selected, currentPlan, onChoose }: ModuleCardProps
         {currentPlan && (
           <div className="mt-3 flex items-center gap-2">
             <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
-              isFreePlan ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+              isExpired ? 'bg-red-100 text-red-700' : isFreePlan ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
             }`}>
               Plano atual: {currentPlan.plan_name}
             </span>
-            <span className="text-xs font-medium text-gray-400">Assinatura ativa</span>
+            <span className={`text-xs font-medium ${isExpired ? 'text-red-500' : 'text-gray-400'}`}>
+              {isExpired ? 'Assinatura expirada' : 'Assinatura ativa'}
+            </span>
           </div>
         )}
 
@@ -257,11 +277,13 @@ type PlanModalProps = {
   pendingPlanId: string | undefined
   /** Plano realmente contratado no perfil ativo (fonte da verdade para Upgrade/Downgrade) */
   currentPlan: ModulePlan | undefined
+  /** Status da assinatura atual — diferencia 'current' (saudável) de 'renew' (expirada) */
+  currentSubStatus: ProfileModuleSubscription['status'] | undefined
   onSelect: (plan: ModulePlan, isAnnual: boolean) => void
   onClose: () => void
 }
 
-function PlanModal({ module, initialIsAnnual, pendingPlanId, currentPlan, onSelect, onClose }: PlanModalProps) {
+function PlanModal({ module, initialIsAnnual, pendingPlanId, currentPlan, currentSubStatus, onSelect, onClose }: PlanModalProps) {
   const [isAnnual, setIsAnnual] = useState(initialIsAnnual)
 
   return (
@@ -307,11 +329,11 @@ function PlanModal({ module, initialIsAnnual, pendingPlanId, currentPlan, onSele
 
         <div className="overflow-y-auto p-6 space-y-4">
           {module.available_plans.map(plan => {
-            const comparison = comparePlan(plan, currentPlan)
+            const comparison = comparePlan(plan, currentPlan, currentSubStatus)
             const isPendingSelection = comparison === 'none' && plan.plan_id === pendingPlanId && isAnnual === initialIsAnnual
             // No card do plano atual, sempre exibe os valores congelados da assinatura
             // (versão contratada) — nunca os valores mais recentes do catálogo.
-            const displayPlan = comparison === 'current' && currentPlan ? currentPlan : plan
+            const displayPlan = (comparison === 'current' || comparison === 'renew') && currentPlan ? currentPlan : plan
             const total = planAnnualTotal(displayPlan)
 
             let buttonLabel = isPendingSelection ? 'Selecionado' : 'Selecionar'
@@ -319,6 +341,9 @@ function PlanModal({ module, initialIsAnnual, pendingPlanId, currentPlan, onSele
             if (comparison === 'current') {
               buttonLabel = '✓ Plano Atual'
               buttonVariant = 'secondary'
+            } else if (comparison === 'renew') {
+              buttonLabel = 'Renovar'
+              buttonVariant = 'primary'
             } else if (comparison === 'upgrade') {
               buttonLabel = 'Upgrade'
               buttonVariant = 'primary'
@@ -327,7 +352,7 @@ function PlanModal({ module, initialIsAnnual, pendingPlanId, currentPlan, onSele
               buttonVariant = 'secondary'
             }
 
-            const isHighlighted = comparison === 'current' || isPendingSelection
+            const isHighlighted = comparison === 'current' || comparison === 'renew' || isPendingSelection
 
             return (
               <div
@@ -335,6 +360,8 @@ function PlanModal({ module, initialIsAnnual, pendingPlanId, currentPlan, onSele
                 className={`rounded-xl border p-4 transition-all ${
                   comparison === 'current'
                     ? 'border-green-500 bg-green-50 ring-1 ring-green-400'
+                    : comparison === 'renew'
+                    ? 'border-red-400 bg-red-50 ring-1 ring-red-300'
                     : isHighlighted
                     ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-400'
                     : 'border-gray-200 hover:border-gray-300'
@@ -342,7 +369,14 @@ function PlanModal({ module, initialIsAnnual, pendingPlanId, currentPlan, onSele
               >
                 <div className="flex items-start gap-4">
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900">{displayPlan.plan_name}</p>
+                    <p className="font-semibold text-gray-900">
+                      {displayPlan.plan_name}
+                      {comparison === 'renew' && (
+                        <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 align-middle">
+                          Status: Expirado
+                        </span>
+                      )}
+                    </p>
 
                     {isAnnual ? (
                       <>
@@ -507,7 +541,7 @@ function ConfirmSubscriptionModal({
                       <span className={`inline-block mt-1 rounded-full px-2 py-0.5 text-xs font-medium ${
                         previousPlan ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'
                       }`}>
-                        {previousPlan ? `Alterando: ${previousPlan.plan_name} → ${plan.plan_name}` : 'Novo módulo'}
+                        {changeLabel(previousPlan, plan)}
                       </span>
                     </div>
                     <span className="font-bold text-gray-900 whitespace-nowrap">{price}</span>
@@ -750,7 +784,7 @@ function ConfigPanel({ selected, onRemove, onConfirm }: ConfigPanelProps) {
                       <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
                         previousPlan ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
                       }`}>
-                        {previousPlan ? `${previousPlan.plan_name} → ${plan.plan_name}` : 'Novo módulo'}
+                        {changeLabel(previousPlan, plan)}
                       </span>
                     </div>
                   </div>
@@ -852,8 +886,11 @@ export function PlansPage() {
     refetchOnMount: 'always',
   })
 
+  // Inclui EXPIRED além de ACTIVE: o "plano atual" precisa sobreviver à expiração
+  // para que o card mostre "Renovar" em vez de voltar a "Contratar" do zero.
+  // (tenant_id + module_id é único, então não há ambiguidade entre status.)
   const activeSubByModuleId = subscriptions
-    .filter(s => s.status === 'ACTIVE')
+    .filter(s => s.status === 'ACTIVE' || s.status === 'EXPIRED')
     .reduce<Record<string, ProfileModuleSubscription>>((acc, s) => {
       acc[s.moduleId] = s
       return acc
@@ -941,6 +978,7 @@ export function PlansPage() {
                   module={module}
                   selected={configuration[module.module_id]}
                   currentPlan={currentPlanFromSubscription(activeSubByModuleId[module.module_id])}
+                  currentSubStatus={activeSubByModuleId[module.module_id]?.status}
                   onChoose={() => setModalModule(module)}
                 />
               ))}
@@ -969,6 +1007,7 @@ export function PlansPage() {
           initialIsAnnual={configuration[modalModule.module_id]?.isAnnual ?? false}
           pendingPlanId={configuration[modalModule.module_id]?.plan.plan_id}
           currentPlan={currentPlanFromSubscription(activeSubByModuleId[modalModule.module_id])}
+          currentSubStatus={activeSubByModuleId[modalModule.module_id]?.status}
           onSelect={(plan, isAnnual) => selectPlan(modalModule, plan, isAnnual)}
           onClose={() => setModalModule(null)}
         />

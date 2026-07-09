@@ -54,6 +54,7 @@ public class TenantSubscriptionRepository {
                 "      WHERE pms.tenant_id = :tenantId " +
                 "        AND pms.module_id = pm.id " +
                 "        AND pms.status = 'ACTIVE'" +
+                "        AND (pms.expires_at IS NULL OR pms.expires_at > NOW())" +
                 "    ) OR EXISTS (" +
                 "      SELECT 1 FROM plan_version_modules pvm " +
                 "      WHERE pvm.module_id = pm.id " +

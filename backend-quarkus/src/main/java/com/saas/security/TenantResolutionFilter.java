@@ -1,6 +1,5 @@
 package com.saas.security;
 
-import com.saas.exception.TrialExpiredException;
 import com.saas.repository.TenantSubscriptionRepository;
 import com.saas.repository.UserTenantRepository;
 import io.quarkus.security.identity.SecurityIdentity;
@@ -62,20 +61,22 @@ public class TenantResolutionFilter implements ContainerRequestFilter {
         String tenantIdHeader = requestContext.getHeaderString("X-Tenant-ID");
 
         var userTenant = resolveUserTenant(userId, tenantIdHeader);
-        var subscription = subscriptionRepository.findActiveByTenant(userTenant.tenantId())
-                .orElseThrow(() -> new TrialExpiredException("Assinatura não encontrada"));
 
-        if ("suspended".equals(subscription.status()) || "cancelled".equals(subscription.status())) {
-            throw new TrialExpiredException("Conta suspensa ou cancelada");
-        }
+        // A autenticação/navegação na plataforma nunca depende da assinatura da conta —
+        // apenas do vínculo ativo em user_tenants (já validado acima). A assinatura é
+        // resolvida de forma tolerante: se não houver nenhuma, segue com defaults vazios
+        // em vez de bloquear a requisição. Quem bloqueia é o acesso a cada módulo,
+        // avaliado individualmente em profile_module_subscriptions (ver DashboardResource,
+        // ModuleTokenResource, ServiceRouteResource).
+        var subscription = subscriptionRepository.findActiveByTenant(userTenant.tenantId());
 
         var tenantCtx = new TenantContext(
                 userId,
                 userTenant.tenantId(),
                 userTenant.role(),
-                subscription.planCode(),
-                subscription.moduleSlugSet(),
-                subscription.status()
+                subscription.map(TenantSubscriptionRepository.SubscriptionResult::planCode).orElse(null),
+                subscription.map(TenantSubscriptionRepository.SubscriptionResult::moduleSlugSet).orElse(java.util.Set.of()),
+                subscription.map(TenantSubscriptionRepository.SubscriptionResult::status).orElse(null)
         );
 
         var principal = new TenantContextPrincipal(tenantCtx);

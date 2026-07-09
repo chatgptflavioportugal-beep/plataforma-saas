@@ -18,6 +18,7 @@ function profileLabel(tenantName: string, tenantType: string, role: string): str
 
 const badgeClass: Record<string, string> = {
   SUBSCRIBED: 'bg-primary-100 text-primary-700',
+  EXPIRED: 'bg-red-100 text-red-700',
   FREE: 'bg-green-100 text-green-700',
   LOCKED: 'bg-gray-100 text-gray-400',
 }
@@ -32,6 +33,7 @@ function ModuleCard({
   onClick: () => void
 }) {
   const isLocked = module.accessStatus === 'LOCKED'
+  const isExpired = module.accessStatus === 'EXPIRED'
 
   return (
     <button
@@ -40,6 +42,8 @@ function ModuleCard({
         'rounded-xl border p-5 text-left w-full transition-all flex flex-col',
         isLocked
           ? 'bg-gray-50 border-gray-100 opacity-50 grayscale hover:opacity-60'
+          : isExpired
+          ? 'bg-white border-red-200 shadow-sm hover:border-red-300 hover:shadow-md'
           : 'bg-white border-gray-100 shadow-sm hover:border-primary-200 hover:shadow-md',
       ].join(' ')}
     >
@@ -58,6 +62,9 @@ function ModuleCard({
         )}
         {isLocked && (
           <span className="absolute -bottom-1 -right-1 text-base leading-none">🔒</span>
+        )}
+        {isExpired && (
+          <span className="absolute -bottom-1 -right-1 text-base leading-none">⚠️</span>
         )}
       </div>
 
@@ -81,9 +88,11 @@ function ModuleCard({
         {module.badgeLabel}
       </span>
 
-      {/* Service count / locked text */}
+      {/* Service count / locked / expired text */}
       {isLocked ? (
         <p className="text-xs text-gray-400 mt-2">Disponível para contratação</p>
+      ) : isExpired ? (
+        <p className="text-xs text-red-500 mt-2">Assinatura expirada — toque para renovar</p>
       ) : (
         module.serviceCount > 0 && (
           <p className="text-xs text-gray-400 mt-2">
@@ -317,6 +326,51 @@ function LockedModal({
   )
 }
 
+// ─── Expired Modal ────────────────────────────────────────────────────────────
+
+function ExpiredModal({
+  module,
+  onClose,
+  onRenew,
+}: {
+  module: DashboardModuleItem
+  onClose: () => void
+  onRenew: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-white rounded-2xl max-w-sm w-full shadow-xl p-6">
+        <div className="text-center">
+          <div className="text-4xl mb-4">⚠️</div>
+          <h2 className="text-lg font-bold text-gray-900 mb-1">Assinatura expirada</h2>
+          <p className="text-sm font-medium text-gray-500 mb-3">{module.moduleName}</p>
+          <p className="text-sm text-gray-600">
+            Sua assinatura deste módulo expirou. Para continuar utilizando este módulo, renove
+            sua assinatura ou escolha outro plano.
+          </p>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Fechar
+          </button>
+          <button
+            onClick={onRenew}
+            className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
+          >
+            Renovar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Service Access Denied Modal ──────────────────────────────────────────────
 
 function ServiceDeniedModal({
@@ -361,6 +415,7 @@ export function DashboardPage() {
 
   const [selectedModule, setSelectedModule] = useState<DashboardModuleItem | null>(null)
   const [lockedModule, setLockedModule] = useState<DashboardModuleItem | null>(null)
+  const [expiredModule, setExpiredModule] = useState<DashboardModuleItem | null>(null)
   const [deniedService, setDeniedService] = useState<DashboardModuleService | null>(null)
 
   const { data: modules = [], isLoading } = useQuery({
@@ -382,6 +437,7 @@ export function DashboardPage() {
 
   function handleModuleClick(mod: DashboardModuleItem) {
     if (mod.accessStatus === 'LOCKED') setLockedModule(mod)
+    else if (mod.accessStatus === 'EXPIRED') setExpiredModule(mod)
     else setSelectedModule(mod)
   }
 
@@ -457,6 +513,18 @@ export function DashboardPage() {
           onClose={() => setLockedModule(null)}
           onViewPlans={() => {
             setLockedModule(null)
+            navigate('/app/billing/plans')
+          }}
+        />
+      )}
+
+      {/* Expired modal */}
+      {expiredModule && (
+        <ExpiredModal
+          module={expiredModule}
+          onClose={() => setExpiredModule(null)}
+          onRenew={() => {
+            setExpiredModule(null)
             navigate('/app/billing/plans')
           }}
         />

@@ -68,7 +68,8 @@ public class ModuleTokenResource {
         //       que é o acesso que funcionava antes desta feature.
 
         List<Object[]> subRows = em.createNativeQuery("""
-            SELECT pms.id::text, pvm.id::text, p.name, p.code
+            SELECT pms.id::text, pvm.id::text, p.name, p.code,
+                   (pms.expires_at IS NOT NULL AND pms.expires_at < NOW()) AS past_expiry
             FROM profile_module_subscriptions pms
             JOIN plan_version_modules pvm ON pvm.id = pms.plan_version_id
             JOIN plans p ON p.id = pvm.plan_id
@@ -80,6 +81,15 @@ public class ModuleTokenResource {
         .setParameter("moduleId", UUID.fromString(moduleId))
         .setParameter("tenantId", tenantId)
         .getResultList();
+
+        // Assinatura ativa mas vencida: bloqueia direto, não cai para FREE_PLAN/TENANT_SUBSCRIPTION.
+        if (!subRows.isEmpty() && Boolean.TRUE.equals(subRows.get(0)[4])) {
+            return Response.status(403).entity(Map.of(
+                    "code", "MODULE_EXPIRED",
+                    "error", "Assinatura deste módulo expirou",
+                    "moduleSlug", moduleSlug
+            )).build();
+        }
 
         String planName    = null;
         String accessSource;

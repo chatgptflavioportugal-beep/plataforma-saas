@@ -226,7 +226,7 @@ export interface DashboardModuleService {
   hasAccess: boolean
 }
 
-export type ServiceAccessStatus = 'ALLOWED' | 'DENIED' | 'NOT_FOUND'
+export type ServiceAccessStatus = 'ALLOWED' | 'DENIED' | 'EXPIRED' | 'NOT_FOUND'
 
 export interface ResolvedServiceRoute {
   serviceId?: string
@@ -245,13 +245,14 @@ export interface DashboardModuleItem {
   moduleSlug: string
   moduleDescription: string | null
   moduleIconPath: string | null
-  accessStatus: 'SUBSCRIBED' | 'FREE' | 'LOCKED'
+  accessStatus: 'SUBSCRIBED' | 'EXPIRED' | 'FREE' | 'LOCKED'
   planName: string | null
   planSlug: string | null
   planVersionId: string | null
   badgeLabel: string
   serviceCount: number
   services: DashboardModuleService[]
+  expiresAt: string | null
 }
 
 export interface ApiError {

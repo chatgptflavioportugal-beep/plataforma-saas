@@ -1,9 +1,10 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { AxiosError } from 'axios'
 import { api, setActiveTenant } from '@/shared/services/api'
 import { fetchProfileToken, clearAllTokens } from '@/shared/services/tokenService'
-import type { TenantProfile, UserTenant } from '@/shared/types'
+import type { ApiError, TenantProfile, UserTenant } from '@/shared/types'
 import { useAuth } from '@/core/auth/AuthContext'
 
 interface TenantContextValue {
@@ -18,6 +19,8 @@ interface TenantContextValue {
   businessTenants: UserTenant[]
   /** ProfileAccessToken vigente para o perfil ativo (null enquanto carrega). */
   profileAccessToken: string | null
+  /** Mensagem de erro ao resolver o tenant ativo (ex.: sem assinatura ativa, acesso negado). */
+  tenantProfileError: string | null
 }
 
 const TenantCtx = createContext<TenantContextValue | null>(null)
@@ -59,7 +62,15 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     if (!activeTenantId) return
     fetchProfileToken(activeTenantId)
       .then(setProfileAccessToken)
-      .catch(() => setProfileAccessToken(null))
+      .catch((err) => {
+        console.error(
+          '[TenantContext] Falha ao gerar ProfileAccessToken para tenant',
+          activeTenantId,
+          ':',
+          err instanceof AxiosError ? err.response?.data ?? err.message : err
+        )
+        setProfileAccessToken(null)
+      })
   }, [activeTenantId])
 
   useEffect(() => {
@@ -97,7 +108,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     }
   }, [tenantsLoading, tenantsFetching, tenantsError, userTenants, activeTenantId, navigate, location.pathname, switchTenant])
 
-  const { data: currentTenant, isLoading: tenantLoading } = useQuery({
+  const { data: currentTenant, isLoading: tenantLoading, error: tenantProfileErrorObj } = useQuery({
     queryKey: ['tenant-profile', activeTenantId],
     queryFn: async () => {
       const { data } = await api.get<TenantProfile>(`/api/v1/tenants/${activeTenantId}/profile`)
@@ -106,6 +117,15 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     enabled: !!activeTenantId,
     retry: false,
   })
+
+  const tenantProfileError = (() => {
+    if (!tenantProfileErrorObj) return null
+    if (tenantProfileErrorObj instanceof AxiosError) {
+      const apiError = tenantProfileErrorObj.response?.data as ApiError | undefined
+      return apiError?.message ?? apiError?.error ?? tenantProfileErrorObj.message
+    }
+    return (tenantProfileErrorObj as Error).message
+  })()
 
   const trialDaysRemaining = (() => {
     if (!currentTenant?.subscription?.trial_end) return null
@@ -126,6 +146,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       individualTenant,
       businessTenants,
       profileAccessToken,
+      tenantProfileError,
     }}>
       {children}
     </TenantCtx.Provider>
