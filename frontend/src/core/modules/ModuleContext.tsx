@@ -11,16 +11,17 @@ import {
   fetchModuleToken,
   getCachedModuleToken,
   isModuleTokenExpiringSoon,
-  type ModuleTokenResponse,
 } from '@/shared/services/tokenService'
 import { createModuleApi } from '@/shared/services/moduleApi'
+import { decodeJwt } from '@/shared/utils/jwt'
+import type { ModuleTokenClaims } from '@/shared/types/tokens'
 import type { AxiosInstance } from 'axios'
 
 interface ModuleContextValue {
   moduleSlug: string
   moduleToken: string | null
   permissions: string[]
-  limits: ModuleTokenResponse['limits']
+  limits: ModuleTokenClaims['limits']
   planName: string | null
   isLoading: boolean
   error: string | null
@@ -47,7 +48,6 @@ interface ModuleProviderProps {
 export function ModuleProvider({ moduleSlug, children }: ModuleProviderProps) {
   const { activeTenantId } = useTenant()
 
-  const [tokenData, setTokenData] = useState<ModuleTokenResponse | null>(null)
   const [moduleToken, setModuleToken] = useState<string | null>(() =>
     getCachedModuleToken(moduleSlug)
   )
@@ -60,7 +60,6 @@ export function ModuleProvider({ moduleSlug, children }: ModuleProviderProps) {
     setError(null)
     try {
       const data = await fetchModuleToken(moduleSlug, activeTenantId)
-      setTokenData(data)
       setModuleToken(data.moduleAccessToken)
     } catch (err) {
       setError('Sem acesso a este módulo. Verifique sua assinatura.')
@@ -93,16 +92,25 @@ export function ModuleProvider({ moduleSlug, children }: ModuleProviderProps) {
     return createModuleApi(moduleSlug, activeTenantId)
   }, [moduleToken, moduleSlug, activeTenantId])
 
+  const claims = useMemo<ModuleTokenClaims | null>(() => {
+    if (!moduleToken) return null
+    try {
+      return decodeJwt<ModuleTokenClaims>(moduleToken)
+    } catch {
+      return null
+    }
+  }, [moduleToken])
+
   const hasPermission = (key: string) =>
-    (tokenData?.permissions ?? []).includes(key)
+    (claims?.permissions ?? []).includes(key)
 
   return (
     <ModuleCtx.Provider value={{
       moduleSlug,
       moduleToken,
-      permissions: tokenData?.permissions ?? [],
-      limits:      tokenData?.limits ?? {},
-      planName:    tokenData?.planName ?? null,
+      permissions: claims?.permissions ?? [],
+      limits:      claims?.limits ?? {},
+      planName:    claims?.planName ?? null,
       isLoading,
       error,
       hasPermission,

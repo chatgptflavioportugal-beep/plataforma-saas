@@ -1,12 +1,30 @@
 import { api } from './api'
+import { decodeJwt } from '../utils/jwt'
+import type { ModuleTokenClaims, ProfileTokenClaims, TokenStorage } from '../types/tokens'
 
-const PROFILE_TOKEN_KEY = 'profile_access_token'
-const PROFILE_EXPIRY_KEY = 'profile_access_token_expiry'
-const MODULE_TOKEN_PREFIX = 'module_access_token_'
-const MODULE_EXPIRY_PREFIX = 'module_access_token_expiry_'
+const STORAGE_KEY = 'auth_tokens'
 
 /** Margem de renovação antecipada: renova se faltar menos de 2 min */
 const RENEWAL_MARGIN_MS = 2 * 60 * 1000
+
+function readStorage(): TokenStorage {
+  const raw = sessionStorage.getItem(STORAGE_KEY)
+  if (!raw) return { moduleTokens: {} }
+  try {
+    const parsed = JSON.parse(raw) as Partial<TokenStorage>
+    return { profileToken: parsed.profileToken, moduleTokens: parsed.moduleTokens ?? {} }
+  } catch {
+    return { moduleTokens: {} }
+  }
+}
+
+function writeStorage(storage: TokenStorage): void {
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(storage))
+}
+
+function isExpiredOrExpiringSoon(expiresAt: string): boolean {
+  return Date.now() >= new Date(expiresAt).getTime() - RENEWAL_MARGIN_MS
+}
 
 // ─── ProfileAccessToken ──────────────────────────────────────────────────────
 
@@ -16,30 +34,53 @@ export async function fetchProfileToken(tenantId: string): Promise<string> {
     null,
     { headers: { 'X-Tenant-ID': tenantId } }
   )
-  sessionStorage.setItem(PROFILE_TOKEN_KEY, data.profileAccessToken)
-  sessionStorage.setItem(PROFILE_EXPIRY_KEY, data.expiresAt)
+  const claims = decodeJwt<ProfileTokenClaims>(data.profileAccessToken)
+
+  const storage = readStorage()
+  storage.profileToken = {
+    token: data.profileAccessToken,
+    expiresAt: data.expiresAt,
+    permissionsVersion: claims.permissionsVersion,
+  }
+  writeStorage(storage)
+
   return data.profileAccessToken
 }
 
-export function getCachedProfileToken(): string | null {
-  const token  = sessionStorage.getItem(PROFILE_TOKEN_KEY)
-  const expiry = sessionStorage.getItem(PROFILE_EXPIRY_KEY)
-  if (!token || !expiry) return null
-  const expiresAt = new Date(expiry).getTime()
-  if (Date.now() >= expiresAt - RENEWAL_MARGIN_MS) {
+/**
+ * Retorna o ProfileAccessToken em cache se ainda válido.
+ * Se `expectedPermissionsVersion` for informado e divergir do token armazenado, descarta o cache.
+ */
+export function getCachedProfileToken(expectedPermissionsVersion?: number): string | null {
+  const { profileToken } = readStorage()
+  if (!profileToken) return null
+
+  if (isExpiredOrExpiringSoon(profileToken.expiresAt)) {
     clearProfileToken()
     return null
   }
-  return token
+  if (
+    expectedPermissionsVersion !== undefined &&
+    profileToken.permissionsVersion !== expectedPermissionsVersion
+  ) {
+    clearProfileToken()
+    return null
+  }
+
+  return profileToken.token
 }
 
-export async function getProfileToken(tenantId: string): Promise<string> {
-  return getCachedProfileToken() ?? fetchProfileToken(tenantId)
+export async function getProfileToken(
+  tenantId: string,
+  expectedPermissionsVersion?: number
+): Promise<string> {
+  return getCachedProfileToken(expectedPermissionsVersion) ?? fetchProfileToken(tenantId)
 }
 
 export function clearProfileToken(): void {
-  sessionStorage.removeItem(PROFILE_TOKEN_KEY)
-  sessionStorage.removeItem(PROFILE_EXPIRY_KEY)
+  const storage = readStorage()
+  delete storage.profileToken
+  writeStorage(storage)
 }
 
 // ─── ModuleAccessToken ───────────────────────────────────────────────────────
@@ -63,21 +104,41 @@ export async function fetchModuleToken(
     null,
     { headers: { 'X-Tenant-ID': tenantId } }
   )
-  sessionStorage.setItem(MODULE_TOKEN_PREFIX + moduleSlug, data.moduleAccessToken)
-  sessionStorage.setItem(MODULE_EXPIRY_PREFIX + moduleSlug, data.expiresAt)
+  const claims = decodeJwt<ModuleTokenClaims>(data.moduleAccessToken)
+
+  const storage = readStorage()
+  storage.moduleTokens[moduleSlug] = {
+    token: data.moduleAccessToken,
+    expiresAt: data.expiresAt,
+    permissionsVersion: claims.permissionsVersion,
+  }
+  writeStorage(storage)
+
   return data
 }
 
-export function getCachedModuleToken(moduleSlug: string): string | null {
-  const token  = sessionStorage.getItem(MODULE_TOKEN_PREFIX + moduleSlug)
-  const expiry = sessionStorage.getItem(MODULE_EXPIRY_PREFIX + moduleSlug)
-  if (!token || !expiry) return null
-  const expiresAt = new Date(expiry).getTime()
-  if (Date.now() >= expiresAt - RENEWAL_MARGIN_MS) {
+/**
+ * Retorna o ModuleAccessToken em cache se ainda válido.
+ * Se `expectedPermissionsVersion` for informado e divergir do token armazenado, descarta o cache.
+ */
+export function getCachedModuleToken(
+  moduleSlug: string,
+  expectedPermissionsVersion?: number
+): string | null {
+  const { moduleTokens } = readStorage()
+  const entry = moduleTokens[moduleSlug]
+  if (!entry) return null
+
+  if (isExpiredOrExpiringSoon(entry.expiresAt)) {
     clearModuleToken(moduleSlug)
     return null
   }
-  return token
+  if (expectedPermissionsVersion !== undefined && entry.permissionsVersion !== expectedPermissionsVersion) {
+    clearModuleToken(moduleSlug)
+    return null
+  }
+
+  return entry.token
 }
 
 export async function getModuleToken(
@@ -91,27 +152,19 @@ export async function getModuleToken(
 }
 
 export function clearModuleToken(moduleSlug: string): void {
-  sessionStorage.removeItem(MODULE_TOKEN_PREFIX + moduleSlug)
-  sessionStorage.removeItem(MODULE_EXPIRY_PREFIX + moduleSlug)
+  const storage = readStorage()
+  delete storage.moduleTokens[moduleSlug]
+  writeStorage(storage)
 }
 
 export function clearAllTokens(): void {
-  // Limpa PAT
-  clearProfileToken()
-  // Limpa todos os MATs (chaves prefixadas)
-  const keysToRemove: string[] = []
-  for (let i = 0; i < sessionStorage.length; i++) {
-    const key = sessionStorage.key(i)
-    if (key && (key.startsWith(MODULE_TOKEN_PREFIX) || key.startsWith(MODULE_EXPIRY_PREFIX))) {
-      keysToRemove.push(key)
-    }
-  }
-  keysToRemove.forEach((k) => sessionStorage.removeItem(k))
+  writeStorage({ moduleTokens: {} })
 }
 
-/** Verifica se o token de módulo está próximo do vencimento (< 2 min). */
+/** Verifica se o token de módulo está próximo do vencimento (< 2 min) ou ausente. */
 export function isModuleTokenExpiringSoon(moduleSlug: string): boolean {
-  const expiry = sessionStorage.getItem(MODULE_EXPIRY_PREFIX + moduleSlug)
-  if (!expiry) return true
-  return Date.now() >= new Date(expiry).getTime() - RENEWAL_MARGIN_MS
+  const { moduleTokens } = readStorage()
+  const entry = moduleTokens[moduleSlug]
+  if (!entry) return true
+  return isExpiredOrExpiringSoon(entry.expiresAt)
 }

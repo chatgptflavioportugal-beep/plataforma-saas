@@ -53,7 +53,10 @@
       "Bash(py -3 --version)",
       "Bash(py -3 -c \"import fastapi\")",
       "Bash(py -3 -m venv .venv_verify)",
-      "Bash(./.venv_verify/Scripts/python.exe -m pip install -q -r requirements.txt)"
+      "Bash(./.venv_verify/Scripts/python.exe -m pip install -q -r requirements.txt)",
+      "Bash(find backend-quarkus/src/main/java/com/saas/security -type f)",
+      "Bash(find backend-quarkus/src/main/java/com/saas/resource -iname \"*token*\")",
+      "Bash(find backend-python/security -type f)"
     ]
   }
 }
