@@ -20,7 +20,6 @@ export function AppLayout() {
 
   const navItems = [
     { path: '/app/dashboard', label: 'Dashboard' },
-    { path: '/app/pdf/merge', label: 'Merge de PDFs' },
     { path: '/app/billing/plans', label: 'Planos', exact: true },
     { path: '/app/billing/subscriptions', label: 'Assinaturas', exact: true },
     ...(canManageMembers ? [{ path: '/app/settings/members', label: 'Membros', exact: true }] : []),

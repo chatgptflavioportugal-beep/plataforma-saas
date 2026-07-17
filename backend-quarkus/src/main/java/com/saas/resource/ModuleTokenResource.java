@@ -62,7 +62,8 @@ public class ModuleTokenResource {
 
         // 2. Verifica acesso em três etapas (da mais específica para a mais ampla):
         //    a) profile_module_subscriptions ACTIVE  → SUBSCRIPTION
-        //    b) plan_version_modules free (price=0)  → FREE_PLAN
+        //    b) plan_version_modules free (price=0) sem assinatura → ainda não ativado
+        //       (o front deve chamar POST /api/v1/subscriptions/free e tentar de novo)
         //    c) moduleSlugSet do TenantContext        → TENANT_SUBSCRIPTION (caminho legado)
         //       O moduleSlugSet vem da assinatura principal do tenant (tenant_subscriptions),
         //       que é o acesso que funcionava antes desta feature.
@@ -100,7 +101,9 @@ public class ModuleTokenResource {
             planName      = (String) subRows.get(0)[2];
             accessSource  = "SUBSCRIPTION";
         } else {
-            // b) Plano free associado ao módulo
+            // b) Plano free associado ao módulo, mas ainda não ativado (sem linha em
+            //    profile_module_subscriptions). Não emite token — o front deve chamar
+            //    POST /api/v1/subscriptions/free para ativar e então tentar de novo.
             List<Object[]> freeRows = em.createNativeQuery("""
                 SELECT pvm.id::text, p.name
                 FROM plan_version_modules pvm
@@ -112,9 +115,13 @@ public class ModuleTokenResource {
             """).setParameter("moduleId", UUID.fromString(moduleId)).getResultList();
 
             if (!freeRows.isEmpty()) {
-                planVersionId = (String) freeRows.get(0)[0];
-                planName      = (String) freeRows.get(0)[1];
-                accessSource  = "FREE_PLAN";
+                return Response.status(409).entity(Map.of(
+                        "code", "FREE_PLAN_NOT_ACTIVATED",
+                        "error", "Plano gratuito disponível para este módulo, mas ainda não ativado",
+                        "moduleSlug", moduleSlug,
+                        "moduleId", moduleId,
+                        "planVersionId", freeRows.get(0)[0]
+                )).build();
             } else if (ctx.hasFeature(moduleSlug)) {
                 // c) Acesso via assinatura principal do tenant (legado, compatibilidade)
                 planName     = ctx.getPlanCode();

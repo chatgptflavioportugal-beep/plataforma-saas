@@ -9,13 +9,17 @@ import {
 import { useTenant } from '@/core/workspaces/TenantContext'
 import {
   fetchModuleToken,
+  fetchProfileToken,
   getCachedModuleToken,
   isModuleTokenExpiringSoon,
 } from '@/shared/services/tokenService'
 import { createModuleApi } from '@/shared/services/moduleApi'
+import { api } from '@/shared/services/api'
 import { decodeJwt } from '@/shared/utils/jwt'
-import type { ModuleTokenClaims } from '@/shared/types/tokens'
+import type { ModuleTokenClaims, ProfileTokenClaims } from '@/shared/types/tokens'
 import type { AxiosInstance } from 'axios'
+import { isAxiosError } from 'axios'
+import { useQueryClient } from '@tanstack/react-query'
 
 interface ModuleContextValue {
   moduleSlug: string
@@ -24,6 +28,8 @@ interface ModuleContextValue {
   limits: ModuleTokenClaims['limits']
   planName: string | null
   isLoading: boolean
+  /** Mensagem exibida durante a ativação automática do plano Free (primeiro acesso). */
+  activationMessage: string | null
   error: string | null
   hasPermission: (key: string) => boolean
   /** Instância Axios pré-configurada com o ModuleAccessToken para este módulo. */
@@ -39,6 +45,10 @@ interface ModuleProviderProps {
   children: ReactNode
 }
 
+const NO_PERMISSION_MESSAGE =
+  'Você não possui permissão para ativar este módulo. Solicite ao proprietário da empresa ' +
+  'ou a um administrador que realize a ativação do plano Free.'
+
 /**
  * Provê o ModuleAccessToken e o axios configurado para um módulo específico.
  *
@@ -46,25 +56,77 @@ interface ModuleProviderProps {
  * ao montar o provider e renovado proativamente antes de expirar.
  */
 export function ModuleProvider({ moduleSlug, children }: ModuleProviderProps) {
-  const { activeTenantId } = useTenant()
+  const { activeTenantId, profileAccessToken } = useTenant()
+  const queryClient = useQueryClient()
 
   const [moduleToken, setModuleToken] = useState<string | null>(() =>
     getCachedModuleToken(moduleSlug)
   )
-  const [isLoading, setIsLoading] = useState(!moduleToken)
-  const [error, setError]         = useState<string | null>(null)
+  const [isLoading, setIsLoading]                     = useState(!moduleToken)
+  const [activationMessage, setActivationMessage]     = useState<string | null>(null)
+  const [error, setError]                             = useState<string | null>(null)
+
+  // Checagem local de permissão para ativar um módulo Free — usa exclusivamente
+  // as claims já decodificadas do Profile Token (sem consultar banco/backend).
+  const canActivateFreeModule = () => {
+    if (!profileAccessToken) return false
+    try {
+      const claims = decodeJwt<ProfileTokenClaims>(profileAccessToken)
+      return (
+        claims.profileType === 'INDIVIDUAL' ||
+        claims.profileRole === 'OWNER' ||
+        claims.permissions.includes('profile.plans.subscribe')
+      )
+    } catch {
+      return false
+    }
+  }
 
   const loadToken = async () => {
     if (!activeTenantId) return
     setIsLoading(true)
     setError(null)
+    setActivationMessage(null)
     try {
       const data = await fetchModuleToken(moduleSlug, activeTenantId)
       setModuleToken(data.moduleAccessToken)
     } catch (err) {
+      if (isAxiosError(err) && err.response?.status === 409 && err.response.data?.code === 'FREE_PLAN_NOT_ACTIVATED') {
+        if (!canActivateFreeModule()) {
+          setError(NO_PERMISSION_MESSAGE)
+          setModuleToken(null)
+          setIsLoading(false)
+          return
+        }
+        await activateFreeModuleAndRetry()
+        return
+      }
       setError('Sem acesso a este módulo. Verifique sua assinatura.')
       setModuleToken(null)
     } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const activateFreeModuleAndRetry = async () => {
+    if (!activeTenantId) return
+    setActivationMessage('Estamos preparando seu acesso. Aguarde alguns segundos...')
+    try {
+      // Corpo em snake_case: o backend usa Jackson com property-naming-strategy=SNAKE_CASE
+      await api.post('/api/v1/subscriptions/free', { module_slug: moduleSlug })
+      await fetchProfileToken(activeTenantId)
+      queryClient.invalidateQueries({ queryKey: ['dashboard-modules'] })
+      const data = await fetchModuleToken(moduleSlug, activeTenantId)
+      setModuleToken(data.moduleAccessToken)
+    } catch (err) {
+      if (isAxiosError(err) && err.response?.status === 403) {
+        setError(NO_PERMISSION_MESSAGE)
+      } else {
+        setError('Não foi possível ativar o plano gratuito. Tente novamente.')
+      }
+      setModuleToken(null)
+    } finally {
+      setActivationMessage(null)
       setIsLoading(false)
     }
   }
@@ -112,6 +174,7 @@ export function ModuleProvider({ moduleSlug, children }: ModuleProviderProps) {
       limits:      claims?.limits ?? {},
       planName:    claims?.planName ?? null,
       isLoading,
+      activationMessage,
       error,
       hasPermission,
       moduleApi:   builtModuleApi,

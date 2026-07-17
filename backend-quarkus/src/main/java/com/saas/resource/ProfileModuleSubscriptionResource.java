@@ -40,6 +40,10 @@ public class ProfileModuleSubscriptionResource {
         List<ModuleSubscriptionItem> modules
     ) {}
 
+    public record ActivateFreeModuleRequest(
+        String moduleSlug
+    ) {}
+
     // ─── POST /modules — confirmar assinatura ────────────────────────────────────
 
     /**
@@ -151,6 +155,142 @@ public class ProfileModuleSubscriptionResource {
             "tenantId", tenantId.toString(),
             "modulesContracted", request.modules().size()
         )).build();
+    }
+
+    // ─── POST /free — ativação sob demanda de módulo com plano Free ─────────────
+
+    /**
+     * Ativa (cria ou reativa) a assinatura Free de um módulo para o perfil ativo,
+     * no primeiro acesso do usuário ao módulo (lazy activation).
+     *
+     * Perfil Individual: qualquer usuário do perfil pode ativar.
+     * Perfil Empresarial: owner/admin, ou membro com a permissão "plans.subscribe".
+     *
+     * Idempotente: se já existir assinatura ACTIVE não expirada, não faz nada.
+     */
+    @POST
+    @Path("/free")
+    @Transactional
+    @SuppressWarnings("unchecked")
+    public Response activateFreeModule(
+        ActivateFreeModuleRequest request,
+        @Context SecurityContext secCtx
+    ) {
+        var ctx = TenantContext.from(secCtx);
+        UUID tenantId = ctx.getTenantId();
+        UUID userId   = ctx.getUserId();
+
+        if (request == null || request.moduleSlug() == null || request.moduleSlug().isBlank()) {
+            return Response.status(400)
+                .entity(Map.of("error", "moduleSlug é obrigatório"))
+                .build();
+        }
+
+        if (!canActivateFreeModule(ctx)) {
+            return Response.status(403)
+                .entity(Map.of("error", "Sem permissão para ativar módulos gratuitos neste perfil"))
+                .build();
+        }
+
+        List<Object[]> moduleRows = em.createNativeQuery(
+            "SELECT id FROM platform_modules WHERE slug = :slug AND is_active = TRUE"
+        ).setParameter("slug", request.moduleSlug()).getResultList();
+
+        if (moduleRows.isEmpty()) {
+            return Response.status(404)
+                .entity(Map.of("error", "Módulo não encontrado: " + request.moduleSlug()))
+                .build();
+        }
+        UUID moduleId = (UUID) moduleRows.get(0)[0];
+
+        List<Object[]> freeRows = em.createNativeQuery(
+            "SELECT pvm.id, p.name FROM plan_version_modules pvm " +
+            "JOIN plans p ON p.id = pvm.plan_id " +
+            "WHERE pvm.module_id = :moduleId AND pvm.status = 'active' AND pvm.monthly_price = 0 " +
+            "LIMIT 1"
+        ).setParameter("moduleId", moduleId).getResultList();
+
+        if (freeRows.isEmpty()) {
+            return Response.status(400)
+                .entity(Map.of("error", "Este módulo não possui plano gratuito"))
+                .build();
+        }
+        UUID planVersionId = (UUID) freeRows.get(0)[0];
+        String planName    = (String) freeRows.get(0)[1];
+
+        // Idempotência: já ativo e não expirado — não faz nada
+        long activeCount = ((Number) em.createNativeQuery(
+            "SELECT COUNT(*) FROM profile_module_subscriptions " +
+            "WHERE tenant_id = :tenantId AND module_id = :moduleId AND status = 'ACTIVE' " +
+            "  AND (expires_at IS NULL OR expires_at > NOW())"
+        )
+            .setParameter("tenantId", tenantId)
+            .setParameter("moduleId", moduleId)
+            .getSingleResult()).longValue();
+
+        if (activeCount == 0) {
+            em.createNativeQuery("""
+                INSERT INTO profile_module_subscriptions
+                    (tenant_id, module_id, plan_version_id, billing_cycle, status,
+                     started_at, expires_at, canceled_at, created_by_user_id)
+                VALUES
+                    (:tenantId, :moduleId, :planVersionId, 'FREE', 'ACTIVE',
+                     NOW(), NULL, NULL, :userId)
+                ON CONFLICT (tenant_id, module_id)
+                DO UPDATE SET
+                    plan_version_id    = EXCLUDED.plan_version_id,
+                    billing_cycle      = 'FREE',
+                    status             = 'ACTIVE',
+                    started_at         = NOW(),
+                    expires_at         = NULL,
+                    canceled_at        = NULL,
+                    updated_at         = NOW()
+            """)
+                .setParameter("tenantId", tenantId)
+                .setParameter("moduleId", moduleId)
+                .setParameter("planVersionId", planVersionId)
+                .setParameter("userId", userId)
+                .executeUpdate();
+        }
+
+        return Response.ok(Map.of(
+            "success",       true,
+            "moduleId",      moduleId.toString(),
+            "moduleSlug",    request.moduleSlug(),
+            "planVersionId", planVersionId.toString(),
+            "planName",      planName
+        )).build();
+    }
+
+    private boolean canActivateFreeModule(TenantContext ctx) {
+        String rawType = (String) em.createNativeQuery(
+            "SELECT type FROM tenants WHERE id = :id"
+        ).setParameter("id", ctx.getTenantId()).getSingleResult();
+
+        if ("individual".equals(rawType)) {
+            return true;
+        }
+
+        String role = ctx.getUserRole();
+        if (List.of("owner", "admin").contains(role)) {
+            return true;
+        }
+
+        List<?> permRows = em.createNativeQuery("""
+            SELECT 1
+            FROM user_tenants ut
+            JOIN profile_access_level_admin_permissions ap ON ap.access_level_id = ut.access_level_id
+            WHERE ut.user_id = :userId
+              AND ut.tenant_id = :tenantId
+              AND ut.is_active = TRUE
+              AND ap.permission_key = 'plans.subscribe'
+            LIMIT 1
+        """)
+            .setParameter("userId", ctx.getUserId())
+            .setParameter("tenantId", ctx.getTenantId())
+            .getResultList();
+
+        return !permRows.isEmpty();
     }
 
     // ─── GET /modules — listar assinaturas do perfil ativo ──────────────────────

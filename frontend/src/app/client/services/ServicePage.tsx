@@ -92,6 +92,23 @@ function LoadingSpinner() {
   )
 }
 
+/**
+ * Modal bloqueante exibido durante a ativação automática do plano Free (primeiro acesso).
+ * Sem botão de fechar e sem dispensa por clique fora — o usuário não pode interagir
+ * com a tela até a ativação terminar.
+ */
+function ActivationModal({ message }: { message: string }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl max-w-sm w-full shadow-xl p-8 text-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600 mx-auto mb-5" />
+        <h2 className="text-lg font-bold text-gray-900 mb-2">Ativando Plano Free</h2>
+        <p className="text-sm text-gray-500">{message}</p>
+      </div>
+    </div>
+  )
+}
+
 /** Aguarda o ModuleAccessToken e exibe erro de acesso se não conseguir. */
 function ModuleGate({
   children,
@@ -100,7 +117,9 @@ function ModuleGate({
   children: React.ReactNode
   navigate: (path: string) => void
 }) {
-  const { isLoading, error } = useModule()
+  const { isLoading, activationMessage, error } = useModule()
+
+  if (activationMessage) return <ActivationModal message={activationMessage} />
 
   if (isLoading) return <LoadingSpinner />
 

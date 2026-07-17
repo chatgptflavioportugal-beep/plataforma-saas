@@ -56,7 +56,12 @@
       "Bash(./.venv_verify/Scripts/python.exe -m pip install -q -r requirements.txt)",
       "Bash(find backend-quarkus/src/main/java/com/saas/security -type f)",
       "Bash(find backend-quarkus/src/main/java/com/saas/resource -iname \"*token*\")",
-      "Bash(find backend-python/security -type f)"
+      "Bash(find backend-python/security -type f)",
+      "Bash(mvn -q compile)",
+      "Bash(java -version)",
+      "Bash(mvn -version)",
+      "Bash(npx eslint *)",
+      "Bash(./node_modules/.bin/eslint --version)"
     ]
   }
 }

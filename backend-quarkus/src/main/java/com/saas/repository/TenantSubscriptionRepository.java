@@ -40,27 +40,21 @@ public class TenantSubscriptionRepository {
         if (accountRows.isEmpty()) return Optional.empty();
         Object[] row = (Object[]) accountRows.get(0);
 
-        // Constrói moduleSlugSet a partir de:
-        // 1. Assinaturas de módulo ativas do perfil (profile_module_subscriptions)
-        // 2. Módulos com plano Free disponível (plan_version_modules.monthly_price = 0)
+        // Constrói moduleSlugSet a partir de assinaturas de módulo reais e ativas
+        // (profile_module_subscriptions). Módulos com plano Free só entram aqui depois
+        // de ativados via POST /api/v1/subscriptions/free (lazy activation) — a mera
+        // disponibilidade de um plano Free não concede mais acesso automático.
         @SuppressWarnings("unchecked")
         List<String> slugRows = em.createNativeQuery(
                 "SELECT DISTINCT pm.slug " +
                 "FROM platform_modules pm " +
                 "WHERE pm.is_active = TRUE " +
-                "  AND (" +
-                "    EXISTS (" +
-                "      SELECT 1 FROM profile_module_subscriptions pms " +
-                "      WHERE pms.tenant_id = :tenantId " +
-                "        AND pms.module_id = pm.id " +
-                "        AND pms.status = 'ACTIVE'" +
-                "        AND (pms.expires_at IS NULL OR pms.expires_at > NOW())" +
-                "    ) OR EXISTS (" +
-                "      SELECT 1 FROM plan_version_modules pvm " +
-                "      WHERE pvm.module_id = pm.id " +
-                "        AND pvm.status = 'active' " +
-                "        AND pvm.monthly_price = 0" +
-                "    )" +
+                "  AND EXISTS (" +
+                "    SELECT 1 FROM profile_module_subscriptions pms " +
+                "    WHERE pms.tenant_id = :tenantId " +
+                "      AND pms.module_id = pm.id " +
+                "      AND pms.status = 'ACTIVE'" +
+                "      AND (pms.expires_at IS NULL OR pms.expires_at > NOW())" +
                 "  )"
         )
         .setParameter("tenantId", tenantId)

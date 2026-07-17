@@ -59,7 +59,13 @@
       "Bash(JAVA_HOME=/c/Users/fmportugal/.jdks/openjdk-22.0.2 PATH=/c/Users/fmportugal/.jdks/openjdk-22.0.2/bin:__TRACKED_VAR__ mvn -q compile)",
       "Bash(npm -v)",
       "Bash(mkdir -p \"/c/Users/fmportugal/AppData/Roaming/npm\")",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(xargs grep -ln \"profile_module_subscriptions\")",
+      "Bash(xargs grep -ln \"FREE\\\\|is_free\\\\|free_plan\\\\|create_tenant\\\\|new_tenant\\\\|handle_new\")",
+      "Bash(xargs grep -n \"plan_type\")",
+      "Bash(xargs grep -ln \"INSERT INTO profile_module_subscriptions\\\\|profile_module_subscriptions\")",
+      "Bash(xargs -I{} basename {})",
+      "Bash(./mvnw -q -o compile)"
     ]
   }
 }
