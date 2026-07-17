@@ -7,6 +7,9 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import org.jboss.logging.Logger;
 
+import java.util.List;
+import java.util.UUID;
+
 /**
  * Mantém profile_module_subscriptions.status coerente com expires_at.
  *
@@ -26,14 +29,27 @@ public class ModuleSubscriptionExpirationScheduler {
 
     @Scheduled(cron = "0 0 * * * ?")
     @Transactional
+    @SuppressWarnings("unchecked")
     public void expireOverdueModuleSubscriptions() {
+        List<UUID> affectedTenantIds = em.createNativeQuery(
+                "SELECT DISTINCT tenant_id FROM profile_module_subscriptions " +
+                "WHERE status = 'ACTIVE' AND expires_at IS NOT NULL AND expires_at < NOW()"
+        ).getResultList();
+
+        if (affectedTenantIds.isEmpty()) return;
+
         int updated = em.createNativeQuery(
                 "UPDATE profile_module_subscriptions SET status = 'EXPIRED', updated_at = NOW() " +
                 "WHERE status = 'ACTIVE' AND expires_at IS NOT NULL AND expires_at < NOW()"
         ).executeUpdate();
 
-        if (updated > 0) {
-            LOG.infof("Expiradas %d assinaturas de módulo vencidas", updated);
-        }
+        // Assinatura de módulo expirou — invalida PAT/MAT em cache dos membros do tenant
+        // para que o front reavalie o acesso na próxima requisição, sem esperar o MAT expirar.
+        em.createNativeQuery(
+                "UPDATE user_tenants SET permissions_version = permissions_version + 1 " +
+                "WHERE tenant_id IN (:ids) AND is_active = TRUE"
+        ).setParameter("ids", affectedTenantIds).executeUpdate();
+
+        LOG.infof("Expiradas %d assinaturas de módulo vencidas", updated);
     }
 }

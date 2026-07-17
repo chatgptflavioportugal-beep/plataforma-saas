@@ -1,5 +1,6 @@
 package com.saas.resource;
 
+import com.saas.repository.UserTenantRepository;
 import com.saas.security.TenantContext;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
@@ -27,6 +28,9 @@ public class ProfileModuleSubscriptionResource {
 
     @Inject
     EntityManager em;
+
+    @Inject
+    UserTenantRepository userTenantRepository;
 
     // ─── DTOs ────────────────────────────────────────────────────────────────────
 
@@ -150,6 +154,9 @@ public class ProfileModuleSubscriptionResource {
                 .executeUpdate();
         }
 
+        // Assinatura de módulo mudou — invalida PAT/MAT em cache de todos os membros do tenant.
+        userTenantRepository.bumpVersionForTenant(tenantId);
+
         return Response.ok(Map.of(
             "success", true,
             "tenantId", tenantId.toString(),
@@ -192,7 +199,7 @@ public class ProfileModuleSubscriptionResource {
                 .build();
         }
 
-        List<Object[]> moduleRows = em.createNativeQuery(
+        List<UUID> moduleRows = em.createNativeQuery(
             "SELECT id FROM platform_modules WHERE slug = :slug AND is_active = TRUE"
         ).setParameter("slug", request.moduleSlug()).getResultList();
 
@@ -201,7 +208,7 @@ public class ProfileModuleSubscriptionResource {
                 .entity(Map.of("error", "Módulo não encontrado: " + request.moduleSlug()))
                 .build();
         }
-        UUID moduleId = (UUID) moduleRows.get(0)[0];
+        UUID moduleId = moduleRows.get(0);
 
         List<Object[]> freeRows = em.createNativeQuery(
             "SELECT pvm.id, p.name FROM plan_version_modules pvm " +
@@ -251,6 +258,9 @@ public class ProfileModuleSubscriptionResource {
                 .setParameter("planVersionId", planVersionId)
                 .setParameter("userId", userId)
                 .executeUpdate();
+
+            // Módulo Free ativado — invalida PAT/MAT em cache de todos os membros do tenant.
+            userTenantRepository.bumpVersionForTenant(tenantId);
         }
 
         return Response.ok(Map.of(
@@ -428,6 +438,8 @@ public class ProfileModuleSubscriptionResource {
             .setParameter("tenantId", tenantId)
             .executeUpdate();
 
+        userTenantRepository.bumpVersionForTenant(tenantId);
+
         return Response.ok(Map.of(
             "success", true,
             "id", subscriptionId,
@@ -492,6 +504,8 @@ public class ProfileModuleSubscriptionResource {
             .setParameter("id", subId)
             .setParameter("tenantId", tenantId)
             .executeUpdate();
+
+        userTenantRepository.bumpVersionForTenant(tenantId);
 
         return Response.ok(Map.of(
             "success", true,

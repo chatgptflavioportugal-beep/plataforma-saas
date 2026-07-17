@@ -66,6 +66,24 @@ public class InvitationResource {
         return Response.noContent().build();
     }
 
+    @PATCH
+    @Path("/members/{userId}/access-level")
+    public Response changeMemberAccessLevel(@PathParam("tenantId") UUID tenantId,
+                                            @PathParam("userId") UUID targetUserId,
+                                            Map<String, String> body,
+                                            @Context SecurityContext ctx) {
+        TenantContext tc = resolveAndCheckAccess(ctx, tenantId);
+        requireAdminPerm(tc, tenantId, "members.change_access_level");
+
+        String accessLevelId = body != null ? body.get("accessLevelId") : null;
+        if (accessLevelId == null || accessLevelId.isBlank()) {
+            return Response.status(400).entity(Map.of("error", "Nível de acesso é obrigatório")).build();
+        }
+
+        invitationService.changeMemberAccessLevel(tenantId, targetUserId, accessLevelId);
+        return Response.ok(Map.of("success", true)).build();
+    }
+
     // ─── Convites ─────────────────────────────────────────────────────────────
 
     @GET

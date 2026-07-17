@@ -56,11 +56,11 @@ const NO_PERMISSION_MESSAGE =
  * ao montar o provider e renovado proativamente antes de expirar.
  */
 export function ModuleProvider({ moduleSlug, children }: ModuleProviderProps) {
-  const { activeTenantId, profileAccessToken } = useTenant()
+  const { activeTenantId, profileAccessToken, permissionsVersion } = useTenant()
   const queryClient = useQueryClient()
 
   const [moduleToken, setModuleToken] = useState<string | null>(() =>
-    getCachedModuleToken(moduleSlug)
+    getCachedModuleToken(moduleSlug, permissionsVersion ?? undefined)
   )
   const [isLoading, setIsLoading]                     = useState(!moduleToken)
   const [activationMessage, setActivationMessage]     = useState<string | null>(null)
@@ -133,7 +133,7 @@ export function ModuleProvider({ moduleSlug, children }: ModuleProviderProps) {
 
   useEffect(() => {
     if (!activeTenantId) return
-    const cached = getCachedModuleToken(moduleSlug)
+    const cached = getCachedModuleToken(moduleSlug, permissionsVersion ?? undefined)
     if (cached && !isModuleTokenExpiringSoon(moduleSlug)) {
       setModuleToken(cached)
       setIsLoading(false)
@@ -147,12 +147,14 @@ export function ModuleProvider({ moduleSlug, children }: ModuleProviderProps) {
       }
     }, 60 * 1000) // verifica a cada minuto
     return () => clearInterval(interval)
-  }, [moduleSlug, activeTenantId])
+    // permissionsVersion muda quando nível de acesso/permissões/assinatura são alterados —
+    // força reavaliação do cache (já invalidado pelo polling do TenantContext) sem esperar o MAT expirar.
+  }, [moduleSlug, activeTenantId, permissionsVersion])
 
   const builtModuleApi = useMemo(() => {
     if (!moduleToken || !activeTenantId) return null
-    return createModuleApi(moduleSlug, activeTenantId)
-  }, [moduleToken, moduleSlug, activeTenantId])
+    return createModuleApi(moduleSlug, activeTenantId, permissionsVersion ?? undefined)
+  }, [moduleToken, moduleSlug, activeTenantId, permissionsVersion])
 
   const claims = useMemo<ModuleTokenClaims | null>(() => {
     if (!moduleToken) return null

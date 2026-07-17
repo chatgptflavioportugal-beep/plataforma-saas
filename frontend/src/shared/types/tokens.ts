@@ -1,15 +1,18 @@
 // ─── Objetos persistidos (fora do JWT apenas o essencial) ─────────────────────
 
+// Nota: permissionsVersion não é armazenado aqui propositalmente — sessionStorage é
+// editável pelo usuário via devtools, então qualquer verificação de versão deve sempre
+// ler a claim assinada dentro do JWT (ver ProfileTokenClaims/ModuleTokenClaims abaixo),
+// nunca um campo solto ao lado do token.
+
 export interface ProfileToken {
   token: string
   expiresAt: string
-  permissionsVersion: number
 }
 
 export interface ModuleToken {
   token: string
   expiresAt: string
-  permissionsVersion: number
 }
 
 export interface TokenStorage {

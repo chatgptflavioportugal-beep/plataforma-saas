@@ -1,5 +1,6 @@
 package com.saas.security;
 
+import com.saas.repository.UserTenantRepository;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -33,6 +34,9 @@ public class ModuleTokenFilter implements ContainerRequestFilter {
 
     @Inject
     ModuleTokenContextHolder contextHolder;
+
+    @Inject
+    UserTenantRepository userTenantRepository;
 
     private static final String MODULE_API_PREFIX = "/api/v1/modules/";
 
@@ -69,6 +73,27 @@ public class ModuleTokenFilter implements ContainerRequestFilter {
             requestContext.abortWith(
                 Response.status(Response.Status.UNAUTHORIZED)
                     .entity(java.util.Map.of("error", e.getMessage()))
+                    .build()
+            );
+            return;
+        }
+
+        // Revalida contra o banco a cada requisição: permite invalidar o token em cache
+        // no frontend imediatamente após mudança de nível de acesso, permissões ou
+        // assinatura — sem esperar a expiração natural do MAT (30min).
+        var permStatus = userTenantRepository.findPermissionsStatus(claims.userId(), claims.tenantId());
+        if (permStatus.isEmpty() || !permStatus.get().active()) {
+            requestContext.abortWith(
+                Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(java.util.Map.of("code", "MEMBER_INACTIVE", "error", "Acesso revogado para este perfil"))
+                    .build()
+            );
+            return;
+        }
+        if (permStatus.get().permissionsVersion() != claims.permissionsVersion()) {
+            requestContext.abortWith(
+                Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(java.util.Map.of("code", "PERMISSIONS_VERSION_MISMATCH", "error", "Permissões alteradas — token expirado"))
                     .build()
             );
             return;

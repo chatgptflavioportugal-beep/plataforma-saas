@@ -19,9 +19,9 @@ function formatDate(dateStr: string | null) {
   return new Date(dateStr).toLocaleDateString('pt-BR')
 }
 
-/** Retorna true se a assinatura ainda está dentro da validade */
+/** Retorna true se a assinatura ainda está dentro da validade (planos sem expiração, como Free, são sempre válidos) */
 function isStillValid(expiresAt: string | null): boolean {
-  if (!expiresAt) return false
+  if (!expiresAt) return true
   return new Date(expiresAt) > new Date()
 }
 

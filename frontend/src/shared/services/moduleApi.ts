@@ -24,7 +24,11 @@ function getModuleBaseUrl(moduleSlug: string): string {
  *  3. Injeta Bearer token no header Authorization
  *  4. Renova automaticamente se o token estiver próximo do vencimento
  */
-export function createModuleApi(moduleSlug: string, tenantId: string): AxiosInstance {
+export function createModuleApi(
+  moduleSlug: string,
+  tenantId: string,
+  expectedPermissionsVersion?: number
+): AxiosInstance {
   const instance = axios.create({
     baseURL: getModuleBaseUrl(moduleSlug),
   })
@@ -34,7 +38,7 @@ export function createModuleApi(moduleSlug: string, tenantId: string): AxiosInst
       await fetchModuleToken(moduleSlug, tenantId)
     }
 
-    const token = await getModuleToken(moduleSlug, tenantId)
+    const token = await getModuleToken(moduleSlug, tenantId, expectedPermissionsVersion)
     config.headers.Authorization = `Bearer ${token}`
     return config
   })

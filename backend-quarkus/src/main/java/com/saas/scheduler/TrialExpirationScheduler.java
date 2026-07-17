@@ -9,6 +9,7 @@ import jakarta.transaction.Transactional;
 import org.jboss.logging.Logger;
 
 import java.util.List;
+import java.util.UUID;
 
 @ApplicationScoped
 public class TrialExpirationScheduler {
@@ -26,21 +27,32 @@ public class TrialExpirationScheduler {
         sendExpirationAlerts();
     }
 
+    @SuppressWarnings("unchecked")
     private void suspendExpiredTrials() {
-        int updated = em.createNativeQuery(
-                "UPDATE tenants SET status = 'suspended', updated_at = NOW() " +
-                "WHERE status = 'trial' AND trial_ends_at < NOW()"
-        ).executeUpdate();
+        List<UUID> expiredTenantIds = em.createNativeQuery(
+                "SELECT id FROM tenants WHERE status = 'trial' AND trial_ends_at < NOW()"
+        ).getResultList();
+
+        if (expiredTenantIds.isEmpty()) return;
+
+        em.createNativeQuery(
+                "UPDATE tenants SET status = 'suspended', updated_at = NOW() WHERE id IN (:ids)"
+        ).setParameter("ids", expiredTenantIds).executeUpdate();
 
         em.createNativeQuery(
                 "UPDATE tenant_subscriptions SET status = 'suspended', updated_at = NOW() " +
-                "WHERE tenant_id IN (SELECT id FROM tenants WHERE status = 'suspended') " +
-                "AND status = 'trial'"
-        ).executeUpdate();
+                "WHERE tenant_id IN (:ids) AND status = 'trial'"
+        ).setParameter("ids", expiredTenantIds).executeUpdate();
 
-        if (updated > 0) {
-            LOG.infof("Suspendidos %d tenants com trial expirado", updated);
-        }
+        // Trial suspenso — invalida PAT/MAT em cache para forçar reavaliação de acesso
+        // sem esperar o token expirar (o bloqueio real já é feito em tempo real pelos
+        // endpoints de módulo; isso só garante que o front descubra na próxima requisição).
+        em.createNativeQuery(
+                "UPDATE user_tenants SET permissions_version = permissions_version + 1 " +
+                "WHERE tenant_id IN (:ids) AND is_active = TRUE"
+        ).setParameter("ids", expiredTenantIds).executeUpdate();
+
+        LOG.infof("Suspendidos %d tenants com trial expirado", expiredTenantIds.size());
     }
 
     @SuppressWarnings("unchecked")

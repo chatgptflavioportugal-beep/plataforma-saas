@@ -1,5 +1,6 @@
 package com.saas.service;
 
+import com.saas.repository.UserTenantRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -24,6 +25,9 @@ public class InvitationService {
 
     @Inject
     EmailService emailService;
+
+    @Inject
+    UserTenantRepository userTenantRepository;
 
     @ConfigProperty(name = "app.base-url", defaultValue = "http://localhost:3000")
     String baseUrl;
@@ -92,6 +96,59 @@ public class InvitationService {
                 "UPDATE user_tenants SET is_active = FALSE, updated_at = NOW() " +
                 "WHERE tenant_id = :tenantId AND user_id = :userId"
         ).setParameter("tenantId", tenantId).setParameter("userId", targetUserId).executeUpdate();
+
+        // Membro removido — invalida qualquer PAT/MAT em cache dele (ModuleTokenFilter
+        // já rejeita por is_active=FALSE, o bump cobre também o caso de readmissão futura).
+        userTenantRepository.bumpVersionForMember(targetUserId, tenantId);
+    }
+
+    // ----------------------------------------------------------------
+    // Alterar o nível de acesso de um membro ativo
+    // Apenas quem tem a permissão "members.change_access_level" pode executar.
+    // Somente membros com role 'member' possuem nível de acesso atribuído
+    // (owner/admin têm acesso total independente de nível).
+    // ----------------------------------------------------------------
+
+    @SuppressWarnings("unchecked")
+    @Transactional
+    public void changeMemberAccessLevel(UUID tenantId, UUID targetUserId, String accessLevelId) {
+        UUID alId;
+        try {
+            alId = UUID.fromString(accessLevelId);
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("ID de nível de acesso inválido");
+        }
+
+        var levelRows = (List<Object>) em.createNativeQuery(
+                "SELECT name FROM profile_access_levels " +
+                "WHERE id = :alId AND tenant_id = :tenantId AND status = 'ACTIVE'"
+        ).setParameter("alId", alId).setParameter("tenantId", tenantId).getResultList();
+
+        if (levelRows.isEmpty()) {
+            throw new BadRequestException("Nível de acesso inválido ou inativo");
+        }
+
+        var targetRows = (List<Object>) em.createNativeQuery(
+                "SELECT role FROM user_tenants " +
+                "WHERE tenant_id = :tenantId AND user_id = :userId AND is_active = TRUE"
+        ).setParameter("tenantId", tenantId).setParameter("userId", targetUserId).getResultList();
+
+        if (targetRows.isEmpty()) throw new NotFoundException("Membro não encontrado");
+        String targetRole = (String) targetRows.get(0);
+        if (!"member".equals(targetRole)) {
+            throw new BadRequestException("Apenas membros possuem nível de acesso atribuído");
+        }
+
+        em.createNativeQuery(
+                "UPDATE user_tenants SET access_level_id = :alId, updated_at = NOW() " +
+                "WHERE tenant_id = :tenantId AND user_id = :userId"
+        )
+        .setParameter("alId", alId)
+        .setParameter("tenantId", tenantId)
+        .setParameter("userId", targetUserId)
+        .executeUpdate();
+
+        userTenantRepository.bumpVersionForMember(targetUserId, tenantId);
     }
 
     // ----------------------------------------------------------------

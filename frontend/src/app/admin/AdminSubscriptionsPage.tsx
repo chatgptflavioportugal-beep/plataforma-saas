@@ -92,8 +92,9 @@ function fmtDate(d: string | null) {
   return new Date(d).toLocaleDateString('pt-BR')
 }
 
+/** Planos sem expiração (ex.: Free) são sempre válidos para reativação */
 function isStillValid(expiresAt: string | null) {
-  if (!expiresAt) return false
+  if (!expiresAt) return true
   return new Date(expiresAt) > new Date()
 }
 

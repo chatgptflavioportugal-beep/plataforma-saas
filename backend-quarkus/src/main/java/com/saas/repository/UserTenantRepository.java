@@ -102,4 +102,69 @@ public class UserTenantRepository {
         .setParameter("tenantId", tenantId)
         .getSingleResult();
     }
+
+    // ─── permissions_version — invalidação de PAT/MAT em cache no frontend ──────
+    //
+    // O ProfileAccessToken e o ModuleAccessToken carregam permissions_version no
+    // momento da emissão. Qualquer alteração de nível de acesso, das permissões de
+    // um nível ou de assinatura deve chamar um dos bumpVersionFor* abaixo para que
+    // ModuleTokenFilter rejeite (401) o token em cache na próxima requisição e o
+    // frontend seja forçado a emitir um novo, sem esperar a expiração natural
+    // (8h no PAT, 30min no MAT).
+
+    public record PermissionsStatus(int permissionsVersion, boolean active) {}
+
+    @SuppressWarnings("unchecked")
+    public Optional<PermissionsStatus> findPermissionsStatus(UUID userId, UUID tenantId) {
+        var rows = (List<Object[]>) em.createNativeQuery(
+                "SELECT permissions_version, is_active FROM user_tenants " +
+                "WHERE user_id = :userId AND tenant_id = :tenantId"
+        )
+        .setParameter("userId", userId)
+        .setParameter("tenantId", tenantId)
+        .getResultList();
+
+        if (rows.isEmpty()) return Optional.empty();
+        Object[] row = rows.get(0);
+        return Optional.of(new PermissionsStatus(
+                ((Number) row[0]).intValue(),
+                Boolean.TRUE.equals(row[1])
+        ));
+    }
+
+    /** Versão vigente para emissão de token; 1 (default da coluna) se o vínculo não existir. */
+    public int resolvePermissionsVersion(UUID userId, UUID tenantId) {
+        return findPermissionsStatus(userId, tenantId).map(PermissionsStatus::permissionsVersion).orElse(1);
+    }
+
+    /** Incrementa a versão de um único membro (ex.: mudança de nível de acesso, remoção). */
+    public void bumpVersionForMember(UUID userId, UUID tenantId) {
+        em.createNativeQuery(
+                "UPDATE user_tenants SET permissions_version = permissions_version + 1 " +
+                "WHERE user_id = :userId AND tenant_id = :tenantId"
+        )
+        .setParameter("userId", userId)
+        .setParameter("tenantId", tenantId)
+        .executeUpdate();
+    }
+
+    /** Incrementa a versão de todos os membros ativos de um nível de acesso (edição das permissões do nível). */
+    public void bumpVersionForAccessLevel(UUID accessLevelId) {
+        em.createNativeQuery(
+                "UPDATE user_tenants SET permissions_version = permissions_version + 1 " +
+                "WHERE access_level_id = :accessLevelId AND is_active = TRUE"
+        )
+        .setParameter("accessLevelId", accessLevelId)
+        .executeUpdate();
+    }
+
+    /** Incrementa a versão de todos os membros ativos de um tenant (mudança de assinatura/plano). */
+    public void bumpVersionForTenant(UUID tenantId) {
+        em.createNativeQuery(
+                "UPDATE user_tenants SET permissions_version = permissions_version + 1 " +
+                "WHERE tenant_id = :tenantId AND is_active = TRUE"
+        )
+        .setParameter("tenantId", tenantId)
+        .executeUpdate();
+    }
 }

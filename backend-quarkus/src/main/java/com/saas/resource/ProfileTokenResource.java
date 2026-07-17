@@ -1,5 +1,6 @@
 package com.saas.resource;
 
+import com.saas.repository.UserTenantRepository;
 import com.saas.security.TenantContext;
 import com.saas.security.TokenService;
 import io.quarkus.security.Authenticated;
@@ -22,7 +23,7 @@ import java.util.UUID;
  * Autenticação: Supabase JWT + X-Tenant-ID (via TenantResolutionFilter existente).
  * O PAT carrega apenas permissões gerenciais do perfil, não permissões internas de módulos.
  */
-@Path("/api/v1/profile/access-token")
+@Path("/api/v1/profile")
 @Authenticated
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
@@ -34,7 +35,11 @@ public class ProfileTokenResource {
     @Inject
     TokenService tokenService;
 
+    @Inject
+    UserTenantRepository userTenantRepository;
+
     @POST
+    @Path("/access-token")
     @SuppressWarnings("unchecked")
     public Response generate(@Context SecurityContext secCtx) {
         var ctx = TenantContext.from(secCtx);
@@ -46,7 +51,7 @@ public class ProfileTokenResource {
         String profileType = resolveProfileType(tenantId);
 
         // Versão de permissões do membro (para invalidação de token ao alterar permissões)
-        int permissionsVersion = resolvePermissionsVersion(userId, tenantId);
+        int permissionsVersion = userTenantRepository.resolvePermissionsVersion(userId, tenantId);
 
         // Nível de acesso (apenas para membros)
         String accessLevelId = null;
@@ -107,6 +112,21 @@ public class ProfileTokenResource {
         )).build();
     }
 
+    // ─── GET /permissions-version — polling leve para invalidação no frontend ─────
+
+    /**
+     * Retorna a versão vigente de permissões do perfil ativo, para o frontend
+     * detectar (via polling curto) mudanças de nível de acesso/permissões/assinatura
+     * e descartar o ProfileAccessToken/ModuleAccessToken em cache sem esperar expirar.
+     */
+    @GET
+    @Path("/permissions-version")
+    public Response permissionsVersion(@Context SecurityContext secCtx) {
+        var ctx = TenantContext.from(secCtx);
+        int version = userTenantRepository.resolvePermissionsVersion(ctx.getUserId(), ctx.getTenantId());
+        return Response.ok(java.util.Map.of("permissionsVersion", version)).build();
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────────
 
     private String resolveProfileType(UUID tenantId) {
@@ -117,17 +137,6 @@ public class ProfileTokenResource {
             return "individual".equals(type) ? "INDIVIDUAL" : "COMPANY";
         } catch (Exception e) {
             return "COMPANY";
-        }
-    }
-
-    private int resolvePermissionsVersion(UUID userId, UUID tenantId) {
-        try {
-            Number v = (Number) em.createNativeQuery(
-                "SELECT permissions_version FROM user_tenants WHERE user_id = :uid AND tenant_id = :tid"
-            ).setParameter("uid", userId).setParameter("tid", tenantId).getSingleResult();
-            return v != null ? v.intValue() : 1;
-        } catch (Exception e) {
-            return 1;
         }
     }
 

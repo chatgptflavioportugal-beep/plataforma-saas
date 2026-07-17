@@ -1,5 +1,6 @@
 package com.saas.resource;
 
+import com.saas.repository.UserTenantRepository;
 import com.saas.security.TenantContext;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
@@ -22,6 +23,9 @@ public class AccessLevelResource {
 
     @Inject
     EntityManager em;
+
+    @Inject
+    UserTenantRepository userTenantRepository;
 
     // ─── Permissões administrativas fixas do sistema ──────────────────────────
 
@@ -373,6 +377,9 @@ public class AccessLevelResource {
             }
         }
 
+        // Permissões do nível mudaram — invalida PAT/MAT em cache de todos os membros vinculados.
+        userTenantRepository.bumpVersionForAccessLevel(alId);
+
         return Response.ok(Map.of("success", true)).build();
     }
 
@@ -408,6 +415,9 @@ public class AccessLevelResource {
         if (updated == 0) {
             return Response.status(404).entity(Map.of("error", "Nível de acesso não encontrado")).build();
         }
+
+        // Status do nível mudou (ex.: INACTIVE) — invalida PAT/MAT em cache dos membros vinculados.
+        userTenantRepository.bumpVersionForAccessLevel(alId);
 
         return Response.ok(Map.of("success", true, "status", status)).build();
     }
