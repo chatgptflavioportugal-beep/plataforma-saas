@@ -51,10 +51,6 @@ services:
       - PROFILE_ACCESS_TOKEN_SECRET=${PROFILE_ACCESS_TOKEN_SECRET}
       # CORS
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
-      # Trial
-      - TRIAL_DURATION_DAYS=${TRIAL_DURATION_DAYS:-14}
-      - MAX_FREE_TRIAL_TENANTS=${MAX_FREE_TRIAL_TENANTS:-100}
-      - TRIAL_DATA_RETENTION_DAYS=${TRIAL_DATA_RETENTION_DAYS:-30}
     depends_on:
       - backend-python
     volumes:

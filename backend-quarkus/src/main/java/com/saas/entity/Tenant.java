@@ -33,7 +33,7 @@ public class Tenant extends PanacheEntityBase {
     public String slug;
 
     @Column(nullable = false)
-    public String status = "trial";
+    public String status = "active";
 
     @Column(name = "plan_id")
     public UUID planId;

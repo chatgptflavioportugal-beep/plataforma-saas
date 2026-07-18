@@ -194,6 +194,10 @@ export interface ModulePlan {
   monthly_price: number
   annual_monthly_price: number
   annual_total_price: number
+  /** Campanha de Trial vigente (maior prioridade, com vagas, dentro da validade) para este plano/módulo — resolvida em tempo real, não é mais um atributo estático do plano */
+  trial_available: boolean
+  trial_campaign_name: string | null
+  trial_days: number | null
   limits: ModulePlanLimit[]
 }
 
@@ -245,7 +249,7 @@ export interface DashboardModuleItem {
   moduleSlug: string
   moduleDescription: string | null
   moduleIconPath: string | null
-  accessStatus: 'SUBSCRIBED' | 'EXPIRED' | 'FREE' | 'LOCKED'
+  accessStatus: 'SUBSCRIBED' | 'TRIAL' | 'EXPIRED' | 'FREE' | 'LOCKED'
   planName: string | null
   planSlug: string | null
   planVersionId: string | null
@@ -253,6 +257,10 @@ export interface DashboardModuleItem {
   serviceCount: number
   services: DashboardModuleService[]
   expiresAt: string | null
+  /** Dias restantes de Trial — presente apenas quando accessStatus === 'TRIAL' */
+  trialDaysRemaining: number | null
+  /** true quando o Trial foi cancelado (renovação automática desligada) mas o acesso ainda está dentro da validade */
+  trialCancelled: boolean
 }
 
 export interface ApiError {
@@ -373,10 +381,86 @@ export interface ProfileModuleSubscription {
   monthlyPrice: number
   /** Preço mensal equivalente no ciclo anual (total anual = annualMonthlyPrice × 12) — congelado */
   annualMonthlyPrice: number
-  status: 'ACTIVE' | 'PENDING_PAYMENT' | 'CANCELED' | 'EXPIRED'
+  status: 'TRIAL' | 'TRIAL_CANCELLED' | 'ACTIVE' | 'PENDING_PAYMENT' | 'CANCELED' | 'EXPIRED'
   startedAt: string
   expiresAt: string | null
   canceledAt: string | null
+  /** Dados de Trial congelados no momento da contratação (dias/datas da campanha vigente à época) */
+  trialDays: number | null
+  trialStartAt: string | null
+  trialEndAt: string | null
+  billingStartsAt: string | null
+  /** Campanha de Trial usada nesta contratação (rastreabilidade) — null quando nunca esteve em Trial */
+  trialCampaignId: string | null
   /** Limites da versão contratada (congelada), nunca da versão vigente do plano */
   limits: ModulePlanLimit[]
+}
+
+/** Registro de participação em Trial — GET /api/v1/subscriptions/trial-history (ledger append-only, pode haver mais de um registro por módulo ao longo do tempo) */
+export interface ModuleTrialHistoryEntry {
+  moduleId: string
+  trialCampaignId: string | null
+  trialStartedAt: string
+  trialFinishedAt: string | null
+  trialCanceledAt: string | null
+  becameCustomer: boolean
+}
+
+/** Elegibilidade de Trial por módulo/plano para o perfil ativo — GET /api/v1/subscriptions/trial-eligibility */
+export interface TrialEligibility {
+  planVersionModuleId: string
+  moduleId: string
+  eligible: boolean
+  days: number | null
+  campaignName: string | null
+  reasonCode: 'NONE' | 'COOLDOWN' | 'NO_CAMPAIGN'
+  cooldownEndsAt: string | null
+}
+
+// ─── Trial Campaigns (admin) ───────────────────────────────────────────────────
+
+export type TrialCampaignStatus = 'ACTIVE' | 'SCHEDULED' | 'CLOSED' | 'CANCELLED'
+
+export interface TrialCampaign {
+  id: string
+  planVersionModuleId: string
+  moduleId: string
+  moduleName: string
+  name: string
+  status: TrialCampaignStatus
+  days: number
+  maxSlots: number
+  usedSlots: number
+  startDate: string | null
+  endDate: string | null
+  notes: string | null
+  priority: number
+  createdAt: string
+  planName?: string
+  planCode?: string
+  planVersion?: number
+  totalParticipants?: number
+  conversionPercent?: number
+}
+
+export interface TrialCampaignParticipant {
+  tenantId: string
+  tenantName: string
+  tenantType: 'INDIVIDUAL' | 'COMPANY'
+  userName: string | null
+  userEmail: string | null
+  startedAt: string
+  finishedAt: string | null
+  canceledAt: string | null
+  status: string | null
+  becameCustomer: boolean
+}
+
+// ─── Configurações Gerais da Plataforma ────────────────────────────────────────
+
+export interface PlatformSetting {
+  key: string
+  value: string
+  description: string | null
+  updatedAt: string
 }

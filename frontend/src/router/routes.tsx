@@ -18,7 +18,6 @@ import { DashboardPage } from '@/app/client/DashboardPage'
 import { ServicePage } from '@/app/client/services/ServicePage'
 import { PlansPage } from '@/app/client/billing/PlansPage'
 import { SubscriptionsPage } from '@/app/client/billing/SubscriptionsPage'
-import { TrialExpiredPage } from '@/app/client/billing/TrialExpiredPage'
 import { FeatureLockedPage } from '@/app/client/billing/FeatureLockedPage'
 import { SettingsPage } from '@/app/client/SettingsPage'
 import { CompanyMembersPage } from '@/app/client/settings/CompanyMembersPage'
@@ -32,9 +31,11 @@ import { AdminCustomersPage } from '@/app/admin/AdminCustomersPage'
 import { AdminSystemAdminsPage } from '@/app/admin/AdminSystemAdminsPage'
 import { AdminPlansPage } from '@/app/admin/AdminPlansPage'
 import { AdminSubscriptionsPage } from '@/app/admin/AdminSubscriptionsPage'
+import { AdminTrialsPage } from '@/app/admin/AdminTrialsPage'
 import { AdminModulesPage } from '@/app/admin/AdminModulesPage'
 import { AdminUsersPage } from '@/app/admin/AdminUsersPage'
 import { AdminAccessLevelsPage } from '@/app/admin/AdminAccessLevelsPage'
+import { AdminPlatformSettingsPage } from '@/app/admin/AdminPlatformSettingsPage'
 
 const ADMIN_ROUTES_BY_PRIORITY = [
   { path: 'dashboard',           permission: 'admin.dashboard.view' },
@@ -42,9 +43,11 @@ const ADMIN_ROUTES_BY_PRIORITY = [
   { path: 'customers',           permission: 'admin.clients.view' },
   { path: 'plans',               permission: 'admin.plans.view' },
   { path: 'subscriptions',       permission: 'admin.subscriptions.view' },
+  { path: 'trials',              permission: 'admin.trials.view' },
   { path: 'modules',             permission: 'admin.modules.view' },
   { path: 'admin-users',         permission: 'admin.users.view' },
   { path: 'admin-access-levels', permission: 'admin.access_levels.view' },
+  { path: 'settings',            permission: 'admin.settings.view' },
 ]
 
 function AdminIndexRedirect() {
@@ -124,7 +127,6 @@ export function AppRouter() {
             <Route path="pdf/merge" element={<Navigate to="/app/pdf-pdf-merge" replace />} />
             <Route path="billing/plans" element={<PlansPage />} />
             <Route path="billing/subscriptions" element={<SubscriptionsPage />} />
-            <Route path="billing/trial-expired" element={<TrialExpiredPage />} />
             <Route path="billing/feature-locked" element={<FeatureLockedPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="settings/members" element={<CompanyMembersPage />} />
@@ -146,9 +148,11 @@ export function AppRouter() {
             <Route path="system-admins" element={<AdminPermissionGuard permission="admin.users.view"><AdminSystemAdminsPage /></AdminPermissionGuard>} />
             <Route path="plans" element={<AdminPermissionGuard permission="admin.plans.view"><AdminPlansPage /></AdminPermissionGuard>} />
             <Route path="subscriptions" element={<AdminPermissionGuard permission="admin.subscriptions.view"><AdminSubscriptionsPage /></AdminPermissionGuard>} />
+            <Route path="trials" element={<AdminPermissionGuard permission="admin.trials.view"><AdminTrialsPage /></AdminPermissionGuard>} />
             <Route path="modules" element={<AdminPermissionGuard permission="admin.modules.view"><AdminModulesPage /></AdminPermissionGuard>} />
             <Route path="admin-users" element={<AdminPermissionGuard permission="admin.users.view"><AdminUsersPage /></AdminPermissionGuard>} />
             <Route path="admin-access-levels" element={<AdminPermissionGuard permission="admin.access_levels.view"><AdminAccessLevelsPage /></AdminPermissionGuard>} />
+            <Route path="settings" element={<AdminPermissionGuard permission="admin.settings.view"><AdminPlatformSettingsPage /></AdminPermissionGuard>} />
             {/* Redirecionamentos de rotas legadas */}
             <Route path="company-users" element={<Navigate to="/admin/customers" replace />} />
             <Route path="users" element={<Navigate to="/admin/customers" replace />} />

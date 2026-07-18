@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/shared/services/api'
 import { useAuth } from '@/core/auth/AuthContext'
 import type { Plan, PlanVersionModule, PlanVersionModuleLimit, PlatformModule } from '@/shared/types'
+import { TrialCampaignsModal } from './TrialCampaignsModal'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -388,7 +389,9 @@ function HistoryModuleCard({ mod }: { mod: HistoryModule }) {
           )}
           <span className="text-sm font-medium text-white">{mod.module_name}</span>
         </div>
-        <Badge label={isActive ? 'Ativo' : 'Inativo'} variant={isActive ? 'green' : 'gray'} />
+        <div className="flex items-center gap-1.5">
+          <Badge label={isActive ? 'Ativo' : 'Inativo'} variant={isActive ? 'green' : 'gray'} />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2 text-xs">
@@ -560,9 +563,12 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   // Editar módulo inline
   const [editingId, setEditingId]   = useState<string | null>(null)
-  const [editModuleForm, setEditModuleForm] = useState<Omit<LocalModule, 'tempId' | 'moduleId' | 'moduleName' | 'limits'>>({
+  const [editModuleForm, setEditModuleForm] = useState<Omit<LocalModule, 'tempId' | 'moduleId' | 'moduleName' | 'moduleSlug' | 'limits'>>({
     monthlyPrice: '0', annualMonthlyPrice: '0', status: 'active', sortOrder: '99',
   })
+
+  // Modal "Gerenciar Trials" — aberto para um módulo específico do plano
+  const [trialsModuleFor, setTrialsModuleFor] = useState<{ planVersionModuleId: string; moduleName: string } | null>(null)
 
   // Adicionar limitação — por tempId do módulo
   const [addingLimitFor, setAddingLimitFor]   = useState<string | null>(null)
@@ -998,6 +1004,13 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
                                 Editar
                               </button>
                               <button type="button"
+                                disabled={mod.tempId.startsWith('new-')}
+                                title={mod.tempId.startsWith('new-') ? 'Salve o plano antes de gerenciar Trials' : undefined}
+                                onClick={() => setTrialsModuleFor({ planVersionModuleId: mod.tempId, moduleName: mod.moduleName })}
+                                className="px-2.5 py-1 rounded-md bg-blue-900/60 text-blue-300 text-xs hover:bg-blue-800/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                                Trials
+                              </button>
+                              <button type="button"
                                 onClick={() => { if (confirm(`Remover "${mod.moduleName}" deste plano?`)) handleRemoveModule(mod.tempId) }}
                                 className="px-2.5 py-1 rounded-md bg-red-900/60 text-red-300 text-xs hover:bg-red-800/60 transition-colors">
                                 Remover
@@ -1237,6 +1250,15 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
           </div>
         </div>
       </div>
+
+      {trialsModuleFor && (
+        <TrialCampaignsModal
+          planId={plan.id}
+          planVersionModuleId={trialsModuleFor.planVersionModuleId}
+          moduleName={trialsModuleFor.moduleName}
+          onClose={() => setTrialsModuleFor(null)}
+        />
+      )}
     </div>
   )
 }

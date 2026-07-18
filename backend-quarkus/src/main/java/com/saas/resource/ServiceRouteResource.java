@@ -82,17 +82,19 @@ public class ServiceRouteResource {
             ? moduleSlug + "." + groupSlug + "." + serviceSlug
             : moduleSlug + "." + serviceSlug;
 
-        // 2. Verifica se o módulo é acessível para o tenant (SUBSCRIBED, EXPIRED ou FREE)
+        // 2. Verifica se o módulo é acessível para o tenant (SUBSCRIBED, TRIAL, EXPIRED ou FREE).
+        //    TRIAL_CANCELLED conta como acesso válido — cancelar o Trial só cancela a
+        //    renovação, o acesso permanece até expires_at (trial_end_at).
         List<Object[]> accessRows = em.createNativeQuery("""
             SELECT
               pms.id::text,
               pms.status,
-              (pms.status = 'ACTIVE' AND pms.expires_at IS NOT NULL AND pms.expires_at < NOW())
+              (pms.status IN ('ACTIVE', 'TRIAL', 'TRIAL_CANCELLED') AND pms.expires_at IS NOT NULL AND pms.expires_at < NOW())
                 AS past_expiry
             FROM profile_module_subscriptions pms
             WHERE pms.module_id = :moduleId
               AND pms.tenant_id = :tenantId
-              AND pms.status IN ('ACTIVE', 'EXPIRED')
+              AND pms.status IN ('ACTIVE', 'TRIAL', 'TRIAL_CANCELLED', 'EXPIRED', 'PENDING_PAYMENT')
             LIMIT 1
         """)
         .setParameter("moduleId", UUID.fromString(moduleId))
@@ -105,8 +107,8 @@ public class ServiceRouteResource {
             Object[] arow = accessRows.get(0);
             String subStatus  = (String) arow[1];
             boolean pastExpiry = Boolean.TRUE.equals(arow[2]);
-            isExpiredSub = "EXPIRED".equals(subStatus) || pastExpiry;
-            isSubscribed = "ACTIVE".equals(subStatus) && !pastExpiry;
+            isExpiredSub = "EXPIRED".equals(subStatus) || "PENDING_PAYMENT".equals(subStatus) || pastExpiry;
+            isSubscribed = ("ACTIVE".equals(subStatus) || "TRIAL".equals(subStatus) || "TRIAL_CANCELLED".equals(subStatus)) && !pastExpiry;
         }
 
         // Verifica se módulo possui plano free

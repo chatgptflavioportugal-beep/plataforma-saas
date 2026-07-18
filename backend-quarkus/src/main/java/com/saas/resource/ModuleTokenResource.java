@@ -80,7 +80,7 @@ public class ModuleTokenResource {
             JOIN plans p ON p.id = pvm.plan_id
             WHERE pms.module_id = :moduleId
               AND pms.tenant_id = :tenantId
-              AND pms.status = 'ACTIVE'
+              AND pms.status IN ('ACTIVE', 'TRIAL', 'TRIAL_CANCELLED')
             LIMIT 1
         """)
         .setParameter("moduleId", UUID.fromString(moduleId))

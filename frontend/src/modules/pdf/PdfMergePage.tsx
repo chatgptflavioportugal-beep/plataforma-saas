@@ -43,10 +43,6 @@ export function PdfMergePage() {
         })
         return
       }
-      if (axiosError.response?.status === 402) {
-        navigate('/app/billing/trial-expired')
-        return
-      }
       setError('Erro ao processar merge. Tente novamente.')
     }
   }

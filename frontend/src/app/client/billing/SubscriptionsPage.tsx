@@ -32,22 +32,39 @@ type ReactivateState  = 'idle' | 'success' | 'error'
 
 function StatusBadge({ status }: { status: ProfileModuleSubscription['status'] }) {
   const variants: Record<string, string> = {
-    ACTIVE:          'bg-green-100 text-green-700',
-    PENDING_PAYMENT: 'bg-yellow-100 text-yellow-700',
-    CANCELED:        'bg-red-100 text-red-600',
-    EXPIRED:         'bg-gray-100 text-gray-500',
+    TRIAL:            'bg-amber-100 text-amber-700',
+    TRIAL_CANCELLED:  'bg-amber-100 text-amber-700',
+    ACTIVE:           'bg-green-100 text-green-700',
+    PENDING_PAYMENT:  'bg-yellow-100 text-yellow-700',
+    CANCELED:         'bg-red-100 text-red-600',
+    EXPIRED:          'bg-gray-100 text-gray-500',
   }
   const labels: Record<string, string> = {
-    ACTIVE:          'Ativa',
-    PENDING_PAYMENT: 'Aguardando pagamento',
-    CANCELED:        'Cancelada',
-    EXPIRED:         'Expirada',
+    TRIAL:            'Trial',
+    TRIAL_CANCELLED:  'Trial cancelado',
+    ACTIVE:           'Ativa',
+    PENDING_PAYMENT:  'Aguardando pagamento',
+    CANCELED:         'Cancelada',
+    EXPIRED:          'Expirada',
   }
   return (
     <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${variants[status] ?? 'bg-gray-100 text-gray-500'}`}>
       {labels[status] ?? status}
     </span>
   )
+}
+
+/** Dias restantes de Trial a partir de trialEndAt (arredondado para cima, mínimo 0). */
+function trialDaysRemaining(trialEndAt: string | null): number {
+  if (!trialEndAt) return 0
+  const diffMs = new Date(trialEndAt).getTime() - Date.now()
+  return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)))
+}
+
+function trialCountdownLabel(daysRemaining: number): string {
+  if (daysRemaining <= 0) return 'Último dia do Trial'
+  if (daysRemaining === 1) return 'Trial termina amanhã'
+  return `Restam ${daysRemaining} dias de Trial`
 }
 
 // ─── Cancel Confirmation Modal ────────────────────────────────────────────────
@@ -60,19 +77,22 @@ type CancelModalProps = {
 }
 
 function CancelModal({ subscription, profileName, onConfirm, onClose }: CancelModalProps) {
+  const isTrial = subscription.status === 'TRIAL'
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md">
         {/* Header */}
         <div className="border-b border-gray-100 px-6 py-5">
-          <h2 className="text-lg font-bold text-gray-900">Cancelar assinatura</h2>
+          <h2 className="text-lg font-bold text-gray-900">{isTrial ? 'Cancelar Trial' : 'Cancelar assinatura'}</h2>
         </div>
 
         {/* Body */}
         <div className="px-6 py-5 space-y-4">
           <p className="text-sm text-gray-600">
-            Você está prestes a cancelar a assinatura do módulo:
+            {isTrial
+              ? 'Você está prestes a cancelar o Trial do módulo:'
+              : 'Você está prestes a cancelar a assinatura do módulo:'}
           </p>
 
           <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 space-y-2">
@@ -399,13 +419,16 @@ type SubscriptionCardProps = {
 }
 
 function SubscriptionCard({ subscription, onCancel, onReactivate, onRenew }: SubscriptionCardProps) {
-  const isAnnual       = subscription.billingCycle === 'ANNUAL'
-  const annualTotal    = subscription.annualMonthlyPrice * 12
-  const canCancel      = subscription.status === 'ACTIVE'
-  const isCanceled     = subscription.status === 'CANCELED'
-  const isExpired      = subscription.status === 'EXPIRED'
-  // Permite reativar apenas se cancelada E ainda dentro da validade
-  const canReactivate  = isCanceled && isStillValid(subscription.expiresAt)
+  const isAnnual         = subscription.billingCycle === 'ANNUAL'
+  const annualTotal      = subscription.annualMonthlyPrice * 12
+  const isTrialCancelled = subscription.status === 'TRIAL_CANCELLED'
+  const isTrial          = subscription.status === 'TRIAL' || isTrialCancelled
+  // Só é possível cancelar um Trial (ou assinatura ativa) que ainda não foi cancelado
+  const canCancel        = subscription.status === 'ACTIVE' || subscription.status === 'TRIAL'
+  const isCanceled       = subscription.status === 'CANCELED'
+  const isExpired        = subscription.status === 'EXPIRED' || subscription.status === 'PENDING_PAYMENT'
+  // Permite reativar apenas se cancelada (assinatura ou Trial) E ainda dentro da validade
+  const canReactivate    = (isCanceled || isTrialCancelled) && isStillValid(subscription.expiresAt)
 
   return (
     <div
@@ -469,13 +492,39 @@ function SubscriptionCard({ subscription, onCancel, onReactivate, onRenew }: Sub
 
         <div>
           <p className="text-xs text-gray-400 mb-0.5">
-            {isExpired ? 'Expirou em' : 'Disponível até'}
+            {isExpired ? 'Expirou em' : isTrial ? 'Trial termina em' : 'Disponível até'}
           </p>
           <p className="font-medium text-gray-700">
             {formatDate(subscription.expiresAt)}
           </p>
         </div>
       </div>
+
+      {/* Aviso de Trial em andamento (ainda não cancelado) */}
+      {isTrial && !isTrialCancelled && (
+        <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2.5 flex items-start gap-2">
+          <svg className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p className="text-xs text-amber-700 leading-relaxed">
+            {trialCountdownLabel(trialDaysRemaining(subscription.trialEndAt))}. Depois do Trial, a cobrança
+            será iniciada automaticamente conforme o plano contratado.
+          </p>
+        </div>
+      )}
+
+      {/* Aviso de Trial cancelado — acesso mantido até o fim do período, sem cobrança */}
+      {isTrialCancelled && (
+        <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2.5 flex items-start gap-2">
+          <svg className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20A10 10 0 0012 2z" />
+          </svg>
+          <p className="text-xs text-amber-700 leading-relaxed">
+            Trial cancelado — não haverá cobrança. Você continuará utilizando este módulo até{' '}
+            <span className="font-semibold">{formatDate(subscription.expiresAt)}</span>. Depois dessa data o acesso será encerrado.
+          </p>
+        </div>
+      )}
 
       {/* Aviso para canceladas */}
       {isCanceled && (
@@ -510,7 +559,7 @@ function SubscriptionCard({ subscription, onCancel, onReactivate, onRenew }: Sub
               className="w-full"
               onClick={onReactivate}
             >
-              Reativar assinatura
+              {isTrialCancelled ? 'Reativar Trial' : 'Reativar assinatura'}
             </Button>
           )}
           {canCancel && (
@@ -519,7 +568,7 @@ function SubscriptionCard({ subscription, onCancel, onReactivate, onRenew }: Sub
               onClick={onCancel}
               className="text-sm text-red-500 hover:text-red-700 font-medium transition-colors text-left"
             >
-              Cancelar assinatura
+              {isTrial ? 'Cancelar Trial' : 'Cancelar assinatura'}
             </button>
           )}
         </div>

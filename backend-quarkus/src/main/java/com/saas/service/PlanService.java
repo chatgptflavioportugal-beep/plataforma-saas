@@ -464,7 +464,8 @@ public class PlanService {
 
         UUID id = UUID.randomUUID();
         em.createNativeQuery(
-                "INSERT INTO plan_version_modules (id, plan_id, module_id, monthly_price, annual_monthly_price, status, sort_order) " +
+                "INSERT INTO plan_version_modules " +
+                "(id, plan_id, module_id, monthly_price, annual_monthly_price, status, sort_order) " +
                 "VALUES (:id, CAST(:planId AS uuid), CAST(:moduleId AS uuid), :monthlyPrice, :annualMonthlyPrice, :status, :sortOrder)"
         )
         .setParameter("id", id)
@@ -601,7 +602,8 @@ public class PlanService {
 
     private void copyModulesToNewVersion(String oldPlanId, UUID newPlanId) {
         em.createNativeQuery(
-                "INSERT INTO plan_version_modules (plan_id, module_id, monthly_price, annual_monthly_price, status, sort_order) " +
+                "INSERT INTO plan_version_modules " +
+                "(plan_id, module_id, monthly_price, annual_monthly_price, status, sort_order) " +
                 "SELECT CAST(:newPlanId AS uuid), module_id, monthly_price, annual_monthly_price, status, sort_order " +
                 "FROM plan_version_modules WHERE plan_id::text = :oldPlanId"
         ).setParameter("newPlanId", newPlanId.toString()).setParameter("oldPlanId", oldPlanId).executeUpdate();
@@ -615,6 +617,32 @@ public class PlanService {
                 "JOIN plan_version_modules new_pvm " +
                 "  ON new_pvm.plan_id = CAST(:newPlanId AS uuid) AND new_pvm.module_id = old_pvm.module_id " +
                 "WHERE old_pvm.plan_id::text = :oldPlanId"
+        ).setParameter("newPlanId", newPlanId.toString()).setParameter("oldPlanId", oldPlanId).executeUpdate();
+
+        copyAliveTrialCampaignsToNewVersion(oldPlanId, newPlanId);
+    }
+
+    // ----------------------------------------------------------------
+    // Helper privado — leva campanhas de Trial em andamento (ACTIVE/SCHEDULED,
+    // com vagas disponíveis) para os novos plan_version_modules do mesmo módulo.
+    // Sem isso, qualquer edição do plano (mesmo em outro módulo) órfã os Trials
+    // em andamento, já que toda edição gera uma nova versão de plan_version_modules.
+    // used_slots é preservado — representa consumo real da campanha, não da versão.
+    // ----------------------------------------------------------------
+
+    private void copyAliveTrialCampaignsToNewVersion(String oldPlanId, UUID newPlanId) {
+        em.createNativeQuery(
+                "INSERT INTO trial_campaigns " +
+                "(plan_version_module_id, name, status, days, max_slots, used_slots, start_date, end_date, notes, priority) " +
+                "SELECT new_pvm.id, tc.name, tc.status, tc.days, tc.max_slots, tc.used_slots, " +
+                "       tc.start_date, tc.end_date, tc.notes, tc.priority " +
+                "FROM trial_campaigns tc " +
+                "JOIN plan_version_modules old_pvm ON old_pvm.id = tc.plan_version_module_id " +
+                "JOIN plan_version_modules new_pvm " +
+                "  ON new_pvm.plan_id = CAST(:newPlanId AS uuid) AND new_pvm.module_id = old_pvm.module_id " +
+                "WHERE old_pvm.plan_id::text = :oldPlanId " +
+                "  AND tc.status IN ('ACTIVE', 'SCHEDULED') " +
+                "  AND tc.used_slots < tc.max_slots"
         ).setParameter("newPlanId", newPlanId.toString()).setParameter("oldPlanId", oldPlanId).executeUpdate();
     }
 
@@ -802,6 +830,7 @@ public class PlanService {
                     }
                 }
             }
+            copyAliveTrialCampaignsToNewVersion(currentPlanId, newId);
         } else {
             copyModulesToNewVersion(currentPlanId, newId);
         }
@@ -827,6 +856,9 @@ public class PlanService {
             "  'plan_sort_order', p.sort_order," +
             "  'monthly_price', pvm.monthly_price, 'annual_monthly_price', pvm.annual_monthly_price," +
             "  'annual_total_price', pvm.annual_monthly_price * 12," +
+            "  'trial_available', trial_offer.id IS NOT NULL," +
+            "  'trial_campaign_name', trial_offer.name," +
+            "  'trial_days', trial_offer.days," +
             "  'limits', COALESCE((SELECT json_agg(json_build_object(" +
             "    'title', pvml.title, 'description', pvml.description," +
             "    'limit_value', pvml.limit_value, 'unit', pvml.unit, 'sort_order', pvml.sort_order" +
@@ -834,6 +866,17 @@ public class PlanService {
             "  WHERE pvml.plan_version_module_id = pvm.id), '[]'::json)" +
             ") ORDER BY p.sort_order, pvm.monthly_price) FROM plan_version_modules pvm" +
             " JOIN plans p ON p.id = pvm.plan_id" +
+            // Campanha de Trial vigente deste plan_version_module — mesma regra de
+            // seleção de TrialCampaignService.resolveCatalogOffer(); mantenha as duas
+            // em sincronia se a lógica de elegibilidade mudar.
+            " LEFT JOIN LATERAL (" +
+            "   SELECT tc.id, tc.name, tc.days FROM trial_campaigns tc" +
+            "   WHERE tc.plan_version_module_id = pvm.id AND tc.status = 'ACTIVE'" +
+            "     AND tc.used_slots < tc.max_slots" +
+            "     AND (tc.start_date IS NULL OR tc.start_date <= CURRENT_DATE)" +
+            "     AND (tc.end_date IS NULL OR tc.end_date >= CURRENT_DATE)" +
+            "   ORDER BY tc.priority DESC, tc.created_at ASC LIMIT 1" +
+            " ) trial_offer ON TRUE" +
             " WHERE pvm.module_id = pm.id AND pvm.status = 'active'" +
             " AND p.is_active = TRUE AND p.is_current_version = TRUE), '[]'::json)::text AS available_plans_json " +
             "FROM platform_modules pm WHERE pm.is_active = TRUE ORDER BY pm.sort_order, pm.name"

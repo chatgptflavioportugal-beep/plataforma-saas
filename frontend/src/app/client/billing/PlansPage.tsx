@@ -5,7 +5,7 @@ import { api } from '@/shared/services/api'
 import { Button } from '@/shared/components/Button'
 import { Spinner } from '@/shared/components/Spinner'
 import { useTenant } from '@/core/workspaces/TenantContext'
-import type { ModuleBillingOption, ModulePlan, ModuleService, ProfileModuleSubscription } from '@/shared/types'
+import type { ModuleBillingOption, ModulePlan, ModuleService, ProfileModuleSubscription, TrialEligibility } from '@/shared/types'
 
 // Raw shape returned by the API (JSON strings not yet parsed)
 type ModuleBillingOptionRaw = {
@@ -62,8 +62,22 @@ function currentPlanFromSubscription(activeSub: ProfileModuleSubscription | unde
     monthly_price: activeSub.monthlyPrice,
     annual_monthly_price: activeSub.annualMonthlyPrice,
     annual_total_price: activeSub.annualMonthlyPrice * 12,
+    trial_available: false,
+    trial_campaign_name: null,
+    trial_days: activeSub.trialDays,
     limits: activeSub.limits,
   }
+}
+
+/**
+ * Rótulo de Trial exibido junto ao preço de um plano do catálogo. Retorna null
+ * quando o perfil não é elegível agora (sem campanha disponível ou dentro do
+ * cooldown de reutilização) — a elegibilidade é resolvida pelo backend
+ * (GET /api/v1/subscriptions/trial-eligibility), não recalculada aqui.
+ */
+function trialLabel(eligibility: TrialEligibility | undefined): string | null {
+  if (!eligibility?.eligible || !eligibility.days) return null
+  return `${eligibility.days} dias grátis`
 }
 
 type PlanComparison = 'current' | 'renew' | 'upgrade' | 'downgrade' | 'none'
@@ -83,7 +97,7 @@ function comparePlan(
 ): PlanComparison {
   if (!currentPlan) return 'none'
   if (plan.plan_slug === currentPlan.plan_slug) {
-    return currentSubStatus === 'EXPIRED' ? 'renew' : 'current'
+    return (currentSubStatus === 'EXPIRED' || currentSubStatus === 'PENDING_PAYMENT') ? 'renew' : 'current'
   }
   return plan.plan_sort_order > currentPlan.plan_sort_order ? 'upgrade' : 'downgrade'
 }
@@ -138,15 +152,19 @@ type ModuleCardProps = {
   selected: SelectedConfig | undefined
   currentPlan: ModulePlan | undefined
   currentSubStatus: ProfileModuleSubscription['status'] | undefined
+  /** Elegibilidade de Trial por plan_version_id, resolvida pelo backend */
+  eligibilityMap: Record<string, TrialEligibility>
   onChoose: () => void
 }
 
-function ModuleCard({ module, selected, currentPlan, currentSubStatus, onChoose }: ModuleCardProps) {
+function ModuleCard({ module, selected, currentPlan, currentSubStatus, eligibilityMap, onChoose }: ModuleCardProps) {
   const plans = module.available_plans
   const hasPlans = plans.length > 0
   const planNames = plans.map(p => p.plan_name).join(', ')
   const isFreePlan = currentPlan ? currentPlan.monthly_price === 0 : false
-  const isExpired = currentSubStatus === 'EXPIRED'
+  const isExpired = currentSubStatus === 'EXPIRED' || currentSubStatus === 'PENDING_PAYMENT'
+  const isTrialCancelled = currentSubStatus === 'TRIAL_CANCELLED'
+  const isTrial = currentSubStatus === 'TRIAL' || isTrialCancelled
 
   let mainButtonLabel = 'Contratar'
   if (selected) mainButtonLabel = 'Trocar plano'
@@ -168,6 +186,10 @@ function ModuleCard({ module, selected, currentPlan, currentSubStatus, onChoose 
     const minMonthly = Math.min(...plans.map(p => p.monthly_price))
     if (minMonthly > 0) mainPrice = `A partir de ${brl(minMonthly)}/mês`
   }
+
+  // O módulo ainda não foi contratado e algum plano tem uma campanha de Trial
+  // vigente para a qual este perfil é elegível agora (fora do cooldown de reutilização).
+  const trialAvailable = !currentPlan && plans.some(p => eligibilityMap[p.plan_version_id]?.eligible)
 
   return (
     <div
@@ -205,14 +227,23 @@ function ModuleCard({ module, selected, currentPlan, currentSubStatus, onChoose 
         {currentPlan && (
           <div className="mt-3 flex items-center gap-2">
             <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
-              isExpired ? 'bg-red-100 text-red-700' : isFreePlan ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+              isExpired ? 'bg-red-100 text-red-700'
+                : isTrial ? 'bg-amber-100 text-amber-700'
+                : isFreePlan ? 'bg-green-100 text-green-700'
+                : 'bg-blue-100 text-blue-700'
             }`}>
               Plano atual: {currentPlan.plan_name}
             </span>
-            <span className={`text-xs font-medium ${isExpired ? 'text-red-500' : 'text-gray-400'}`}>
-              {isExpired ? 'Assinatura expirada' : 'Assinatura ativa'}
+            <span className={`text-xs font-medium ${isExpired ? 'text-red-500' : isTrial ? 'text-amber-600' : 'text-gray-400'}`}>
+              {isExpired ? 'Assinatura expirada' : isTrialCancelled ? 'Trial cancelado' : isTrial ? 'Em Trial' : 'Assinatura ativa'}
             </span>
           </div>
+        )}
+
+        {trialAvailable && (
+          <span className="mt-3 inline-flex w-fit rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-700">
+            Trial disponível
+          </span>
         )}
 
         {module.module_description && (
@@ -279,11 +310,13 @@ type PlanModalProps = {
   currentPlan: ModulePlan | undefined
   /** Status da assinatura atual — diferencia 'current' (saudável) de 'renew' (expirada) */
   currentSubStatus: ProfileModuleSubscription['status'] | undefined
+  /** Elegibilidade de Trial por plan_version_id, resolvida pelo backend */
+  eligibilityMap: Record<string, TrialEligibility>
   onSelect: (plan: ModulePlan, isAnnual: boolean) => void
   onClose: () => void
 }
 
-function PlanModal({ module, initialIsAnnual, pendingPlanId, currentPlan, currentSubStatus, onSelect, onClose }: PlanModalProps) {
+function PlanModal({ module, initialIsAnnual, pendingPlanId, currentPlan, currentSubStatus, eligibilityMap, onSelect, onClose }: PlanModalProps) {
   const [isAnnual, setIsAnnual] = useState(initialIsAnnual)
 
   return (
@@ -335,6 +368,9 @@ function PlanModal({ module, initialIsAnnual, pendingPlanId, currentPlan, curren
             // (versão contratada) — nunca os valores mais recentes do catálogo.
             const displayPlan = (comparison === 'current' || comparison === 'renew') && currentPlan ? currentPlan : plan
             const total = planAnnualTotal(displayPlan)
+            const eligibility = eligibilityMap[displayPlan.plan_version_id]
+            const grantedLabel = trialLabel(eligibility)
+            const alreadyUsedTrial = comparison === 'none' && displayPlan.trial_available && !eligibility?.eligible
 
             let buttonLabel = isPendingSelection ? 'Selecionado' : 'Selecionar'
             let buttonVariant: 'primary' | 'secondary' = isPendingSelection ? 'secondary' : 'primary'
@@ -374,6 +410,16 @@ function PlanModal({ module, initialIsAnnual, pendingPlanId, currentPlan, curren
                       {comparison === 'renew' && (
                         <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 align-middle">
                           Status: Expirado
+                        </span>
+                      )}
+                      {grantedLabel && (
+                        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700 align-middle">
+                          {grantedLabel}
+                        </span>
+                      )}
+                      {alreadyUsedTrial && (
+                        <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500 align-middle">
+                          Trial já utilizado
                         </span>
                       )}
                     </p>
@@ -450,6 +496,7 @@ type ConfirmModalProps = {
   selected: SelectedConfig[]
   profileName: string
   profileType: 'individual' | 'business'
+  eligibilityMap: Record<string, TrialEligibility>
   onConfirm: () => void
   onClose: () => void
 }
@@ -458,6 +505,7 @@ function ConfirmSubscriptionModal({
   selected,
   profileName,
   profileType,
+  eligibilityMap,
   onConfirm,
   onClose,
 }: ConfirmModalProps) {
@@ -531,6 +579,7 @@ function ConfirmSubscriptionModal({
                 const price = isAnnual
                   ? `${brl(planAnnualTotal(plan))}/ano`
                   : `${brl(plan.monthly_price)}/mês`
+                const moduleTrialLabel = trialLabel(eligibilityMap[plan.plan_version_id])
                 return (
                   <li key={module.module_id} className="flex items-start justify-between gap-3 text-sm">
                     <div>
@@ -543,8 +592,15 @@ function ConfirmSubscriptionModal({
                       }`}>
                         {changeLabel(previousPlan, plan)}
                       </span>
+                      {moduleTrialLabel && (
+                        <p className="mt-1 text-xs font-medium text-amber-600">
+                          {moduleTrialLabel} — cobrança só começa depois do Trial
+                        </p>
+                      )}
                     </div>
-                    <span className="font-bold text-gray-900 whitespace-nowrap">{price}</span>
+                    <span className="font-bold text-gray-900 whitespace-nowrap">
+                      {moduleTrialLabel ? 'Grátis no Trial' : price}
+                    </span>
                   </li>
                 )
               })}
@@ -886,11 +942,29 @@ export function PlansPage() {
     refetchOnMount: 'always',
   })
 
-  // Inclui EXPIRED além de ACTIVE: o "plano atual" precisa sobreviver à expiração
-  // para que o card mostre "Renovar" em vez de voltar a "Contratar" do zero.
+  // Elegibilidade de Trial por plan_version_id, resolvida pelo backend (campanha
+  // vigente + cooldown de reutilização) — nunca recalculada no frontend.
+  const { data: trialEligibility = [] } = useQuery({
+    queryKey: ['trial-eligibility', currentTenant?.tenant.id],
+    queryFn: async () => {
+      const { data } = await api.get<TrialEligibility[]>('/api/v1/subscriptions/trial-eligibility')
+      return data
+    },
+    enabled: !!currentTenant,
+    staleTime: 0,
+    refetchOnMount: 'always',
+  })
+  const eligibilityMap = trialEligibility.reduce<Record<string, TrialEligibility>>((acc, e) => {
+    acc[e.planVersionModuleId] = e
+    return acc
+  }, {})
+
+  // Inclui EXPIRED, TRIAL, TRIAL_CANCELLED e PENDING_PAYMENT além de ACTIVE: o
+  // "plano atual" precisa sobreviver a essas transições para que o card mostre o
+  // status real (Renovar, Em Trial etc.) em vez de voltar a "Contratar" do zero.
   // (tenant_id + module_id é único, então não há ambiguidade entre status.)
   const activeSubByModuleId = subscriptions
-    .filter(s => s.status === 'ACTIVE' || s.status === 'EXPIRED')
+    .filter(s => s.status !== 'CANCELED')
     .reduce<Record<string, ProfileModuleSubscription>>((acc, s) => {
       acc[s.moduleId] = s
       return acc
@@ -979,6 +1053,7 @@ export function PlansPage() {
                   selected={configuration[module.module_id]}
                   currentPlan={currentPlanFromSubscription(activeSubByModuleId[module.module_id])}
                   currentSubStatus={activeSubByModuleId[module.module_id]?.status}
+                  eligibilityMap={eligibilityMap}
                   onChoose={() => setModalModule(module)}
                 />
               ))}
@@ -997,7 +1072,7 @@ export function PlansPage() {
 
       {/* Footer note */}
       <p className="text-center text-xs text-gray-400">
-        Todos os módulos incluem 14 dias grátis para testar. Pagamentos seguros e encriptados.
+        Alguns planos incluem período de Trial gratuito — veja os detalhes ao escolher o plano. Pagamentos seguros e encriptados.
       </p>
 
       {/* Plan selection modal */}
@@ -1008,6 +1083,7 @@ export function PlansPage() {
           pendingPlanId={configuration[modalModule.module_id]?.plan.plan_id}
           currentPlan={currentPlanFromSubscription(activeSubByModuleId[modalModule.module_id])}
           currentSubStatus={activeSubByModuleId[modalModule.module_id]?.status}
+          eligibilityMap={eligibilityMap}
           onSelect={(plan, isAnnual) => selectPlan(modalModule, plan, isAnnual)}
           onClose={() => setModalModule(null)}
         />
@@ -1019,6 +1095,7 @@ export function PlansPage() {
           selected={selectedList}
           profileName={profileName}
           profileType={profileType}
+          eligibilityMap={eligibilityMap}
           onConfirm={handleConfirmSubscription}
           onClose={() => setShowConfirmModal(false)}
         />

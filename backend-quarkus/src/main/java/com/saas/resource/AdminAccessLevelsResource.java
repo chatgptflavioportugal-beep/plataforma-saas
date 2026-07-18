@@ -87,6 +87,15 @@ public class AdminAccessLevelsResource {
                 perm("admin.access_levels.create",     "Criar nível de acesso"),
                 perm("admin.access_levels.edit",       "Editar nível de acesso"),
                 perm("admin.access_levels.activate",   "Ativar/inativar nível de acesso")
+            )),
+            group("trials", "Trials", List.of(
+                perm("admin.trials.view",   "Visualizar Trials"),
+                perm("admin.trials.create", "Criar campanha de Trial"),
+                perm("admin.trials.edit",   "Editar campanha de Trial")
+            )),
+            group("settings", "Configurações da Plataforma", List.of(
+                perm("admin.settings.view", "Visualizar configurações"),
+                perm("admin.settings.edit", "Editar configurações")
             ))
         );
     }

@@ -1,6 +1,7 @@
 package com.saas.resource;
 
 import com.saas.security.TenantContext;
+import com.saas.service.TrialCampaignService;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -22,16 +23,20 @@ public class DashboardResource {
     @Inject
     EntityManager em;
 
+    @Inject
+    TrialCampaignService trialCampaignService;
+
     /**
      * Retorna todos os módulos da plataforma com status de acesso para o perfil ativo.
      *
      * accessStatus:
      *   SUBSCRIBED — perfil possui assinatura ativa (dentro da validade) deste módulo
-     *   EXPIRED    — perfil já assinou este módulo, mas a assinatura venceu
+     *   TRIAL      — perfil está no período de Trial deste módulo (dentro da validade)
+     *   EXPIRED    — perfil já assinou (ou testou) este módulo, mas a assinatura/trial venceu
      *   FREE       — módulo possui plano com preço zero disponível (sem assinatura ativa)
      *   LOCKED     — módulo não disponível e sem plano gratuito
      *
-     * Serviços são retornados apenas para SUBSCRIBED e FREE.
+     * Serviços são retornados apenas para SUBSCRIBED, TRIAL e FREE.
      * Para membros com nível de acesso, serviços SUBSCRIBED são filtrados pelas permissões do nível.
      * Ordem de retorno: SUBSCRIBED → EXPIRED → FREE → LOCKED.
      */
@@ -56,7 +61,7 @@ public class DashboardResource {
               pms.id::text               AS sub_id,
               pms.status                 AS sub_status,
               pms.expires_at::text       AS sub_expires_at,
-              (pms.status = 'ACTIVE' AND pms.expires_at IS NOT NULL AND pms.expires_at < NOW())
+              (pms.status IN ('ACTIVE', 'TRIAL', 'TRIAL_CANCELLED') AND pms.expires_at IS NOT NULL AND pms.expires_at < NOW())
                                           AS sub_past_expiry,
               p.name                     AS plan_name,
               p.code                     AS plan_slug,
@@ -68,12 +73,15 @@ public class DashboardResource {
                 WHERE pvm2.module_id = pm.id
                   AND pvm2.status = 'active'
                   AND pvm2.monthly_price = 0
-              ) THEN 1 ELSE 0 END        AS has_free_plan
+              ) THEN 1 ELSE 0 END        AS has_free_plan,
+              CASE WHEN pms.status IN ('TRIAL', 'TRIAL_CANCELLED') AND pms.expires_at IS NOT NULL
+                THEN GREATEST(0, CEIL(EXTRACT(EPOCH FROM (pms.expires_at - NOW())) / 86400.0))::int
+                ELSE NULL END            AS trial_days_remaining
             FROM platform_modules pm
             LEFT JOIN profile_module_subscriptions pms
               ON pms.module_id = pm.id
              AND pms.tenant_id = :tenantId
-             AND pms.status IN ('ACTIVE', 'EXPIRED')
+             AND pms.status IN ('ACTIVE', 'TRIAL', 'TRIAL_CANCELLED', 'EXPIRED', 'PENDING_PAYMENT')
             LEFT JOIN plan_version_modules pvm_sub ON pvm_sub.id = pms.plan_version_id
             LEFT JOIN plans p ON p.id = pvm_sub.plan_id
             WHERE pm.is_active = TRUE
@@ -100,6 +108,7 @@ public class DashboardResource {
         final Set<String> finalMemberServiceIds = memberServiceIds;
 
         List<Map<String, Object>> subscribed = new ArrayList<>();
+        List<Map<String, Object>> trial      = new ArrayList<>();
         List<Map<String, Object>> expired    = new ArrayList<>();
         List<Map<String, Object>> free       = new ArrayList<>();
         List<Map<String, Object>> locked     = new ArrayList<>();
@@ -119,8 +128,12 @@ public class DashboardResource {
             String planVersionId = (String) row[12];
             long serviceCount    = ((Number) row[13]).longValue();
             boolean hasFreePlan  = ((Number) row[14]).intValue() == 1;
+            Integer trialDaysRemaining = row[15] != null ? ((Number) row[15]).intValue() : null;
 
-            boolean isExpired    = subId != null && ("EXPIRED".equals(subStatus) || ("ACTIVE".equals(subStatus) && pastExpiry));
+            boolean isTrialCancelled = "TRIAL_CANCELLED".equals(subStatus);
+            boolean isExpired    = subId != null && ("EXPIRED".equals(subStatus) || "PENDING_PAYMENT".equals(subStatus)
+                                    || (("ACTIVE".equals(subStatus) || "TRIAL".equals(subStatus) || isTrialCancelled) && pastExpiry));
+            boolean isTrial      = subId != null && ("TRIAL".equals(subStatus) || isTrialCancelled) && !pastExpiry;
             boolean isSubscribed = subId != null && "ACTIVE".equals(subStatus) && !pastExpiry;
 
             String accessStatus;
@@ -128,6 +141,9 @@ public class DashboardResource {
             if (isSubscribed) {
                 accessStatus = "SUBSCRIBED";
                 badgeLabel   = planName != null ? planName : "Ativo";
+            } else if (isTrial) {
+                accessStatus = "TRIAL";
+                badgeLabel   = isTrialCancelled ? "Trial cancelado" : trialBadgeLabel(trialDaysRemaining);
             } else if (isExpired) {
                 accessStatus = "EXPIRED";
                 badgeLabel   = "Expirado";
@@ -137,6 +153,16 @@ public class DashboardResource {
             } else {
                 accessStatus = "LOCKED";
                 badgeLabel   = "Contratar";
+
+                // Sem assinatura nenhuma ainda — verifica se há Trial disponível para
+                // algum plano corrente deste módulo, sem duplicar a lógica de seleção
+                // (delega inteiramente para TrialCampaignService).
+                var trialStatus = trialCampaignService.resolveModuleTrialStatus(tenantId, UUID.fromString(moduleId));
+                if (trialStatus.eligible()) {
+                    badgeLabel = "Trial disponível";
+                } else if (trialStatus.hadCampaignEver()) {
+                    badgeLabel = "Trial encerrado";
+                }
             }
 
             Map<String, Object> item = new LinkedHashMap<>();
@@ -152,8 +178,10 @@ public class DashboardResource {
             item.put("badgeLabel",    badgeLabel);
             item.put("serviceCount",  serviceCount);
             item.put("expiresAt",     subExpiresAt);
+            item.put("trialDaysRemaining", isTrial ? trialDaysRemaining : null);
+            item.put("trialCancelled", isTrial && isTrialCancelled);
 
-            if ("SUBSCRIBED".equals(accessStatus) || "FREE".equals(accessStatus)) {
+            if ("SUBSCRIBED".equals(accessStatus) || "TRIAL".equals(accessStatus) || "FREE".equals(accessStatus)) {
                 List<Object[]> svcRows = em.createNativeQuery("""
                     SELECT
                       s.id::text,
@@ -203,6 +231,7 @@ public class DashboardResource {
 
             switch (accessStatus) {
                 case "SUBSCRIBED" -> subscribed.add(item);
+                case "TRIAL"      -> trial.add(item);
                 case "EXPIRED"    -> expired.add(item);
                 case "FREE"       -> free.add(item);
                 default           -> locked.add(item);
@@ -211,10 +240,18 @@ public class DashboardResource {
 
         List<Map<String, Object>> result = new ArrayList<>();
         result.addAll(subscribed);
+        result.addAll(trial);
         result.addAll(expired);
         result.addAll(free);
         result.addAll(locked);
 
         return Response.ok(result).build();
+    }
+
+    private static String trialBadgeLabel(Integer daysRemaining) {
+        if (daysRemaining == null) return "Trial";
+        if (daysRemaining <= 0) return "Último dia do Trial";
+        if (daysRemaining == 1) return "Trial termina amanhã";
+        return "Trial — restam " + daysRemaining + " dias";
     }
 }

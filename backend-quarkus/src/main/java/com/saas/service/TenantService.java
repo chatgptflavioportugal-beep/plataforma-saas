@@ -6,9 +6,7 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotFoundException;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -18,9 +16,6 @@ public class TenantService {
 
     @Inject
     EntityManager em;
-
-    @ConfigProperty(name = "trial.duration.days", defaultValue = "14")
-    int trialDurationDays;
 
     // ----------------------------------------------------------------
     // Criar tenant de empresa (chamado pelo onboarding)
@@ -55,9 +50,8 @@ public class TenantService {
         Tenant tenant = new Tenant();
         tenant.name = name;
         tenant.slug = slug;
-        tenant.status = "trial";
+        tenant.status = "active";
         tenant.planId = freePlanId;
-        tenant.trialEndsAt = OffsetDateTime.now().plusDays(trialDurationDays);
         tenant.persist();
 
         em.createNativeQuery(
@@ -75,12 +69,11 @@ public class TenantService {
         .executeUpdate();
 
         em.createNativeQuery(
-                "INSERT INTO tenant_subscriptions (tenant_id, plan_id, status, trial_start, trial_end) " +
-                "VALUES (:tenantId, :planId, 'trial', NOW(), :trialEnd)"
+                "INSERT INTO tenant_subscriptions (tenant_id, plan_id, status) " +
+                "VALUES (:tenantId, :planId, 'active')"
         )
         .setParameter("tenantId", tenant.id)
         .setParameter("planId", freePlanId)
-        .setParameter("trialEnd", tenant.trialEndsAt)
         .executeUpdate();
 
         return tenant;
@@ -189,14 +182,12 @@ public class TenantService {
             }
         }
 
-        OffsetDateTime trialEnd = OffsetDateTime.now().plusDays(14);
         em.createNativeQuery(
-                "INSERT INTO tenant_subscriptions (tenant_id, plan_id, status, trial_start, trial_end) " +
-                "VALUES (:tenantId, :planId, 'trial', NOW(), :trialEnd) ON CONFLICT DO NOTHING"
+                "INSERT INTO tenant_subscriptions (tenant_id, plan_id, status) " +
+                "VALUES (:tenantId, :planId, 'active') ON CONFLICT DO NOTHING"
         )
         .setParameter("tenantId", tenantId)
         .setParameter("planId", planId)
-        .setParameter("trialEnd", trialEnd)
         .executeUpdate();
     }
 

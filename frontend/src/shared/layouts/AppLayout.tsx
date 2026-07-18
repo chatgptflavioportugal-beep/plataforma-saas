@@ -1,7 +1,6 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/core/auth/AuthContext'
 import { useTenant } from '@/core/workspaces/TenantContext'
-import { TrialBanner } from '@/core/subscriptions/TrialBanner'
 import { ProfileSwitcher } from '@/core/workspaces/ProfileSwitcher'
 
 export function AppLayout() {
@@ -28,8 +27,6 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      <TrialBanner />
-
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 flex h-16 items-center justify-between">
 

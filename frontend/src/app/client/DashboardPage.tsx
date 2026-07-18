@@ -18,6 +18,7 @@ function profileLabel(tenantName: string, tenantType: string, role: string): str
 
 const badgeClass: Record<string, string> = {
   SUBSCRIBED: 'bg-primary-100 text-primary-700',
+  TRIAL: 'bg-amber-100 text-amber-700',
   EXPIRED: 'bg-red-100 text-red-700',
   FREE: 'bg-green-100 text-green-700',
   LOCKED: 'bg-gray-100 text-gray-400',
@@ -34,6 +35,7 @@ function ModuleCard({
 }) {
   const isLocked = module.accessStatus === 'LOCKED'
   const isExpired = module.accessStatus === 'EXPIRED'
+  const isTrial = module.accessStatus === 'TRIAL'
 
   return (
     <button
@@ -44,6 +46,8 @@ function ModuleCard({
           ? 'bg-gray-50 border-gray-100 opacity-50 grayscale hover:opacity-60'
           : isExpired
           ? 'bg-white border-red-200 shadow-sm hover:border-red-300 hover:shadow-md'
+          : isTrial
+          ? 'bg-white border-amber-200 shadow-sm hover:border-amber-300 hover:shadow-md'
           : 'bg-white border-gray-100 shadow-sm hover:border-primary-200 hover:shadow-md',
       ].join(' ')}
     >
@@ -88,11 +92,21 @@ function ModuleCard({
         {module.badgeLabel}
       </span>
 
-      {/* Service count / locked / expired text */}
+      {/* Service count / locked / expired / trial text */}
       {isLocked ? (
         <p className="text-xs text-gray-400 mt-2">Disponível para contratação</p>
       ) : isExpired ? (
         <p className="text-xs text-red-500 mt-2">Assinatura expirada — toque para renovar</p>
+      ) : isTrial ? (
+        <p className="text-xs text-amber-600 mt-2 font-medium">
+          {module.trialCancelled
+            ? `Trial cancelado — acesso até ${module.expiresAt ? new Date(module.expiresAt).toLocaleDateString('pt-BR') : '—'}`
+            : module.trialDaysRemaining != null && module.trialDaysRemaining <= 0
+            ? 'Último dia do Trial'
+            : module.trialDaysRemaining === 1
+            ? 'Trial termina amanhã'
+            : `Restam ${module.trialDaysRemaining ?? '—'} dias de Trial`}
+        </p>
       ) : (
         module.serviceCount > 0 && (
           <p className="text-xs text-gray-400 mt-2">

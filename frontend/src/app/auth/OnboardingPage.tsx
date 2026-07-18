@@ -128,7 +128,7 @@ export function OnboardingPage() {
               </div>
               <div>
                 <p className="text-base font-semibold text-gray-900">Perfil Individual</p>
-                <p className="mt-1 text-sm text-gray-400">Para uso pessoal · 14 dias grátis</p>
+                <p className="mt-1 text-sm text-gray-400">Para uso pessoal</p>
               </div>
             </button>
 
@@ -142,7 +142,7 @@ export function OnboardingPage() {
               </div>
               <div>
                 <p className="text-base font-semibold text-gray-900">Perfil Empresarial</p>
-                <p className="mt-1 text-sm text-gray-400">Para sua empresa · 14 dias grátis</p>
+                <p className="mt-1 text-sm text-gray-400">Para sua empresa</p>
               </div>
             </button>
           </div>
@@ -158,7 +158,7 @@ export function OnboardingPage() {
       <div className="w-full max-w-lg space-y-8">
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900">Criar conta empresarial</h1>
-          <p className="mt-2 text-gray-500">Você terá 14 dias grátis para experimentar.</p>
+          <p className="mt-2 text-gray-500">Preencha os dados da sua empresa para começar.</p>
         </div>
 
         <form
@@ -188,7 +188,7 @@ export function OnboardingPage() {
           {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
 
           <Button type="submit" isLoading={isSubmitting} className="w-full">
-            Criar empresa e começar trial
+            Criar empresa
           </Button>
         </form>
 

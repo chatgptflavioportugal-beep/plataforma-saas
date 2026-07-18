@@ -2,9 +2,11 @@ package com.saas.resource;
 
 import com.saas.repository.UserTenantRepository;
 import com.saas.security.TenantContext;
+import com.saas.service.TrialCampaignService;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.NoResultException;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
@@ -14,6 +16,7 @@ import jakarta.ws.rs.core.SecurityContext;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +34,9 @@ public class ProfileModuleSubscriptionResource {
 
     @Inject
     UserTenantRepository userTenantRepository;
+
+    @Inject
+    TrialCampaignService trialCampaignService;
 
     // ─── DTOs ────────────────────────────────────────────────────────────────────
 
@@ -60,6 +66,7 @@ public class ProfileModuleSubscriptionResource {
     @POST
     @Path("/modules")
     @Transactional
+    @SuppressWarnings("unchecked")
     public Response confirmModuleSubscriptions(
         ConfirmSubscriptionRequest request,
         @Context SecurityContext secCtx
@@ -106,8 +113,8 @@ public class ProfileModuleSubscriptionResource {
                     .build();
             }
 
-            // Garante que o plan_version_id referencia o módulo correto e está ativo
-            long count = ((Number) em.createNativeQuery(
+            // Garante que o plan_version_id referencia o módulo correto e está ativo.
+            long pvmExists = ((Number) em.createNativeQuery(
                 "SELECT COUNT(*) FROM plan_version_modules " +
                 "WHERE id = :pvId AND module_id = :moduleId AND status = 'active'"
             )
@@ -115,42 +122,171 @@ public class ProfileModuleSubscriptionResource {
                 .setParameter("moduleId", moduleId)
                 .getSingleResult()).longValue();
 
-            if (count == 0) {
+            if (pvmExists == 0) {
                 return Response.status(400)
                     .entity(Map.of("error", "Plano inválido ou inativo para o módulo " + item.moduleId()))
                     .build();
             }
 
-            // Calcula expires_at: MONTHLY = agora + 1 mês, ANNUAL = agora + 1 ano
-            OffsetDateTime now       = OffsetDateTime.now(ZoneOffset.UTC);
-            OffsetDateTime expiresAt = billingCycle.equals("MONTHLY")
-                ? now.plusMonths(1)
-                : now.plusYears(1);
+            // Estado atual da assinatura (se houver), para detectar resubmissão do
+            // mesmo Trial em andamento (não deve consumir uma segunda vaga) e para
+            // detectar conversão de Trial em cliente pagante (para o relatório).
+            Object[] existing;
+            try {
+                existing = (Object[]) em.createNativeQuery(
+                    "SELECT status, plan_version_id::text, trial_history_id::text, " +
+                    "(status IN ('TRIAL', 'TRIAL_CANCELLED') AND expires_at IS NOT NULL AND expires_at > NOW()) AS trial_ongoing " +
+                    "FROM profile_module_subscriptions WHERE tenant_id = :tenantId AND module_id = :moduleId"
+                )
+                    .setParameter("tenantId", tenantId)
+                    .setParameter("moduleId", moduleId)
+                    .getSingleResult();
+            } catch (NoResultException e) {
+                existing = null;
+            }
 
-            // Upsert: atualiza se já existir assinatura para este módulo neste perfil
+            String existingStatus         = existing != null ? (String) existing[0] : null;
+            String existingPlanVersionId  = existing != null ? (String) existing[1] : null;
+            String existingTrialHistoryId = existing != null ? (String) existing[2] : null;
+            boolean trialOngoing          = existing != null && Boolean.TRUE.equals(existing[3]);
+            boolean sameOngoingTrial      = trialOngoing && planVersionId.toString().equals(existingPlanVersionId);
+
+            if (sameOngoingTrial) {
+                // Resubmissão do mesmo Trial já em andamento (ex.: usuário confirma de
+                // novo a mesma tela) — não reclama outra vaga nem reinicia o histórico,
+                // só atualiza a preferência de ciclo de cobrança para depois do Trial.
+                em.createNativeQuery(
+                    "UPDATE profile_module_subscriptions SET billing_cycle = :billingCycle, updated_at = NOW() " +
+                    "WHERE tenant_id = :tenantId AND module_id = :moduleId"
+                )
+                    .setParameter("billingCycle", billingCycle)
+                    .setParameter("tenantId", tenantId)
+                    .setParameter("moduleId", moduleId)
+                    .executeUpdate();
+                continue;
+            }
+
+            var eligibility = trialCampaignService.checkEligibility(tenantId, moduleId, planVersionId);
+            boolean trialEnabled = eligibility.eligible();
+            UUID claimedCampaignId = null;
+            Integer trialDays = null;
+
+            if (trialEnabled) {
+                try {
+                    claimedCampaignId = trialCampaignService.claimSlotOrThrow(tenantId, moduleId, planVersionId);
+                    trialDays = eligibility.days();
+                } catch (BadRequestException raceLost) {
+                    // Perdeu a corrida pela última vaga para outra requisição concorrente —
+                    // segue o fluxo normal de contratação (ACTIVE) em vez de falhar.
+                    trialEnabled = false;
+                }
+            }
+
+            OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+            String status;
+            OffsetDateTime trialStartAt;
+            OffsetDateTime trialEndAt;
+            OffsetDateTime billingStartsAt;
+            OffsetDateTime expiresAt;
+
+            if (trialEnabled) {
+                status          = "TRIAL";
+                trialStartAt    = now;
+                trialEndAt      = now.plusDays(trialDays);
+                billingStartsAt = trialEndAt;
+                expiresAt       = trialEndAt;
+            } else {
+                status          = "ACTIVE";
+                trialStartAt    = null;
+                trialEndAt      = null;
+                billingStartsAt = null;
+                // Calcula expires_at: MONTHLY = agora + 1 mês, ANNUAL = agora + 1 ano
+                expiresAt = billingCycle.equals("MONTHLY") ? now.plusMonths(1) : now.plusYears(1);
+            }
+
+            // Perfil estava em Trial e esta contratação o substitui — ou vira cliente
+            // pagante (não concedeu novo Trial: sem vagas/cooldown), ou troca para um
+            // Trial diferente (outro plano/campanha). Em ambos os casos o Trial
+            // anterior está encerrando agora; fecha o registro de histórico
+            // correspondente (senão fica orfão, com trial_finished_at nulo para
+            // sempre, já que pms.trial_history_id está prestes a apontar para outro
+            // registro). "Virou cliente" só quando a substituição NÃO é por outro Trial.
+            boolean wasTrial = "TRIAL".equals(existingStatus) || "TRIAL_CANCELLED".equals(existingStatus);
+            if (wasTrial && existingTrialHistoryId != null) {
+                em.createNativeQuery(
+                    "UPDATE module_trial_history SET " +
+                    "became_customer = became_customer OR :becameCustomer, " +
+                    "trial_finished_at = COALESCE(trial_finished_at, NOW()) WHERE id::text = :id"
+                )
+                    .setParameter("becameCustomer", !trialEnabled)
+                    .setParameter("id", existingTrialHistoryId)
+                    .executeUpdate();
+            }
+
+            // Registra o início deste Trial no ledger permanente (histórico de
+            // participação, nunca removido) — usado tanto para o cooldown de
+            // reutilização quanto para o relatório de Participantes de cada campanha.
+            UUID historyId = null;
+            if (trialEnabled) {
+                historyId = UUID.randomUUID();
+                em.createNativeQuery(
+                    "INSERT INTO module_trial_history " +
+                    "(id, tenant_id, module_id, plan_version_module_id, trial_campaign_id, started_by_user_id, trial_started_at) " +
+                    "VALUES (:id, :tenantId, :moduleId, :planVersionId, :campaignId, :userId, :trialStartAt)"
+                )
+                    .setParameter("id", historyId)
+                    .setParameter("tenantId", tenantId)
+                    .setParameter("moduleId", moduleId)
+                    .setParameter("planVersionId", planVersionId)
+                    .setParameter("campaignId", claimedCampaignId)
+                    .setParameter("userId", userId)
+                    .setParameter("trialStartAt", trialStartAt)
+                    .executeUpdate();
+            }
+
+            // Upsert: atualiza se já existir assinatura para este módulo neste perfil.
+            // Trocar de plano durante um Trial cancela o Trial atual e inicia o do novo
+            // plano (mesma linha, mesmo comportamento de upsert já usado para preços/limites).
             em.createNativeQuery("""
                 INSERT INTO profile_module_subscriptions
                     (tenant_id, module_id, plan_version_id, billing_cycle, status,
-                     started_at, expires_at, canceled_at, created_by_user_id)
+                     started_at, expires_at, canceled_at, created_by_user_id,
+                     trial_days, trial_start_at, trial_end_at, billing_starts_at,
+                     trial_campaign_id, trial_history_id)
                 VALUES
-                    (:tenantId, :moduleId, :planVersionId, :billingCycle, 'ACTIVE',
-                     NOW(), :expiresAt, NULL, :userId)
+                    (:tenantId, :moduleId, :planVersionId, :billingCycle, :status,
+                     NOW(), :expiresAt, NULL, :userId,
+                     :trialDays, :trialStartAt, :trialEndAt, :billingStartsAt,
+                     :trialCampaignId, :trialHistoryId)
                 ON CONFLICT (tenant_id, module_id)
                 DO UPDATE SET
                     plan_version_id    = EXCLUDED.plan_version_id,
                     billing_cycle      = EXCLUDED.billing_cycle,
-                    status             = 'ACTIVE',
+                    status             = EXCLUDED.status,
                     started_at         = NOW(),
                     expires_at         = EXCLUDED.expires_at,
                     canceled_at        = NULL,
+                    trial_days         = EXCLUDED.trial_days,
+                    trial_start_at     = EXCLUDED.trial_start_at,
+                    trial_end_at       = EXCLUDED.trial_end_at,
+                    billing_starts_at  = EXCLUDED.billing_starts_at,
+                    trial_campaign_id  = EXCLUDED.trial_campaign_id,
+                    trial_history_id   = EXCLUDED.trial_history_id,
                     updated_at         = NOW()
             """)
                 .setParameter("tenantId", tenantId)
                 .setParameter("moduleId", moduleId)
                 .setParameter("planVersionId", planVersionId)
                 .setParameter("billingCycle", billingCycle)
+                .setParameter("status", status)
                 .setParameter("expiresAt", expiresAt)
                 .setParameter("userId", userId)
+                .setParameter("trialDays", trialDays)
+                .setParameter("trialStartAt", trialStartAt)
+                .setParameter("trialEndAt", trialEndAt)
+                .setParameter("billingStartsAt", billingStartsAt)
+                .setParameter("trialCampaignId", claimedCampaignId)
+                .setParameter("trialHistoryId", historyId)
                 .executeUpdate();
         }
 
@@ -337,6 +473,11 @@ public class ProfileModuleSubscriptionResource {
             "  pms.started_at::text, " +
             "  pms.expires_at::text, " +
             "  pms.canceled_at::text, " +
+            "  pms.trial_days, " +
+            "  pms.trial_start_at::text, " +
+            "  pms.trial_end_at::text, " +
+            "  pms.billing_starts_at::text, " +
+            "  pms.trial_campaign_id::text, " +
             "  COALESCE((SELECT json_agg(json_build_object(" +
             "    'title', pvml.title, 'description', pvml.description," +
             "    'limit_value', pvml.limit_value, 'unit', pvml.unit, 'sort_order', pvml.sort_order" +
@@ -376,7 +517,12 @@ public class ProfileModuleSubscriptionResource {
             m.put("startedAt",            row[16]);
             m.put("expiresAt",            row[17]);
             m.put("canceledAt",           row[18]);
-            m.put("limitsJson",           row[19]);
+            m.put("trialDays",            row[19] != null ? ((Number) row[19]).intValue() : null);
+            m.put("trialStartAt",         row[20]);
+            m.put("trialEndAt",           row[21]);
+            m.put("billingStartsAt",      row[22]);
+            m.put("trialCampaignId",      row[23]);
+            m.put("limitsJson",           row[24]);
             return m;
         }).collect(Collectors.toList());
 
@@ -387,12 +533,16 @@ public class ProfileModuleSubscriptionResource {
 
     /**
      * Cancela uma assinatura de módulo do perfil ativo.
-     * Não remove o registro — apenas muda status para CANCELED e preenche canceled_at.
+     * Assinaturas ACTIVE viram CANCELED — acesso mantido até expires_at, como antes.
+     * Assinaturas em TRIAL viram TRIAL_CANCELLED — cancela apenas a renovação
+     * automática; o acesso permanece liberado até trial_end_at (expires_at), quando
+     * o scheduler expira o módulo automaticamente, sem cobrança.
      * Valida que a assinatura pertence ao perfil ativo e que o usuário tem permissão.
      */
     @POST
     @Path("/modules/{id}/cancel")
     @Transactional
+    @SuppressWarnings("unchecked")
     public Response cancelModuleSubscription(
         @PathParam("id") String subscriptionId,
         @Context SecurityContext secCtx
@@ -413,51 +563,67 @@ public class ProfileModuleSubscriptionResource {
             return Response.status(400).entity(Map.of("error", "ID inválido")).build();
         }
 
-        // Valida que a assinatura pertence ao perfil ativo e está ativa
-        long count = ((Number) em.createNativeQuery(
-            "SELECT COUNT(*) FROM profile_module_subscriptions " +
-            "WHERE id = :id AND tenant_id = :tenantId AND status = 'ACTIVE'"
+        // Valida que a assinatura pertence ao perfil ativo e está ativa ou em Trial
+        // ("Cancelar Trial" usa o mesmo endpoint — apenas cancela a renovação).
+        List<Object[]> rows = em.createNativeQuery(
+            "SELECT status, trial_history_id::text FROM profile_module_subscriptions " +
+            "WHERE id = :id AND tenant_id = :tenantId AND status IN ('ACTIVE', 'TRIAL')"
         )
             .setParameter("id", subId)
             .setParameter("tenantId", tenantId)
-            .getSingleResult()).longValue();
+            .getResultList();
 
-        if (count == 0) {
+        if (rows.isEmpty()) {
             return Response.status(404)
                 .entity(Map.of("error", "Assinatura não encontrada ou já cancelada"))
                 .build();
         }
 
-        // Cancela: muda status, preenche canceled_at, mantém histórico
+        boolean wasTrial = "TRIAL".equals(rows.get(0)[0]);
+        String trialHistoryId = (String) rows.get(0)[1];
+        String newStatus = wasTrial ? "TRIAL_CANCELLED" : "CANCELED";
+
+        // Cancela: muda status, preenche canceled_at, mantém histórico.
+        // Nunca mexe em expires_at — o acesso permanece válido até lá em ambos os casos.
         em.createNativeQuery(
             "UPDATE profile_module_subscriptions " +
-            "SET status = 'CANCELED', canceled_at = NOW(), updated_at = NOW() " +
+            "SET status = :status, canceled_at = NOW(), updated_at = NOW() " +
             "WHERE id = :id AND tenant_id = :tenantId"
         )
+            .setParameter("status", newStatus)
             .setParameter("id", subId)
             .setParameter("tenantId", tenantId)
             .executeUpdate();
+
+        if (wasTrial && trialHistoryId != null) {
+            em.createNativeQuery(
+                "UPDATE module_trial_history SET trial_canceled_at = NOW() WHERE id::text = :id"
+            )
+                .setParameter("id", trialHistoryId)
+                .executeUpdate();
+        }
 
         userTenantRepository.bumpVersionForTenant(tenantId);
 
         return Response.ok(Map.of(
             "success", true,
             "id", subscriptionId,
-            "status", "CANCELED"
+            "status", newStatus
         )).build();
     }
 
     // ─── POST /modules/{id}/reactivate — reativar assinatura cancelada ───────────
 
     /**
-     * Reativa uma assinatura cancelada do perfil ativo.
+     * Reativa uma assinatura cancelada (ou um Trial cancelado) do perfil ativo.
      * Valida que a assinatura pertence ao perfil ativo e que o usuário tem permissão.
      * Valida que a assinatura está cancelada e ainda não expirou.
-     * Restaura status para ACTIVE e limpa canceled_at.
+     * CANCELED volta para ACTIVE; TRIAL_CANCELLED volta para TRIAL.
      */
     @POST
     @Path("/modules/{id}/reactivate")
     @Transactional
+    @SuppressWarnings("unchecked")
     public Response reactivateModuleSubscription(
         @PathParam("id") String subscriptionId,
         @Context SecurityContext secCtx
@@ -478,39 +644,130 @@ public class ProfileModuleSubscriptionResource {
             return Response.status(400).entity(Map.of("error", "ID inválido")).build();
         }
 
-        // Valida que a assinatura pertence ao perfil ativo, está cancelada e ainda não expirou
-        long count = ((Number) em.createNativeQuery(
-            "SELECT COUNT(*) FROM profile_module_subscriptions " +
+        // Valida que a assinatura pertence ao perfil ativo, está cancelada (ACTIVE ou
+        // Trial) e ainda não expirou.
+        List<Object[]> rows = em.createNativeQuery(
+            "SELECT status, trial_history_id::text FROM profile_module_subscriptions " +
             "WHERE id = :id AND tenant_id = :tenantId " +
-            "  AND status = 'CANCELED' " +
+            "  AND status IN ('CANCELED', 'TRIAL_CANCELLED') " +
             "  AND (expires_at IS NULL OR expires_at > NOW())"
         )
             .setParameter("id", subId)
             .setParameter("tenantId", tenantId)
-            .getSingleResult()).longValue();
+            .getResultList();
 
-        if (count == 0) {
+        if (rows.isEmpty()) {
             return Response.status(404)
                 .entity(Map.of("error", "Assinatura não encontrada, já ativa ou expirada"))
                 .build();
         }
 
-        // Reativa: restaura status ACTIVE, limpa canceled_at
+        boolean wasTrialCancelled = "TRIAL_CANCELLED".equals(rows.get(0)[0]);
+        String trialHistoryId = (String) rows.get(0)[1];
+        String restoredStatus = wasTrialCancelled ? "TRIAL" : "ACTIVE";
+
+        // Reativa: restaura status (TRIAL ou ACTIVE), limpa canceled_at
         em.createNativeQuery(
             "UPDATE profile_module_subscriptions " +
-            "SET status = 'ACTIVE', canceled_at = NULL, updated_at = NOW() " +
+            "SET status = :status, canceled_at = NULL, updated_at = NOW() " +
             "WHERE id = :id AND tenant_id = :tenantId"
         )
+            .setParameter("status", restoredStatus)
             .setParameter("id", subId)
             .setParameter("tenantId", tenantId)
             .executeUpdate();
+
+        if (wasTrialCancelled && trialHistoryId != null) {
+            em.createNativeQuery(
+                "UPDATE module_trial_history SET trial_canceled_at = NULL WHERE id::text = :id"
+            )
+                .setParameter("id", trialHistoryId)
+                .executeUpdate();
+        }
 
         userTenantRepository.bumpVersionForTenant(tenantId);
 
         return Response.ok(Map.of(
             "success", true,
             "id", subscriptionId,
-            "status", "ACTIVE"
+            "status", restoredStatus
         )).build();
+    }
+
+    // ─── GET /trial-history — histórico de participação em Trial do perfil ──────
+
+    /**
+     * Lista o histórico de participação em Trial do perfil ativo (pode haver mais
+     * de um registro por módulo ao longo do tempo, uma vez respeitado o cooldown
+     * global de reutilização). Mantido para uso administrativo/futuro — a tela de
+     * contratação (PlansPage) usa GET /trial-eligibility, que já resolve
+     * elegibilidade e não exige o front reimplementar a regra de cooldown.
+     */
+    @GET
+    @Path("/trial-history")
+    @SuppressWarnings("unchecked")
+    public Response listTrialHistory(@Context SecurityContext secCtx) {
+        var ctx = TenantContext.from(secCtx);
+        UUID tenantId = ctx.getTenantId();
+
+        List<Object[]> rows = em.createNativeQuery(
+            "SELECT module_id::text, trial_campaign_id::text, trial_started_at::text, " +
+            "trial_finished_at::text, trial_canceled_at::text, became_customer " +
+            "FROM module_trial_history WHERE tenant_id = :tenantId ORDER BY trial_started_at DESC"
+        ).setParameter("tenantId", tenantId).getResultList();
+
+        List<Map<String, Object>> result = rows.stream().map(row -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("moduleId",        row[0]);
+            m.put("trialCampaignId", row[1]);
+            m.put("trialStartedAt",  row[2]);
+            m.put("trialFinishedAt", row[3]);
+            m.put("trialCanceledAt", row[4]);
+            m.put("becameCustomer",  Boolean.TRUE.equals(row[5]));
+            return m;
+        }).collect(Collectors.toList());
+
+        return Response.ok(result).build();
+    }
+
+    // ─── GET /trial-eligibility — elegibilidade de Trial por módulo/plano ───────
+
+    /**
+     * Para cada plan_version_module ativo de um plano corrente, resolve se o
+     * perfil ativo é elegível a iniciar um Trial agora (campanha vigente com
+     * vagas + fora do cooldown de reutilização). Usado pela tela de contratação
+     * (PlansPage) para decidir o que oferecer, sem reimplementar a regra no front.
+     */
+    @GET
+    @Path("/trial-eligibility")
+    @SuppressWarnings("unchecked")
+    public Response listTrialEligibility(@Context SecurityContext secCtx) {
+        var ctx = TenantContext.from(secCtx);
+        UUID tenantId = ctx.getTenantId();
+
+        List<Object[]> pvmRows = em.createNativeQuery(
+            "SELECT pvm.id, pvm.module_id FROM plan_version_modules pvm " +
+            "JOIN plans p ON p.id = pvm.plan_id " +
+            "WHERE pvm.status = 'active' AND p.is_active = TRUE AND p.is_current_version = TRUE"
+        ).getResultList();
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Object[] row : pvmRows) {
+            UUID pvmId    = (UUID) row[0];
+            UUID moduleId = (UUID) row[1];
+            var elig = trialCampaignService.checkEligibility(tenantId, moduleId, pvmId);
+
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("planVersionModuleId", pvmId.toString());
+            m.put("moduleId",            moduleId.toString());
+            m.put("eligible",            elig.eligible());
+            m.put("days",                elig.days());
+            m.put("campaignName",        elig.campaignName());
+            m.put("reasonCode",          elig.reasonCode());
+            m.put("cooldownEndsAt",      elig.cooldownEndsAt());
+            result.add(m);
+        }
+
+        return Response.ok(result).build();
     }
 }

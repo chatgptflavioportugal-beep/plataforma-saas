@@ -61,7 +61,15 @@
       "Bash(java -version)",
       "Bash(mvn -version)",
       "Bash(npx eslint *)",
-      "Bash(./node_modules/.bin/eslint --version)"
+      "Bash(./node_modules/.bin/eslint --version)",
+      "Bash(mvn -v)",
+      "Bash(mvn -q -o compile)",
+      "Bash(docker --version)",
+      "Bash(docker info *)",
+      "Bash(ls -la ~/.m2 2>&1 | head -5; du -sh ~/.m2 2>&1)",
+      "Read(//c/Users/fmportugal/.m2/**)",
+      "Bash(MSYS_NO_PATHCONV=1 docker run --rm -v /c/desenvolvimento/sistema/saas-plataforma/backend-quarkus:/app -v /c/Users/fmportugal/.m2:/root/.m2 -w /app maven:3.9-eclipse-temurin-21 mvn -q -o compile)",
+      "Bash(./node_modules/.bin/tsc --noEmit)"
     ]
   }
 }
