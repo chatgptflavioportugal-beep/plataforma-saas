@@ -200,7 +200,7 @@ public class TrialCampaignResource {
         try {
             row = (Object[]) em.createNativeQuery(
                 "SELECT " + COMMON_COLUMNS +
-                ", pm.slug, pm.icon_path, p.name, p.code, p.version, pvm.monthly_price, pvm.annual_price " +
+                ", pm.slug, pm.icon_path, p.name, p.code, p.version, pvm.monthly_price, pvm.annual_monthly_price " +
                 COMMON_JOINS + "JOIN plans p ON p.id = pvm.plan_id " +
                 "WHERE tc.id::text = :id"
             ).setParameter("id", id).getSingleResult();
@@ -453,23 +453,29 @@ public class TrialCampaignResource {
     @POST
     @Path("/{id}/cancel")
     @Transactional
-    public Response cancel(@PathParam("id") String id) {
+    public Response cancel(@PathParam("id") String id, CancelRequest req) {
         adminResource.requireAdminPermission("admin.trials.cancel");
         String userId = adminResource.currentUserId();
+        String reason = (req != null && req.reason() != null && !req.reason().isBlank())
+            ? req.reason() : "Cancelado manualmente pelo administrador.";
 
         // Cancelar apenas impede novas ativações — participantes que já iniciaram o
         // Trial continuam normalmente até trialEndAt (nenhuma outra tabela é tocada).
         int updated = em.createNativeQuery(
-            "UPDATE trial_campaigns SET status = 'CANCELLED', updated_at = NOW(), updated_by_user_id = CAST(:userId AS uuid) " +
+            "UPDATE trial_campaigns SET status = 'CANCELLED', cancelled_at = NOW(), cancel_reason = :reason, " +
+            "updated_at = NOW(), updated_by_user_id = CAST(:userId AS uuid) " +
             "WHERE id::text = :id AND status IN ('ACTIVE', 'SCHEDULED')"
-        ).setParameter("userId", userId).setParameter("id", id).executeUpdate();
+        ).setParameter("reason", reason).setParameter("userId", userId).setParameter("id", id).executeUpdate();
 
         if (updated == 0)
             return Response.status(404).entity(Map.of("error", "Campanha não encontrada ou não pode mais ser cancelada")).build();
 
-        auditService.log(null, UUID.fromString(userId), "trial_campaign.cancelled", "trial_campaigns", id, null);
+        auditService.log(null, UUID.fromString(userId), "trial_campaign.cancelled", "trial_campaigns", id,
+            Map.of("reason", reason), null);
         return Response.ok(Map.of("id", id, "status", "CANCELLED")).build();
     }
+
+    public record CancelRequest(String reason) {}
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 

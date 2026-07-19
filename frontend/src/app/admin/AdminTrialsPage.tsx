@@ -393,10 +393,11 @@ function ParticipantsTab({ campaignId }: { campaignId: string }) {
 // ─── aba Histórico ──────────────────────────────────────────────────────────
 
 const HISTORY_ACTION_LABELS: Record<string, string> = {
-  'trial_campaign.created':   'Criado',
-  'trial_campaign.updated':   'Alterado',
-  'trial_campaign.closed':    'Encerrado',
-  'trial_campaign.cancelled': 'Cancelado',
+  'trial_campaign.created':               'Criado',
+  'trial_campaign.updated':               'Alterado',
+  'trial_campaign.closed':                'Encerrado',
+  'trial_campaign.cancelled':             'Cancelado',
+  'trial_campaign.plan_version_replaced': 'Cancelado (nova versão do plano)',
 }
 
 function HistoryTab({ campaignId }: { campaignId: string }) {
@@ -458,7 +459,8 @@ function GeralTab({ detail }: { detail: TrialCampaign }) {
           <Row label="Nome do plano" value={detail.planName ?? '—'} />
           <Row label="Versão" value={detail.planVersion != null ? `v${detail.planVersion}` : '—'} />
           <Row label="Preço mensal" value={brl(detail.planMonthlyPrice)} />
-          <Row label="Preço anual" value={brl(detail.planAnnualPrice)} />
+          <Row label="Preço mensal (plano anual)" value={brl(detail.planAnnualPrice)} />
+          <Row label="Preço anual (total)" value={brl(detail.planAnnualPrice != null ? detail.planAnnualPrice * 12 : null)} />
         </div>
       </section>
 

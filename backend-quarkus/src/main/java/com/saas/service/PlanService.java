@@ -20,6 +20,12 @@ public class PlanService {
     @Inject
     EntityManager em;
 
+    @Inject
+    TrialCampaignService trialCampaignService;
+
+    @Inject
+    AuditService auditService;
+
     // ----------------------------------------------------------------
     // Expressões SQL reutilizáveis para cálculo de totais pelos módulos
     // total_monthly_price        = soma dos preços mensais dos módulos ativos
@@ -75,6 +81,30 @@ public class PlanService {
         " FROM plan_version_modules pvm" +
         " JOIN platform_modules pm ON pm.id = pvm.module_id" +
         " WHERE pvm.plan_id = p.id), '[]'::json)::text";
+
+    // Assinaturas do plano — fonte real é profile_module_subscriptions (por módulo/perfil),
+    // não o tenant_subscriptions legado. ACTIVE = pagante; TRIAL/TRIAL_CANCELLED = ainda com
+    // acesso de Trial válido (cancelar só derruba a renovação, o acesso segue até expirar).
+    private static final String PAID_SUBS_EXPR =
+        "COALESCE((SELECT COUNT(*) FROM profile_module_subscriptions pms " +
+        " JOIN plan_version_modules pvm2 ON pvm2.id = pms.plan_version_id " +
+        " WHERE pvm2.plan_id = p.id AND pms.status = 'ACTIVE'), 0)";
+
+    private static final String TRIAL_SUBS_EXPR =
+        "COALESCE((SELECT COUNT(*) FROM profile_module_subscriptions pms " +
+        " JOIN plan_version_modules pvm2 ON pvm2.id = pms.plan_version_id " +
+        " WHERE pvm2.plan_id = p.id AND pms.status IN ('TRIAL', 'TRIAL_CANCELLED')), 0)";
+
+    // Usados no histórico de versões — panorama das campanhas de Trial daquela versão
+    private static final String TRIAL_CAMPAIGNS_ACTIVE_EXPR =
+        "COALESCE((SELECT COUNT(*) FROM trial_campaigns tc " +
+        " JOIN plan_version_modules pvm3 ON pvm3.id = tc.plan_version_module_id " +
+        " WHERE pvm3.plan_id = p.id AND tc.status IN ('ACTIVE', 'SCHEDULED')), 0)";
+
+    private static final String TRIAL_CAMPAIGNS_CANCELLED_EXPR =
+        "COALESCE((SELECT COUNT(*) FROM trial_campaigns tc " +
+        " JOIN plan_version_modules pvm3 ON pvm3.id = tc.plan_version_module_id " +
+        " WHERE pvm3.plan_id = p.id AND tc.status = 'CANCELLED'), 0)";
 
     // ----------------------------------------------------------------
     // Leitura pública: versões atuais ativas, com filtro opcional por tipo
@@ -143,15 +173,13 @@ public class PlanService {
                 "p.is_active, p.sort_order, p.version, p.is_current_version, " +
                 "p.parent_plan_id::text, p.billing_type, p.created_at::text, " +
                 "p.is_most_popular, p.plan_type, " +
-                "COUNT(ts.id) AS subscriber_count, " +
+                PAID_SUBS_EXPR + " AS paid_subscriptions, " +
+                TRIAL_SUBS_EXPR + " AS trial_subscriptions, " +
                 TOTAL_MONTHLY_EXPR + " AS total_monthly_price, " +
                 TOTAL_ANNUAL_MONTHLY_EXPR + " AS total_annual_monthly_price, " +
                 TOTAL_ANNUAL_MONTHLY_EXPR + " * 12 AS total_annual_price, " +
                 MODULE_COUNT_EXPR + " AS module_count " +
                 "FROM plans p " +
-                "LEFT JOIN tenant_subscriptions ts " +
-                "  ON ts.plan_id = p.id AND ts.status IN ('trial', 'active', 'past_due') " +
-                "GROUP BY p.id " +
                 "ORDER BY p.plan_type, p.code, p.version"
         ).getResultList();
 
@@ -175,11 +203,15 @@ public class PlanService {
             m.put("created_at", row[15]);
             m.put("is_most_popular", row[16]);
             m.put("plan_type", row[17]);
-            m.put("subscriber_count", ((Number) row[18]).longValue());
-            m.put("total_monthly_price", row[19]);
-            m.put("total_annual_monthly_price", row[20]);
-            m.put("total_annual_price", row[21]);
-            m.put("module_count", ((Number) row[22]).intValue());
+            long paidSubs  = ((Number) row[18]).longValue();
+            long trialSubs = ((Number) row[19]).longValue();
+            m.put("paid_subscriptions", paidSubs);
+            m.put("trial_subscriptions", trialSubs);
+            m.put("subscriber_count", paidSubs + trialSubs);
+            m.put("total_monthly_price", row[20]);
+            m.put("total_annual_monthly_price", row[21]);
+            m.put("total_annual_price", row[22]);
+            m.put("module_count", ((Number) row[23]).intValue());
             return m;
         }).collect(Collectors.toList());
     }
@@ -196,18 +228,18 @@ public class PlanService {
                 "p.max_users, p.max_ai_requests_month, " +
                 "p.is_active, p.sort_order, p.version, p.is_current_version, " +
                 "p.is_most_popular, p.created_at::text, p.plan_type, " +
-                "COUNT(ts.id) AS subscriber_count, " +
+                PAID_SUBS_EXPR + " AS paid_subscriptions, " +
+                TRIAL_SUBS_EXPR + " AS trial_subscriptions, " +
                 TOTAL_MONTHLY_EXPR + " AS total_monthly_price, " +
                 TOTAL_ANNUAL_MONTHLY_EXPR + " AS total_annual_monthly_price, " +
                 TOTAL_ANNUAL_MONTHLY_EXPR + " * 12 AS total_annual_price, " +
                 MODULE_COUNT_EXPR + " AS module_count, " +
                 "p.billing_type, " +
+                TRIAL_CAMPAIGNS_ACTIVE_EXPR + " AS trial_campaigns_active, " +
+                TRIAL_CAMPAIGNS_CANCELLED_EXPR + " AS trial_campaigns_cancelled, " +
                 MODULES_DETAIL_JSON_EXPR + " AS modules_json " +
                 "FROM plans p " +
-                "LEFT JOIN tenant_subscriptions ts " +
-                "  ON ts.plan_id = p.id AND ts.status IN ('trial', 'active', 'past_due') " +
                 "WHERE p.code = :code " +
-                "GROUP BY p.id " +
                 "ORDER BY p.version DESC"
         ).setParameter("code", planCode).getResultList();
 
@@ -229,13 +261,19 @@ public class PlanService {
             m.put("is_most_popular", row[13]);
             m.put("created_at", row[14]);
             m.put("plan_type", row[15]);
-            m.put("subscriber_count", ((Number) row[16]).longValue());
-            m.put("total_monthly_price", row[17]);
-            m.put("total_annual_monthly_price", row[18]);
-            m.put("total_annual_price", row[19]);
-            m.put("module_count", ((Number) row[20]).intValue());
-            m.put("billing_type", row[21]);
-            m.put("modules_json", row[22]);
+            long paidSubs  = ((Number) row[16]).longValue();
+            long trialSubs = ((Number) row[17]).longValue();
+            m.put("paid_subscriptions", paidSubs);
+            m.put("trial_subscriptions", trialSubs);
+            m.put("subscriber_count", paidSubs + trialSubs);
+            m.put("total_monthly_price", row[18]);
+            m.put("total_annual_monthly_price", row[19]);
+            m.put("total_annual_price", row[20]);
+            m.put("module_count", ((Number) row[21]).intValue());
+            m.put("billing_type", row[22]);
+            m.put("trial_campaigns_active", ((Number) row[23]).longValue());
+            m.put("trial_campaigns_cancelled", ((Number) row[24]).longValue());
+            m.put("modules_json", row[25]);
             return m;
         }).collect(Collectors.toList());
     }
@@ -278,7 +316,7 @@ public class PlanService {
     // ----------------------------------------------------------------
 
     @Transactional
-    public Map<String, Object> createNewVersion(String currentPlanId, PlanRequest req) {
+    public Map<String, Object> createNewVersion(String currentPlanId, PlanRequest req, String actorUserId) {
         Object[] current = fetchCurrentPlan(currentPlanId);
 
         String code          = (String)     current[0];
@@ -325,6 +363,7 @@ public class PlanService {
         .executeUpdate();
 
         copyModulesToNewVersion(currentPlanId, newId);
+        cancelTrialsForOldVersion(currentPlanId, newVersion, actorUserId);
 
         return Map.of("id", newId.toString(), "version", newVersion, "new_version_created", true);
     }
@@ -618,32 +657,25 @@ public class PlanService {
                 "  ON new_pvm.plan_id = CAST(:newPlanId AS uuid) AND new_pvm.module_id = old_pvm.module_id " +
                 "WHERE old_pvm.plan_id::text = :oldPlanId"
         ).setParameter("newPlanId", newPlanId.toString()).setParameter("oldPlanId", oldPlanId).executeUpdate();
-
-        copyAliveTrialCampaignsToNewVersion(oldPlanId, newPlanId);
     }
 
     // ----------------------------------------------------------------
-    // Helper privado — leva campanhas de Trial em andamento (ACTIVE/SCHEDULED,
-    // com vagas disponíveis) para os novos plan_version_modules do mesmo módulo.
-    // Sem isso, qualquer edição do plano (mesmo em outro módulo) órfã os Trials
-    // em andamento, já que toda edição gera uma nova versão de plan_version_modules.
-    // used_slots é preservado — representa consumo real da campanha, não da versão.
+    // Helper privado — cancela as Trial Campaigns ACTIVE/SCHEDULED da versão antiga
+    // ao gerar uma nova versão do plano. A campanha promovia especificamente aquela
+    // versão antiga, então não é levada adiante — apenas novas adesões são bloqueadas,
+    // participantes que já entraram continuam normalmente (ver TrialCampaignService).
     // ----------------------------------------------------------------
 
-    private void copyAliveTrialCampaignsToNewVersion(String oldPlanId, UUID newPlanId) {
-        em.createNativeQuery(
-                "INSERT INTO trial_campaigns " +
-                "(plan_version_module_id, name, status, days, max_slots, used_slots, start_date, end_date, notes, priority) " +
-                "SELECT new_pvm.id, tc.name, tc.status, tc.days, tc.max_slots, tc.used_slots, " +
-                "       tc.start_date, tc.end_date, tc.notes, tc.priority " +
-                "FROM trial_campaigns tc " +
-                "JOIN plan_version_modules old_pvm ON old_pvm.id = tc.plan_version_module_id " +
-                "JOIN plan_version_modules new_pvm " +
-                "  ON new_pvm.plan_id = CAST(:newPlanId AS uuid) AND new_pvm.module_id = old_pvm.module_id " +
-                "WHERE old_pvm.plan_id::text = :oldPlanId " +
-                "  AND tc.status IN ('ACTIVE', 'SCHEDULED') " +
-                "  AND tc.used_slots < tc.max_slots"
-        ).setParameter("newPlanId", newPlanId.toString()).setParameter("oldPlanId", oldPlanId).executeUpdate();
+    private void cancelTrialsForOldVersion(String oldPlanId, int newVersion, String actorUserId) {
+        String reason = "Plano substituído automaticamente pela versão v" + newVersion + ".";
+        List<UUID> cancelledIds = trialCampaignService.cancelCampaignsForPlanVersion(
+            oldPlanId, reason, UUID.fromString(actorUserId));
+
+        for (UUID campaignId : cancelledIds) {
+            auditService.log(null, UUID.fromString(actorUserId), "trial_campaign.plan_version_replaced",
+                "trial_campaigns", campaignId.toString(),
+                Map.of("reason", reason, "oldPlanId", oldPlanId, "newPlanVersion", newVersion), null);
+        }
     }
 
     // ----------------------------------------------------------------
@@ -746,7 +778,8 @@ public class PlanService {
     public Map<String, Object> createNewVersionWithModules(
             String currentPlanId,
             PlanRequest req,
-            List<PlanModuleWithLimitsRequest> modules) {
+            List<PlanModuleWithLimitsRequest> modules,
+            String actorUserId) {
 
         Object[] current = fetchCurrentPlan(currentPlanId);
 
@@ -830,10 +863,10 @@ public class PlanService {
                     }
                 }
             }
-            copyAliveTrialCampaignsToNewVersion(currentPlanId, newId);
         } else {
             copyModulesToNewVersion(currentPlanId, newId);
         }
+        cancelTrialsForOldVersion(currentPlanId, newVersion, actorUserId);
 
         return Map.of("id", newId.toString(), "version", newVersion, "new_version_created", true);
     }

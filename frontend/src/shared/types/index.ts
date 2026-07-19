@@ -90,6 +90,12 @@ export interface Plan {
   plan_type: 'individual' | 'business'
   created_at?: string
   subscriber_count?: number
+  // split de subscriber_count por origem — fonte é profile_module_subscriptions
+  paid_subscriptions?: number
+  trial_subscriptions?: number
+  // só presentes no histórico de versões (getPlanVersionHistory)
+  trial_campaigns_active?: number
+  trial_campaigns_cancelled?: number
   // calculados a partir dos módulos (sem fallback a preços fixos)
   total_monthly_price?: number
   total_annual_monthly_price?: number  // soma dos preços anual/mês dos módulos ativos

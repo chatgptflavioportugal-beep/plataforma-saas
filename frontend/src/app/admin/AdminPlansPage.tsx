@@ -475,9 +475,27 @@ function VersionHistoryModal({ planCode, planName, onClose }: { planCode: string
                   </div>
                   <div className="text-right text-xs text-gray-400 shrink-0">
                     <p>{v.created_at ? new Date(v.created_at).toLocaleDateString('pt-BR') : '—'}</p>
-                    <p>{v.subscriber_count ?? 0} assinante(s)</p>
+                    <p>
+                      {v.paid_subscriptions ?? 0} paga{(v.paid_subscriptions ?? 0) !== 1 ? 's' : ''}
+                      {(v.trial_subscriptions ?? 0) > 0 && (
+                        <span className="text-purple-400"> · {v.trial_subscriptions} trial</span>
+                      )}
+                    </p>
                   </div>
                 </div>
+
+                {/* campanhas de trial desta versão */}
+                {((v.trial_campaigns_active ?? 0) > 0 || (v.trial_campaigns_cancelled ?? 0) > 0) && (
+                  <div className="mb-3 flex items-center gap-3 text-xs text-gray-400">
+                    <span className="text-gray-500">Campanhas Trial:</span>
+                    {(v.trial_campaigns_active ?? 0) > 0 && (
+                      <span className="text-green-400">{v.trial_campaigns_active} ativa{v.trial_campaigns_active !== 1 ? 's' : ''}</span>
+                    )}
+                    {(v.trial_campaigns_cancelled ?? 0) > 0 && (
+                      <span className="text-red-400">{v.trial_campaigns_cancelled} cancelada{v.trial_campaigns_cancelled !== 1 ? 's' : ''}</span>
+                    )}
+                  </div>
+                )}
 
                 {/* totais */}
                 <div className="grid grid-cols-2 gap-3 text-sm mb-3">
@@ -1438,9 +1456,18 @@ export function AdminPlansPage() {
                     </td>
 
                     <td className="px-3 py-3">
-                      <span className="text-gray-300 font-semibold">{plan.subscriber_count ?? 0}</span>
-                      {versionCount[plan.code] > 1 && (
-                        <span className="text-xs text-gray-600 ml-1">({versionCount[plan.code]}v)</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-300 font-semibold">{plan.subscriber_count ?? 0}</span>
+                        {versionCount[plan.code] > 1 && (
+                          <span className="text-xs text-gray-600">({versionCount[plan.code]}v)</span>
+                        )}
+                      </div>
+                      {(plan.trial_subscriptions ?? 0) > 0 && (
+                        <p className="text-xs text-gray-500">
+                          {plan.paid_subscriptions ?? 0} paga{(plan.paid_subscriptions ?? 0) !== 1 ? 's' : ''}
+                          {' • '}
+                          <span className="text-purple-400">{plan.trial_subscriptions} trial</span>
+                        </p>
                       )}
                     </td>
 

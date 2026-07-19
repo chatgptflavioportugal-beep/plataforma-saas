@@ -5,7 +5,7 @@ import { useAuth } from '@/core/auth/AuthContext'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SubscriptionStatus = 'ACTIVE' | 'PENDING_PAYMENT' | 'CANCELED' | 'EXPIRED'
+type SubscriptionStatus = 'ACTIVE' | 'PENDING_PAYMENT' | 'CANCELED' | 'EXPIRED' | 'TRIAL' | 'TRIAL_CANCELLED'
 type BillingCycle = 'MONTHLY' | 'ANNUAL'
 type ProfileType = 'INDIVIDUAL' | 'COMPANY'
 
@@ -52,6 +52,8 @@ interface AdminSubscriptionSummary {
   canceled: number
   expired: number
   pendingPayment: number
+  trial: number
+  trialCancelled: number
 }
 
 interface Filters {
@@ -105,6 +107,8 @@ const STATUS_COLORS: Record<SubscriptionStatus, string> = {
   PENDING_PAYMENT: 'bg-yellow-900 text-yellow-200',
   CANCELED:        'bg-red-900 text-red-300',
   EXPIRED:         'bg-gray-700 text-gray-400',
+  TRIAL:           'bg-purple-900 text-purple-200',
+  TRIAL_CANCELLED: 'bg-purple-950 text-purple-400',
 }
 
 const STATUS_LABELS: Record<SubscriptionStatus, string> = {
@@ -112,6 +116,8 @@ const STATUS_LABELS: Record<SubscriptionStatus, string> = {
   PENDING_PAYMENT: 'Pend. pagamento',
   CANCELED:        'Cancelada',
   EXPIRED:         'Expirada',
+  TRIAL:           '🧪 Trial',
+  TRIAL_CANCELLED: '🧪 Trial (cancelado)',
 }
 
 function StatusBadge({ status }: { status: SubscriptionStatus }) {
@@ -244,6 +250,7 @@ function SummaryCards({ summary }: { summary: AdminSubscriptionSummary | undefin
   const cards = [
     { label: 'Total',          value: summary?.total,          color: 'text-white' },
     { label: 'Ativas',         value: summary?.active,         color: 'text-green-400' },
+    { label: '🧪 Trial',       value: summary?.trial,          color: 'text-purple-400' },
     { label: 'Mensais',        value: summary?.monthly,        color: 'text-blue-400' },
     { label: 'Anuais',         value: summary?.annual,         color: 'text-purple-400' },
     { label: 'Canceladas',     value: summary?.canceled,       color: 'text-red-400' },
@@ -251,7 +258,7 @@ function SummaryCards({ summary }: { summary: AdminSubscriptionSummary | undefin
     { label: 'Pend. Pagamento',value: summary?.pendingPayment, color: 'text-yellow-400' },
   ]
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
       {cards.map((c) => (
         <div key={c.label} className="rounded-xl bg-gray-800 border border-gray-700 px-4 py-3">
           <p className="text-xs text-gray-400 truncate">{c.label}</p>
@@ -325,6 +332,8 @@ function FiltersPanel({
           options={[
             { value: '', label: 'Status' },
             { value: 'ACTIVE', label: 'Ativa' },
+            { value: 'TRIAL', label: '🧪 Trial' },
+            { value: 'TRIAL_CANCELLED', label: '🧪 Trial (cancelado)' },
             { value: 'PENDING_PAYMENT', label: 'Pendente pagamento' },
             { value: 'CANCELED', label: 'Cancelada' },
             { value: 'EXPIRED', label: 'Expirada' },

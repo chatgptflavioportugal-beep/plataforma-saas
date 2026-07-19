@@ -227,7 +227,7 @@ public class AdminResource {
         requireAdminPermission("admin.plans.create_version");
         try {
             var req = mapToRequest(body);
-            return Response.status(201).entity(planService.createNewVersion(id, req)).build();
+            return Response.status(201).entity(planService.createNewVersion(id, req, currentUserId())).build();
         } catch (NotFoundException e) {
             return Response.status(404).entity(Map.of("error", e.getMessage())).build();
         } catch (BadRequestException e) {
@@ -246,7 +246,7 @@ public class AdminResource {
         try {
             var req = mapToRequest(body);
             var modules = mapToPlanModuleWithLimitsRequests(body);
-            return Response.status(201).entity(planService.createNewVersionWithModules(id, req, modules)).build();
+            return Response.status(201).entity(planService.createNewVersionWithModules(id, req, modules, currentUserId())).build();
         } catch (NotFoundException e) {
             return Response.status(404).entity(Map.of("error", e.getMessage())).build();
         } catch (BadRequestException e) {
@@ -542,7 +542,9 @@ public class AdminResource {
             "COUNT(*) FILTER (WHERE billing_cycle = 'ANNUAL')::bigint, " +
             "COUNT(*) FILTER (WHERE status = 'CANCELED')::bigint, " +
             "COUNT(*) FILTER (WHERE status = 'EXPIRED')::bigint, " +
-            "COUNT(*) FILTER (WHERE status = 'PENDING_PAYMENT')::bigint " +
+            "COUNT(*) FILTER (WHERE status = 'PENDING_PAYMENT')::bigint, " +
+            "COUNT(*) FILTER (WHERE status = 'TRIAL')::bigint, " +
+            "COUNT(*) FILTER (WHERE status = 'TRIAL_CANCELLED')::bigint " +
             "FROM profile_module_subscriptions"
         ).getSingleResult();
         Map<String, Object> m = new java.util.LinkedHashMap<>();
@@ -553,6 +555,8 @@ public class AdminResource {
         m.put("canceled",       ((Number) row[4]).longValue());
         m.put("expired",        ((Number) row[5]).longValue());
         m.put("pendingPayment", ((Number) row[6]).longValue());
+        m.put("trial",          ((Number) row[7]).longValue());
+        m.put("trialCancelled", ((Number) row[8]).longValue());
         return Response.ok(m).build();
     }
 
