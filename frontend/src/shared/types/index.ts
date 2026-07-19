@@ -413,7 +413,7 @@ export interface TrialEligibility {
   eligible: boolean
   days: number | null
   campaignName: string | null
-  reasonCode: 'NONE' | 'COOLDOWN' | 'NO_CAMPAIGN'
+  reasonCode: 'NONE' | 'COOLDOWN' | 'NO_CAMPAIGN' | 'CANCELLED'
   cooldownEndsAt: string | null
 }
 
@@ -436,11 +436,37 @@ export interface TrialCampaign {
   notes: string | null
   priority: number
   createdAt: string
+  updatedAt?: string
+  expired?: boolean
+  createdByUserId?: string | null
+  createdByName?: string | null
+  updatedByUserId?: string | null
+  updatedByName?: string | null
   planName?: string
   planCode?: string
   planVersion?: number
+  planMonthlyPrice?: number
+  planAnnualPrice?: number
+  moduleSlug?: string
+  moduleIcon?: string | null
   totalParticipants?: number
   conversionPercent?: number
+  participantsActive?: number
+  participantsExpired?: number
+  participantsCancelled?: number
+}
+
+export interface TrialCampaignHistoryEntry {
+  action: string
+  actorName: string | null
+  createdAt: string
+}
+
+export interface TrialCampaignListResult {
+  items: TrialCampaign[]
+  total: number
+  page: number
+  size: number
 }
 
 export interface TrialCampaignParticipant {

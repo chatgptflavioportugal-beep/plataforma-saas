@@ -91,7 +91,8 @@ public class AdminAccessLevelsResource {
             group("trials", "Trials", List.of(
                 perm("admin.trials.view",   "Visualizar Trials"),
                 perm("admin.trials.create", "Criar campanha de Trial"),
-                perm("admin.trials.edit",   "Editar campanha de Trial")
+                perm("admin.trials.edit",   "Editar campanha de Trial"),
+                perm("admin.trials.cancel", "Cancelar campanha de Trial")
             )),
             group("settings", "Configurações da Plataforma", List.of(
                 perm("admin.settings.view", "Visualizar configurações"),

@@ -23,6 +23,10 @@ public class TrialCampaignService {
         "Você já utilizou o Trial deste módulo recentemente. Um novo Trial poderá ser " +
         "iniciado após o período mínimo definido pela plataforma.";
 
+    private static final String CANCELLED_MESSAGE = "Este período promocional foi encerrado.";
+
+    private static final String NO_VACANCY_MESSAGE = "Não há vagas disponíveis para Trial deste módulo no momento.";
+
     @Inject
     EntityManager em;
 
@@ -40,7 +44,7 @@ public class TrialCampaignService {
         UUID campaignId,
         String campaignName,
         Integer days,
-        String reasonCode, // NONE | COOLDOWN | NO_CAMPAIGN
+        String reasonCode, // NONE | COOLDOWN | NO_CAMPAIGN | CANCELLED
         String cooldownEndsAt // ISO timestamp, texto (apenas quando reasonCode = COOLDOWN)
     ) {}
 
@@ -89,10 +93,24 @@ public class TrialCampaignService {
 
         CatalogOffer offer = resolveCatalogOffer(planVersionModuleId);
         if (!offer.available()) {
-            return new TrialEligibility(false, null, null, null, "NO_CAMPAIGN", null);
+            String reasonCode = hasCancelledCampaign(planVersionModuleId) ? "CANCELLED" : "NO_CAMPAIGN";
+            return new TrialEligibility(false, null, null, null, reasonCode, null);
         }
 
         return new TrialEligibility(true, offer.campaignId(), offer.campaignName(), offer.days(), "NONE", null);
+    }
+
+    /**
+     * Existe uma campanha CANCELLED (mais recente) para este plan_version_module?
+     * Usado só para dar uma mensagem mais específica ("período encerrado") em vez
+     * do genérico "sem vagas" quando o motivo real é cancelamento administrativo.
+     */
+    private boolean hasCancelledCampaign(UUID planVersionModuleId) {
+        long count = ((Number) em.createNativeQuery(
+            "SELECT COUNT(*) FROM trial_campaigns " +
+            "WHERE plan_version_module_id = :pvmId AND status = 'CANCELLED'"
+        ).setParameter("pvmId", planVersionModuleId).getSingleResult()).longValue();
+        return count > 0;
     }
 
     /**
@@ -176,7 +194,8 @@ public class TrialCampaignService {
         for (int attempt = 0; attempt < 3; attempt++) {
             CatalogOffer offer = resolveCatalogOffer(planVersionModuleId);
             if (!offer.available()) {
-                throw new BadRequestException("Não há vagas disponíveis para Trial deste módulo no momento.");
+                throw new BadRequestException(
+                    hasCancelledCampaign(planVersionModuleId) ? CANCELLED_MESSAGE : NO_VACANCY_MESSAGE);
             }
 
             int updated = em.createNativeQuery(
@@ -188,7 +207,7 @@ public class TrialCampaignService {
             // outra requisição venceu a corrida nesta campanha — tenta de novo
         }
 
-        throw new BadRequestException("Não há vagas disponíveis para Trial deste módulo no momento.");
+        throw new BadRequestException(NO_VACANCY_MESSAGE);
     }
 
     // ─── Configuração global ──────────────────────────────────────────────────────

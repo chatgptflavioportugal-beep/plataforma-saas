@@ -31,12 +31,19 @@ public class AuditService {
 
     public void log(UUID tenantId, UUID userId, String action, String resource,
                     String resourceId, String ipAddress) {
+        log(tenantId, userId, action, resource, resourceId, null, ipAddress);
+    }
+
+    public void log(UUID tenantId, UUID userId, String action, String resource,
+                    String resourceId, Map<String, Object> metadata, String ipAddress) {
         AuditLog log = new AuditLog();
         log.tenantId = tenantId;
         log.userId = userId;
         log.action = action;
         log.resource = resource;
         log.resourceId = resourceId;
+        log.metadata = metadata != null ? metadata : Map.of();
+        log.ipAddress = ipAddress;
         log.persist();
     }
 }
