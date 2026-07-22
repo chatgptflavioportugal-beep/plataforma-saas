@@ -13,11 +13,16 @@ backend-quarkus/target/
 backend-quarkus/.mvn/wrapper/maven-wrapper.jar
 
 # Python
-backend-python/__pycache__/
+backend-python/**/__pycache__/
 backend-python/.venv/
 backend-python/venv/
-backend-python/*.pyc
+backend-python/**/*.pyc
 backend-python/.pytest_cache/
+whatsapp-service/**/__pycache__/
+whatsapp-service/.venv/
+whatsapp-service/venv/
+whatsapp-service/**/*.pyc
+whatsapp-service/.pytest_cache/
 
 # PDF storage local
 /tmp/saas-pdf/
