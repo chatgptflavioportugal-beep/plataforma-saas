@@ -212,6 +212,25 @@ public class TrialCampaignService {
         throw new BadRequestException(NO_VACANCY_MESSAGE);
     }
 
+    // ─── Regra de elegibilidade do plano (Free não pode ter Trial) ───────────────
+
+    /**
+     * O plano Free já é gratuito permanentemente, então não faz sentido oferecer
+     * Trial para ele. "Free" aqui é o plano com code = 'free' (plans.code é
+     * restrito por CHECK constraint a free/starter/pro/enterprise) — não o preço
+     * do módulo, já que um mesmo módulo pode ter preço zero dentro de um plano
+     * pago sem que o plano em si seja o Free. Retorna false se o id não existir
+     * (o chamador já valida existência separadamente).
+     */
+    public boolean isFreePlanVersionModule(String planVersionModuleId) {
+        Number count = (Number) em.createNativeQuery(
+            "SELECT COUNT(*) FROM plan_version_modules pvm " +
+            "JOIN plans p ON p.id = pvm.plan_id " +
+            "WHERE pvm.id::text = :id AND p.code = 'free'"
+        ).setParameter("id", planVersionModuleId).getSingleResult();
+        return count.longValue() > 0;
+    }
+
     // ─── Cancelamento em massa (nova versão do plano) ────────────────────────────
 
     /**

@@ -55,13 +55,17 @@ function PlanModulePicker({
   onChangePlan: (id: string) => void
   onChangeModule: (id: string) => void
 }) {
-  const { data: plans = [] } = useQuery({
+  const { data: allPlans = [] } = useQuery({
     queryKey: ['admin-plans-current'],
     queryFn: async () => {
       const { data } = await api.get<Plan[]>('/api/v1/admin/plans')
-      return data.filter((p) => p.is_current_version)
+      return data
     },
   })
+
+  // Campanhas Trial só fazem sentido para planos pagos — o Free já é a
+  // modalidade gratuita permanente, então nunca aparece aqui para criação.
+  const plans = allPlans.filter((p) => p.is_current_version && p.is_active && p.code !== 'free')
 
   const { data: modules = [] } = useQuery({
     queryKey: ['plan-modules', planId],
@@ -71,6 +75,14 @@ function PlanModulePicker({
     },
     enabled: !!planId,
   })
+
+  if (plans.length === 0) {
+    return (
+      <p className="rounded-lg bg-amber-900/30 border border-amber-700 px-3 py-2 text-sm text-amber-300">
+        Este módulo não possui planos elegíveis para campanhas Trial.
+      </p>
+    )
+  }
 
   return (
     <div className="grid grid-cols-2 gap-3">

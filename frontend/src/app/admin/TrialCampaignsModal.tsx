@@ -89,10 +89,11 @@ interface TrialCampaignsModalProps {
   planId: string
   planVersionModuleId: string
   moduleName: string
+  isFreePlan?: boolean
   onClose: () => void
 }
 
-export function TrialCampaignsModal({ planId, planVersionModuleId, moduleName, onClose }: TrialCampaignsModalProps) {
+export function TrialCampaignsModal({ planId, planVersionModuleId, moduleName, isFreePlan, onClose }: TrialCampaignsModalProps) {
   const qc = useQueryClient()
   const [showCreate, setShowCreate] = useState(false)
   const [createForm, setCreateForm] = useState<FormState>({ ...EMPTY_FORM })
@@ -170,7 +171,13 @@ export function TrialCampaignsModal({ planId, planVersionModuleId, moduleName, o
             <div className="rounded-lg bg-red-900/30 border border-red-700 px-4 py-3 text-sm text-red-300">{error}</div>
           )}
 
-          {!showCreate && (
+          {isFreePlan && (
+            <p className="rounded-lg bg-amber-900/30 border border-amber-700 px-3 py-2 text-sm text-amber-300">
+              O plano Free já é a modalidade gratuita permanente do módulo — não é possível criar novas campanhas Trial para ele. Campanhas antigas continuam listadas abaixo apenas para histórico.
+            </p>
+          )}
+
+          {!showCreate && !isFreePlan && (
             <button type="button"
               onClick={() => { setShowCreate(true); setCreateForm({ ...EMPTY_FORM }) }}
               className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-500 transition-colors">
@@ -178,7 +185,7 @@ export function TrialCampaignsModal({ planId, planVersionModuleId, moduleName, o
             </button>
           )}
 
-          {showCreate && (
+          {showCreate && !isFreePlan && (
             <div className="rounded-xl bg-gray-800 border border-indigo-700 p-4 space-y-3">
               <h4 className="text-sm font-semibold text-indigo-300">Nova campanha</h4>
               <CampaignForm form={createForm} onChange={setCreateForm} />

@@ -1,6 +1,7 @@
 package com.saas.resource;
 
 import com.saas.service.AuditService;
+import com.saas.service.TrialCampaignService;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -36,6 +37,7 @@ public class TrialCampaignResource {
     @Inject EntityManager em;
     @Inject AdminResource adminResource;
     @Inject AuditService auditService;
+    @Inject TrialCampaignService trialCampaignService;
 
     public record TrialCampaignRequest(
         String planVersionModuleId,
@@ -329,6 +331,19 @@ public class TrialCampaignResource {
             "SELECT COUNT(*) FROM plan_version_modules WHERE id::text = :id"
         ).setParameter("id", req.planVersionModuleId()).getSingleResult()).longValue();
         if (pvmExists == 0) throw new NotFoundException("Módulo do plano não encontrado");
+
+        // O plano Free já é a modalidade gratuita permanente do módulo — Trial não
+        // faz sentido nele. Validação de negócio fica na camada de serviço para não
+        // depender só do Controller nem do que o Frontend deixa de listar.
+        if (trialCampaignService.isFreePlanVersionModule(req.planVersionModuleId())) {
+            auditService.log(null, UUID.fromString(userId), "trial_campaign.creation_denied", "trial_campaigns",
+                req.planVersionModuleId(),
+                Map.of(
+                    "reason", "Free plans do not support Trial campaigns.",
+                    "planVersionModuleId", req.planVersionModuleId()
+                ), null);
+            throw new BadRequestException("Não é permitido criar campanhas Trial para o plano Free.");
+        }
 
         UUID id = UUID.randomUUID();
         em.createNativeQuery(

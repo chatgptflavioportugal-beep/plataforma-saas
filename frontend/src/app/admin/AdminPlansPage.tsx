@@ -1274,6 +1274,7 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
           planId={plan.id}
           planVersionModuleId={trialsModuleFor.planVersionModuleId}
           moduleName={trialsModuleFor.moduleName}
+          isFreePlan={plan.code === 'free'}
           onClose={() => setTrialsModuleFor(null)}
         />
       )}
