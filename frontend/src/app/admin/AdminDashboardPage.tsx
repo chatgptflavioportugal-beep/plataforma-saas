@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/shared/services/api'
+import { adminApi } from '@/shared/services/adminApi'
 
 interface AdminStats {
   total_tenants: number
@@ -30,7 +30,7 @@ export function AdminDashboardPage() {
   const { data: stats, isError } = useQuery({
     queryKey: ['admin-stats'],
     queryFn: async () => {
-      const { data } = await api.get<AdminStats>('/api/v1/admin/stats')
+      const { data } = await adminApi.get<AdminStats>('/api/v1/admin/stats')
       return data
     },
     retry: false,

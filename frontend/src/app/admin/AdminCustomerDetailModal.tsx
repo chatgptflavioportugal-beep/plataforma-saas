@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/shared/services/api'
+import { adminApi } from '@/shared/services/adminApi'
 
 interface IndividualProfile {
   id: string
@@ -87,7 +87,7 @@ export function AdminCustomerDetailModal({ customerId, onClose }: Props) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin-customer-detail', customerId],
     queryFn: async () => {
-      const { data } = await api.get<CustomerDetail>(`/api/v1/admin/customers/${customerId}`)
+      const { data } = await adminApi.get<CustomerDetail>(`/api/v1/admin/customers/${customerId}`)
       return data
     },
     enabled: !!customerId,

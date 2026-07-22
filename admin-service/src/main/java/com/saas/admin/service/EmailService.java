@@ -1,4 +1,4 @@
-package com.saas.service;
+package com.saas.admin.service;
 
 import io.quarkus.mailer.Mail;
 import io.quarkus.mailer.Mailer;

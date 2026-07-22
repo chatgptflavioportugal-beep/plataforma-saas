@@ -1,20 +1,23 @@
-package com.saas.resource;
+package com.saas.admin.controller;
 
-import com.saas.service.TenantService;
+import com.saas.admin.security.AdminAuthService;
+import com.saas.admin.service.AdminAuditService;
+import com.saas.admin.service.TenantService;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.SecurityContext;
-import org.eclipse.microprofile.jwt.JsonWebToken;
 
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Tenants, clientes, administradores do sistema, assinaturas (visão admin) e stats
+ * do dashboard admin. Migrado 1:1 do backend-quarkus (com.saas.resource.AdminResource).
+ */
 @Path("/api/v1/admin")
 @Authenticated
 @Produces(MediaType.APPLICATION_JSON)
@@ -23,65 +26,8 @@ public class AdminResource {
 
     @Inject TenantService tenantService;
     @Inject EntityManager em;
-    @Inject JsonWebToken  jwt;
-
-    // ----------------------------------------------------------------
-    // Autorização
-    // ----------------------------------------------------------------
-
-    String currentUserId() {
-        String userId = jwt.getSubject();
-        if (userId == null) throw new ForbiddenException("Não autenticado");
-        return userId;
-    }
-
-    /**
-     * Exige que o usuário seja SUPER_ADMIN ou ADMIN_USER ativo com a permissão especificada.
-     * Passar null em permissionKey verifica apenas que é um admin válido (para listagens gerais).
-     */
-    void requireAdminPermission(String permissionKey) {
-        String userId = currentUserId();
-        try {
-            Object[] row = (Object[]) em.createNativeQuery(
-                "SELECT system_role, is_active, admin_access_level_id::text " +
-                "FROM user_profiles WHERE id::text = :id"
-            ).setParameter("id", userId).getSingleResult();
-
-            String role = (String) row[0];
-            boolean isActive = Boolean.TRUE.equals(row[1]);
-
-            if ("SUPER_ADMIN".equals(role)) return;
-
-            if (!"ADMIN_USER".equals(role))
-                throw new ForbiddenException("Acesso restrito à área administrativa");
-
-            if (!isActive)
-                throw new ForbiddenException("Usuário administrativo inativo");
-
-            if (permissionKey == null) return;
-
-            String accessLevelId = (String) row[2];
-            if (accessLevelId == null)
-                throw new ForbiddenException("Você não possui permissão para executar esta ação");
-
-            long has = ((Number) em.createNativeQuery(
-                "SELECT COUNT(*) FROM admin_access_level_permissions " +
-                "WHERE access_level_id::text = :lvl AND permission_key = :key"
-            ).setParameter("lvl", accessLevelId).setParameter("key", permissionKey)
-             .getSingleResult()).longValue();
-
-            if (has == 0)
-                throw new ForbiddenException("Você não possui permissão para executar esta ação");
-
-        } catch (jakarta.persistence.NoResultException e) {
-            throw new ForbiddenException("Perfil de usuário não encontrado");
-        }
-    }
-
-    /** Mantido para compatibilidade interna; usa requireAdminPermission com null. */
-    private void ensureSuperAdmin() {
-        requireAdminPermission(null);
-    }
+    @Inject AdminAuthService adminAuth;
+    @Inject AdminAuditService auditService;
 
     // ----------------------------------------------------------------
     // Dashboard stats
@@ -89,8 +35,8 @@ public class AdminResource {
 
     @GET
     @Path("/stats")
-    public Response stats(@Context SecurityContext ctx) {
-        requireAdminPermission("admin.dashboard.view");
+    public Response stats() {
+        adminAuth.requireAdminPermission("admin.dashboard.view");
         long totalBusinessTenants = n("SELECT COUNT(*) FROM tenants WHERE type = 'business'");
         long activeTenants        = n("SELECT COUNT(*) FROM tenants WHERE status = 'active' AND type = 'business'");
         long trialTenants         = n("SELECT COUNT(*) FROM tenants WHERE status = 'trial' AND type = 'business'");
@@ -148,14 +94,14 @@ public class AdminResource {
             @QueryParam("search") String search,
             @QueryParam("status") String status,
             @QueryParam("has_extra_members") Boolean hasExtraMembers) {
-        requireAdminPermission("admin.companies.view");
+        adminAuth.requireAdminPermission("admin.companies.view");
         return Response.ok(tenantService.listAdminTenants(search, status, hasExtraMembers)).build();
     }
 
     @GET
     @Path("/tenants/{id}")
     public Response getTenantDetail(@PathParam("id") String id) {
-        requireAdminPermission("admin.companies.detail");
+        adminAuth.requireAdminPermission("admin.companies.detail");
         var detail = tenantService.getAdminTenantDetail(id);
         if (detail == null)
             return Response.status(404).entity(Map.of("error", "Empresa não encontrada")).build();
@@ -176,7 +122,7 @@ public class AdminResource {
             @QueryParam("is_member") Boolean isMember,
             @QueryParam("is_active") Boolean isActive,
             @QueryParam("profile_type") String profileType) {
-        requireAdminPermission("admin.clients.view");
+        adminAuth.requireAdminPermission("admin.clients.view");
 
         StringBuilder sql = new StringBuilder(
             "WITH cdata AS (" +
@@ -264,7 +210,7 @@ public class AdminResource {
     @Path("/customers/{id}")
     @SuppressWarnings("unchecked")
     public Response getCustomerDetail(@PathParam("id") String id) {
-        requireAdminPermission("admin.clients.detail");
+        adminAuth.requireAdminPermission("admin.clients.detail");
 
         List<Object[]> userRows = (List<Object[]>) em.createNativeQuery(
             "SELECT up.id::text, au.email, up.full_name, up.is_active, up.created_at::text, au.last_sign_in_at::text " +
@@ -379,7 +325,7 @@ public class AdminResource {
     @Path("/system-admins")
     @SuppressWarnings("unchecked")
     public Response listSystemAdmins() {
-        requireAdminPermission("admin.users.view");
+        adminAuth.requireAdminPermission("admin.users.view");
         List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
                 "SELECT up.id::text, au.email, up.full_name, up.system_role, up.is_active, " +
                 "up.created_at::text " +
@@ -408,7 +354,7 @@ public class AdminResource {
     @GET
     @Path("/subscriptions/summary")
     public Response getSubscriptionsSummary() {
-        requireAdminPermission("admin.subscriptions.view");
+        adminAuth.requireAdminPermission("admin.subscriptions.view");
         Object[] row = (Object[]) em.createNativeQuery(
             "SELECT COUNT(*)::bigint, " +
             "COUNT(*) FILTER (WHERE status = 'ACTIVE')::bigint, " +
@@ -454,7 +400,7 @@ public class AdminResource {
             @QueryParam("page")          @DefaultValue("0") int page,
             @QueryParam("size")          @DefaultValue("20") int size
     ) {
-        requireAdminPermission("admin.subscriptions.view");
+        adminAuth.requireAdminPermission("admin.subscriptions.view");
 
         int safeSize   = Math.min(Math.max(size, 1), 100);
         int safeOffset = Math.max(page, 0) * safeSize;
@@ -606,7 +552,7 @@ public class AdminResource {
     @Path("/subscriptions/{id}/cancel")
     @Transactional
     public Response adminCancelSubscription(@PathParam("id") String id) {
-        requireAdminPermission("admin.subscriptions.cancel");
+        adminAuth.requireAdminPermission("admin.subscriptions.cancel");
         int updated = em.createNativeQuery(
             "UPDATE profile_module_subscriptions " +
             "SET status = 'CANCELED', canceled_at = NOW(), updated_at = NOW() " +
@@ -614,6 +560,7 @@ public class AdminResource {
         ).setParameter("id", id).executeUpdate();
         if (updated == 0)
             return Response.status(404).entity(Map.of("error", "Assinatura não encontrada ou já cancelada")).build();
+        auditService.log(adminAuth.currentUserId(), "subscription.cancel", "profile_module_subscriptions", id, Map.of());
         return Response.ok(Map.of("success", true, "id", id, "status", "CANCELED")).build();
     }
 
@@ -621,7 +568,7 @@ public class AdminResource {
     @Path("/subscriptions/{id}/reactivate")
     @Transactional
     public Response adminReactivateSubscription(@PathParam("id") String id) {
-        requireAdminPermission("admin.subscriptions.reactivate");
+        adminAuth.requireAdminPermission("admin.subscriptions.reactivate");
         int updated = em.createNativeQuery(
             "UPDATE profile_module_subscriptions " +
             "SET status = 'ACTIVE', canceled_at = NULL, updated_at = NOW() " +
@@ -629,6 +576,7 @@ public class AdminResource {
         ).setParameter("id", id).executeUpdate();
         if (updated == 0)
             return Response.status(404).entity(Map.of("error", "Assinatura não encontrada, não está cancelada ou já expirou")).build();
+        auditService.log(adminAuth.currentUserId(), "subscription.reactivate", "profile_module_subscriptions", id, Map.of());
         return Response.ok(Map.of("success", true, "id", id, "status", "ACTIVE")).build();
     }
 

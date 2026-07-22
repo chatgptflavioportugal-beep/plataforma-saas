@@ -1,5 +1,7 @@
-package com.saas.resource;
+package com.saas.admin.controller;
 
+import com.saas.admin.security.AdminAuthService;
+import com.saas.admin.service.AdminAuditService;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -12,6 +14,10 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * CRUD de níveis de acesso administrativo. Migrado 1:1 do backend-quarkus
+ * (com.saas.resource.AdminAccessLevelsResource).
+ */
 @Path("/api/v1/admin/access-levels")
 @Authenticated
 @Produces(MediaType.APPLICATION_JSON)
@@ -20,7 +26,8 @@ public class AdminAccessLevelsResource {
 
     @Inject EntityManager em;
     @Inject JsonWebToken  jwt;
-    @Inject AdminResource adminResource;
+    @Inject AdminAuthService adminAuth;
+    @Inject AdminAuditService auditService;
 
     // ─── Árvore fixa de permissões administrativas ────────────────────────────
 
@@ -128,7 +135,7 @@ public class AdminAccessLevelsResource {
     @Path("/my-permissions")
     @SuppressWarnings("unchecked")
     public Response getMyPermissions() {
-        adminResource.requireAdminPermission(null);
+        adminAuth.requireAdminPermission(null);
         String userId = jwt.getSubject();
 
         List<String> accessLevelIds = (List<String>) em.createNativeQuery(
@@ -151,14 +158,14 @@ public class AdminAccessLevelsResource {
     @GET
     @Path("/permission-tree")
     public Response getPermissionTree() {
-        adminResource.requireAdminPermission("admin.access_levels.view");
+        adminAuth.requireAdminPermission("admin.access_levels.view");
         return Response.ok(Map.of("groups", PERMISSION_GROUPS)).build();
     }
 
     @GET
     @SuppressWarnings("unchecked")
     public Response listAccessLevels(@QueryParam("status") String status) {
-        adminResource.requireAdminPermission("admin.access_levels.view");
+        adminAuth.requireAdminPermission("admin.access_levels.view");
 
         StringBuilder sql = new StringBuilder(
             "SELECT al.id::text, al.name, al.description, al.status, " +
@@ -192,7 +199,7 @@ public class AdminAccessLevelsResource {
     @Path("/{id}")
     @SuppressWarnings("unchecked")
     public Response getAccessLevel(@PathParam("id") String id) {
-        adminResource.requireAdminPermission("admin.access_levels.view");
+        adminAuth.requireAdminPermission("admin.access_levels.view");
 
         List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
             "SELECT id::text, name, description, status, created_at::text, updated_at::text " +
@@ -221,7 +228,7 @@ public class AdminAccessLevelsResource {
     @Transactional
     @SuppressWarnings("unchecked")
     public Response createAccessLevel(Map<String, Object> body) {
-        adminResource.requireAdminPermission("admin.access_levels.create");
+        adminAuth.requireAdminPermission("admin.access_levels.create");
 
         String name = (String) body.get("name");
         if (name == null || name.isBlank())
@@ -244,6 +251,7 @@ public class AdminAccessLevelsResource {
 
         List<String> permKeys = extractPermKeys(body);
         savePermissions(levelId, permKeys);
+        auditService.log(adminAuth.currentUserId(), "access_level.create", "admin_access_levels", levelId, Map.of("name", name.trim()));
 
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id",             levelId);
@@ -261,7 +269,7 @@ public class AdminAccessLevelsResource {
     @Transactional
     @SuppressWarnings("unchecked")
     public Response updateAccessLevel(@PathParam("id") String id, Map<String, Object> body) {
-        adminResource.requireAdminPermission("admin.access_levels.edit");
+        adminAuth.requireAdminPermission("admin.access_levels.edit");
 
         String name = (String) body.get("name");
         if (name == null || name.isBlank())
@@ -282,6 +290,7 @@ public class AdminAccessLevelsResource {
 
         List<String> permKeys = extractPermKeys(body);
         savePermissions(id, permKeys);
+        auditService.log(adminAuth.currentUserId(), "access_level.update", "admin_access_levels", id, Map.of("name", name.trim()));
 
         return Response.ok(Map.of("ok", true, "permissionKeys", permKeys)).build();
     }
@@ -290,7 +299,7 @@ public class AdminAccessLevelsResource {
     @Path("/{id}/status")
     @Transactional
     public Response updateStatus(@PathParam("id") String id, Map<String, Object> body) {
-        adminResource.requireAdminPermission("admin.access_levels.activate");
+        adminAuth.requireAdminPermission("admin.access_levels.activate");
 
         String newStatus = body instanceof Map<?,?> ? (String) body.get("status") : null;
         if (!List.of("ACTIVE", "INACTIVE").contains(newStatus))
@@ -312,6 +321,7 @@ public class AdminAccessLevelsResource {
         ).setParameter("status", newStatus).setParameter("id", id).executeUpdate();
 
         if (updated == 0) return Response.status(404).entity(Map.of("error", "Nível não encontrado")).build();
+        auditService.log(adminAuth.currentUserId(), "access_level.status_change", "admin_access_levels", id, Map.of("status", newStatus));
         return Response.ok(Map.of("ok", true, "status", newStatus)).build();
     }
 

@@ -1,6 +1,8 @@
-package com.saas.resource;
+package com.saas.admin.controller;
 
-import com.saas.service.EmailService;
+import com.saas.admin.security.AdminAuthService;
+import com.saas.admin.service.AdminAuditService;
+import com.saas.admin.service.EmailService;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -22,6 +24,7 @@ import java.util.*;
 /**
  * Gestão de usuários administrativos da plataforma.
  * Separado de user_profiles/clientes — controla acesso à área Admin.
+ * Migrado 1:1 do backend-quarkus (com.saas.resource.AdminUsersResource).
  */
 @Path("/api/v1/admin/admin-users")
 @Authenticated
@@ -33,7 +36,8 @@ public class AdminUsersResource {
 
     @Inject EntityManager em;
     @Inject JsonWebToken  jwt;
-    @Inject AdminResource adminResource;
+    @Inject AdminAuthService adminAuth;
+    @Inject AdminAuditService auditService;
     @Inject EmailService  emailService;
 
     @ConfigProperty(name = "supabase.url")
@@ -51,7 +55,7 @@ public class AdminUsersResource {
             @QueryParam("status") String status,
             @QueryParam("access_level_id") String accessLevelId) {
 
-        adminResource.requireAdminPermission("admin.users.view");
+        adminAuth.requireAdminPermission("admin.users.view");
 
         StringBuilder sql = new StringBuilder(
             "SELECT up.id::text, au.email, up.full_name, up.system_role, up.is_active, " +
@@ -104,7 +108,7 @@ public class AdminUsersResource {
     @Transactional
     @SuppressWarnings("unchecked")
     public Response createAdminUser(Map<String, Object> body) {
-        adminResource.requireAdminPermission("admin.users.create");
+        adminAuth.requireAdminPermission("admin.users.create");
 
         String email = (String) body.get("email");
         String fullName = (String) body.get("fullName");
@@ -214,6 +218,8 @@ public class AdminUsersResource {
             emailSent = emailService.sendAdminUserCreatedEmail(email.trim().toLowerCase(), effectivePassword);
         }
 
+        auditService.log(adminAuth.currentUserId(), "admin_user.create", "user_profiles", newUserId, Map.of("email", email.trim().toLowerCase()));
+
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("id",              r[0]);
         out.put("email",           r[1]);
@@ -235,7 +241,7 @@ public class AdminUsersResource {
     @Path("/{id}")
     @Transactional
     public Response updateAdminUser(@PathParam("id") String id, Map<String, Object> body) {
-        adminResource.requireAdminPermission("admin.users.edit");
+        adminAuth.requireAdminPermission("admin.users.edit");
 
         String fullName = (String) body.get("fullName");
         String accessLevelId = (String) body.get("accessLevelId");
@@ -276,6 +282,7 @@ public class AdminUsersResource {
             if (updated == 0) return Response.status(404).entity(Map.of("error", "Usuário não encontrado")).build();
         }
 
+        auditService.log(adminAuth.currentUserId(), "admin_user.update", "user_profiles", id, Map.of());
         return Response.ok(Map.of("ok", true)).build();
     }
 
@@ -285,7 +292,7 @@ public class AdminUsersResource {
     @Path("/{id}/status")
     @Transactional
     public Response updateStatus(@PathParam("id") String id, Map<String, Object> body) {
-        adminResource.requireAdminPermission("admin.users.activate");
+        adminAuth.requireAdminPermission("admin.users.activate");
 
         Boolean isActive = body instanceof Map<?,?> ? (Boolean) body.get("isActive") : null;
         if (isActive == null)
@@ -299,7 +306,7 @@ public class AdminUsersResource {
             return Response.status(403).entity(Map.of("error", "Não é permitido inativar o SUPER_ADMIN")).build();
 
         // Não permitir que o usuário atual se inative
-        String currentUserId = adminResource.currentUserId();
+        String currentUserId = adminAuth.currentUserId();
         if (id.equals(currentUserId) && Boolean.FALSE.equals(isActive))
             return Response.status(403).entity(Map.of("error", "Você não pode inativar sua própria conta")).build();
 
@@ -310,6 +317,7 @@ public class AdminUsersResource {
          .executeUpdate();
 
         if (updated == 0) return Response.status(404).entity(Map.of("error", "Usuário não encontrado")).build();
+        auditService.log(currentUserId, "admin_user.status_change", "user_profiles", id, Map.of("isActive", isActive));
         return Response.ok(Map.of("ok", true, "isActive", isActive)).build();
     }
 
@@ -319,7 +327,7 @@ public class AdminUsersResource {
     @Path("/{id}/reset-password")
     @SuppressWarnings("unchecked")
     public Response resetPassword(@PathParam("id") String id, Map<String, Object> body) {
-        adminResource.requireAdminPermission("admin.users.reset_password");
+        adminAuth.requireAdminPermission("admin.users.reset_password");
 
         boolean sendPasswordEmail = !Boolean.FALSE.equals(body.get("sendPasswordEmail"));
 
@@ -363,6 +371,8 @@ public class AdminUsersResource {
             emailSent = emailService.sendAdminUserPasswordResetEmail(userEmail, newPassword);
         }
 
+        auditService.log(adminAuth.currentUserId(), "admin_user.reset_password", "user_profiles", id, Map.of());
+
         return Response.ok(Map.of(
             "success",           true,
             "message",           "Senha resetada com sucesso.",
@@ -380,8 +390,8 @@ public class AdminUsersResource {
     public Response sendPasswordEmailEndpoint(@PathParam("id") String id, Map<String, Object> body) {
         // Permite quem pode criar ou quem pode resetar senha
         boolean allowed = false;
-        try { adminResource.requireAdminPermission("admin.users.create"); allowed = true; } catch (ForbiddenException ignored) {}
-        if (!allowed) adminResource.requireAdminPermission("admin.users.reset_password");
+        try { adminAuth.requireAdminPermission("admin.users.create"); allowed = true; } catch (ForbiddenException ignored) {}
+        if (!allowed) adminAuth.requireAdminPermission("admin.users.reset_password");
 
         String password = (String) body.get("password");
         if (password == null || password.isBlank())

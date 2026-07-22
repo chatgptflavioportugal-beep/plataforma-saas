@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/shared/services/api'
+import { adminApi } from '@/shared/services/adminApi'
 
 interface SystemAdmin {
   id: string
@@ -28,7 +28,7 @@ export function AdminSystemAdminsPage() {
   const { data: admins = [], isLoading } = useQuery({
     queryKey: ['admin-system-admins'],
     queryFn: async () => {
-      const { data } = await api.get<SystemAdmin[]>('/api/v1/admin/system-admins')
+      const { data } = await adminApi.get<SystemAdmin[]>('/api/v1/admin/system-admins')
       return data
     },
     retry: false,

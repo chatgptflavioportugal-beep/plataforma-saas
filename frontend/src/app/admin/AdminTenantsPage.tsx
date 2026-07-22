@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/shared/services/api'
+import { adminApi } from '@/shared/services/adminApi'
 import { AdminTenantDetailModal } from './AdminTenantDetailModal'
 
 interface AdminTenant {
@@ -64,7 +64,7 @@ export function AdminTenantsPage() {
     queryKey: ['admin-tenants', params.toString()],
     queryFn: async () => {
       const url = `/api/v1/admin/tenants${params.size ? `?${params}` : ''}`
-      const { data } = await api.get<AdminTenant[]>(url)
+      const { data } = await adminApi.get<AdminTenant[]>(url)
       return data
     },
     retry: false,

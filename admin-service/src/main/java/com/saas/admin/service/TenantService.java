@@ -1,4 +1,4 @@
-package com.saas.service;
+package com.saas.admin.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -9,10 +9,7 @@ import java.util.Map;
 
 /**
  * Listagem/detalhe administrativo de tenants, usada por AdminResource.
- *
- * Criação de tenant e perfil do tenant (visão do próprio cliente) foram movidos
- * para o profile-service (Fase 3) — este serviço cobre apenas o que a área
- * administrativa interna ainda precisa até a Fase 6 (admin-service).
+ * Migrado do backend-quarkus (Fase Admin Service).
  */
 @ApplicationScoped
 public class TenantService {

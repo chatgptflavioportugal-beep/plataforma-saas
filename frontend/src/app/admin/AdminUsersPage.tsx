@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/shared/services/api'
+import { adminApi } from '@/shared/services/adminApi'
 import { useAuth } from '@/core/auth/AuthContext'
 import type { AdminUser, AdminAccessLevel } from '@/shared/types'
 
@@ -51,7 +51,7 @@ function PasswordRevealModal({
     setSendingEmail(true)
     setEmailError('')
     try {
-      await api.post(`/api/v1/admin/admin-users/${userId}/send-password-email`, {
+      await adminApi.post(`/api/v1/admin/admin-users/${userId}/send-password-email`, {
         password,
         context,
       })
@@ -148,13 +148,13 @@ function AdminUserModal({
   const mutation = useMutation({
     mutationFn: async () => {
       if (isEdit) {
-        await api.put(`/api/v1/admin/admin-users/${user!.id}`, {
+        await adminApi.put(`/api/v1/admin/admin-users/${user!.id}`, {
           fullName: form.fullName,
           accessLevelId: form.accessLevelId || null,
         })
         return null
       } else {
-        const { data } = await api.post<{
+        const { data } = await adminApi.post<{
           id: string; email: string; tempPassword: string; emailSent: boolean
         }>('/api/v1/admin/admin-users', {
           email: form.email,
@@ -323,7 +323,7 @@ function ResetPasswordModal({
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const { data } = await api.post<{
+      const { data } = await adminApi.post<{
         temporaryPassword: string; emailSent: boolean; email: string
       }>(`/api/v1/admin/admin-users/${user.id}/reset-password`, { sendPasswordEmail })
       return data
@@ -421,7 +421,7 @@ export function AdminUsersPage() {
       const params = new URLSearchParams()
       if (search) params.set('search', search)
       if (statusFilter) params.set('status', statusFilter)
-      const { data } = await api.get<AdminUser[]>(`/api/v1/admin/admin-users?${params}`)
+      const { data } = await adminApi.get<AdminUser[]>(`/api/v1/admin/admin-users?${params}`)
       return data
     },
     staleTime: 30_000,
@@ -430,7 +430,7 @@ export function AdminUsersPage() {
   const { data: accessLevels = [] } = useQuery({
     queryKey: ['admin-access-levels-active'],
     queryFn: async () => {
-      const { data } = await api.get<AdminAccessLevel[]>('/api/v1/admin/access-levels?status=ACTIVE')
+      const { data } = await adminApi.get<AdminAccessLevel[]>('/api/v1/admin/access-levels?status=ACTIVE')
       return data
     },
     staleTime: 60_000,
@@ -438,7 +438,7 @@ export function AdminUsersPage() {
 
   const toggleStatus = useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
-      await api.patch(`/api/v1/admin/admin-users/${id}/status`, { isActive })
+      await adminApi.patch(`/api/v1/admin/admin-users/${id}/status`, { isActive })
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-admin-users'] }),
   })

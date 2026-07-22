@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { queryClient } from '@/shared/services/query-client'
-import { api } from '@/shared/services/api'
+import { adminApi } from '@/shared/services/adminApi'
 import type { UserProfile } from '@/shared/types'
 
 interface AuthContextValue {
@@ -63,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function loadAdminPermissions() {
     try {
-      const { data } = await api.get<{ permissionKeys: string[] }>(
+      const { data } = await adminApi.get<{ permissionKeys: string[] }>(
         '/api/v1/admin/access-levels/my-permissions'
       )
       setAdminPermissions(new Set(data.permissionKeys ?? []))

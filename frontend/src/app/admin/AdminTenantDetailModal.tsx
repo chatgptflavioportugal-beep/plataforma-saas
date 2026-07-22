@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/shared/services/api'
+import { adminApi } from '@/shared/services/adminApi'
 
 interface TenantMember {
   full_name: string | null
@@ -94,7 +94,7 @@ export function AdminTenantDetailModal({ tenantId, onClose }: Props) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin-tenant-detail', tenantId],
     queryFn: async () => {
-      const { data } = await api.get<TenantDetail>(`/api/v1/admin/tenants/${tenantId}`)
+      const { data } = await adminApi.get<TenantDetail>(`/api/v1/admin/tenants/${tenantId}`)
       return data
     },
     enabled: !!tenantId,

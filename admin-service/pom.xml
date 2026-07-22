@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.saas</groupId>
-    <artifactId>saas-backend</artifactId>
+    <artifactId>admin-service</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
@@ -38,13 +38,13 @@
             <artifactId>quarkus-resteasy-reactive-jackson</artifactId>
         </dependency>
 
-        <!-- JWT -->
+        <!-- JWT — validação do Supabase JWT (ES256) -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-smallrye-jwt</artifactId>
         </dependency>
 
-        <!-- ORM -->
+        <!-- ORM — EntityManager para SQL nativo + AdminAuditLog (Panache entity) -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-hibernate-orm-panache</artifactId>
@@ -60,37 +60,16 @@
             <artifactId>quarkus-smallrye-openapi</artifactId>
         </dependency>
 
-        <!-- Scheduler (alertas de trial) -->
+        <!-- Health check -->
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-scheduler</artifactId>
+            <artifactId>quarkus-smallrye-health</artifactId>
         </dependency>
 
-        <!-- REST Client (para chamar Python) -->
+        <!-- Mailer (criação/reset de senha de usuários admin) -->
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-rest-client-reactive-jackson</artifactId>
-        </dependency>
-
-
-        <!-- JWT customizado (ProfileAccessToken / ModuleAccessToken) via JJWT
-             Separado do SmallRye JWT que valida tokens Supabase (ES256). -->
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-api</artifactId>
-            <version>0.12.6</version>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-impl</artifactId>
-            <version>0.12.6</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-jackson</artifactId>
-            <version>0.12.6</version>
-            <scope>runtime</scope>
+            <artifactId>quarkus-mailer</artifactId>
         </dependency>
 
         <!-- Testes -->

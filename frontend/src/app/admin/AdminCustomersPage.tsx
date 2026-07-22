@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/shared/services/api'
+import { adminApi } from '@/shared/services/adminApi'
 import { AdminCustomerDetailModal } from './AdminCustomerDetailModal'
 
 interface Customer {
@@ -55,7 +55,7 @@ export function AdminCustomersPage() {
     queryKey: ['admin-customers', params.toString()],
     queryFn: async () => {
       const url = `/api/v1/admin/customers${params.size ? `?${params}` : ''}`
-      const { data } = await api.get<Customer[]>(url)
+      const { data } = await adminApi.get<Customer[]>(url)
       return data
     },
     retry: false,

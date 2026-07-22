@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/shared/services/api'
+import { adminApi } from '@/shared/services/adminApi'
 import { useAuth } from '@/core/auth/AuthContext'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -445,7 +445,7 @@ export function AdminSubscriptionsPage() {
   const { data: summary } = useQuery({
     queryKey: ['admin-subscriptions-summary'],
     queryFn: async () => {
-      const { data } = await api.get<AdminSubscriptionSummary>('/api/v1/admin/subscriptions/summary')
+      const { data } = await adminApi.get<AdminSubscriptionSummary>('/api/v1/admin/subscriptions/summary')
       return data
     },
     staleTime: 60_000,
@@ -454,7 +454,7 @@ export function AdminSubscriptionsPage() {
   const { data: result, isLoading } = useQuery({
     queryKey: ['admin-subscriptions', activeFilters, page],
     queryFn: async () => {
-      const { data } = await api.get<AdminSubscriptionPage>('/api/v1/admin/subscriptions', {
+      const { data } = await adminApi.get<AdminSubscriptionPage>('/api/v1/admin/subscriptions', {
         params: buildParams(),
       })
       return data
@@ -469,12 +469,12 @@ export function AdminSubscriptionsPage() {
   }, [queryClient])
 
   const cancelMutation = useMutation({
-    mutationFn: (id: string) => api.post(`/api/v1/admin/subscriptions/${id}/cancel`),
+    mutationFn: (id: string) => adminApi.post(`/api/v1/admin/subscriptions/${id}/cancel`),
     onSuccess: invalidate,
   })
 
   const reactivateMutation = useMutation({
-    mutationFn: (id: string) => api.post(`/api/v1/admin/subscriptions/${id}/reactivate`),
+    mutationFn: (id: string) => adminApi.post(`/api/v1/admin/subscriptions/${id}/reactivate`),
     onSuccess: invalidate,
   })
 

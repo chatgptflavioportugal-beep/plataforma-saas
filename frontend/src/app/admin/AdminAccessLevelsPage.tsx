@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/shared/services/api'
+import { adminApi } from '@/shared/services/adminApi'
 import { useAuth } from '@/core/auth/AuthContext'
 import type {
   AdminAccessLevel,
@@ -268,9 +268,9 @@ function AccessLevelModal({ level, permissionGroups, onClose }: {
         permissionKeys: Array.from(selectedKeys),
       }
       if (isEdit) {
-        await api.put(`/api/v1/admin/access-levels/${level!.id}`, body)
+        await adminApi.put(`/api/v1/admin/access-levels/${level!.id}`, body)
       } else {
-        await api.post('/api/v1/admin/access-levels', body)
+        await adminApi.post('/api/v1/admin/access-levels', body)
       }
     },
     onSuccess: async () => {
@@ -428,7 +428,7 @@ export function AdminAccessLevelsPage() {
     queryKey: ['admin-access-levels', statusFilter],
     queryFn: async () => {
       const params = statusFilter ? `?status=${statusFilter}` : ''
-      const { data } = await api.get<AdminAccessLevel[]>(`/api/v1/admin/access-levels${params}`)
+      const { data } = await adminApi.get<AdminAccessLevel[]>(`/api/v1/admin/access-levels${params}`)
       return data
     },
     staleTime: 30_000,
@@ -437,7 +437,7 @@ export function AdminAccessLevelsPage() {
   const { data: treeData } = useQuery({
     queryKey: ['admin-permission-tree'],
     queryFn: async () => {
-      const { data } = await api.get<AdminPermissionTreeResponse>('/api/v1/admin/access-levels/permission-tree')
+      const { data } = await adminApi.get<AdminPermissionTreeResponse>('/api/v1/admin/access-levels/permission-tree')
       return data
     },
     staleTime: 5 * 60_000,
@@ -447,7 +447,7 @@ export function AdminAccessLevelsPage() {
     queryKey: ['admin-access-level-detail', editingLevel],
     queryFn: async () => {
       if (!editingLevel || editingLevel === 'new') return null
-      const { data } = await api.get<AdminAccessLevelDetail>(`/api/v1/admin/access-levels/${editingLevel}`)
+      const { data } = await adminApi.get<AdminAccessLevelDetail>(`/api/v1/admin/access-levels/${editingLevel}`)
       return data
     },
     enabled: !!editingLevel && editingLevel !== 'new',
@@ -457,7 +457,7 @@ export function AdminAccessLevelsPage() {
 
   const toggleStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      await api.patch(`/api/v1/admin/access-levels/${id}/status`, { status })
+      await adminApi.patch(`/api/v1/admin/access-levels/${id}/status`, { status })
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-access-levels'] }),
   })
