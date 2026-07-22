@@ -23,6 +23,7 @@ services:
       - VITE_PROFILE_API_URL=${VITE_PROFILE_API_URL:-http://localhost:8084}
       - VITE_SUBSCRIPTION_API_URL=${VITE_SUBSCRIPTION_API_URL:-http://localhost:8085}
       - VITE_PDF_API_URL=${VITE_PDF_API_URL:-http://localhost:8001}
+      - VITE_WHATSAPP_API_URL=${VITE_WHATSAPP_API_URL:-http://localhost:8002}
     depends_on:
       - backend-quarkus
       - auth-service
@@ -168,6 +169,23 @@ services:
       - PDF_STORAGE_PATH=/tmp/saas-pdf
     volumes:
       - pdf-storage:/tmp/saas-pdf
+
+  # -------------------------------------------------------
+  # WhatsApp Service (FastAPI, dev mode)
+  # Estrutura inicial — mensageria WhatsApp. Frontend chama direto
+  # (VITE_WHATSAPP_API_URL), sem passar pelo backend-quarkus.
+  # -------------------------------------------------------
+  whatsapp-service:
+    build:
+      context: ./whatsapp-service
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8002"
+    environment:
+      - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DATABASE_URL=${DATABASE_URL}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
 
 volumes:
   pdf-storage:
