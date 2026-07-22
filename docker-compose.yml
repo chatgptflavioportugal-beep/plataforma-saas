@@ -24,12 +24,15 @@ services:
       - VITE_SUBSCRIPTION_API_URL=${VITE_SUBSCRIPTION_API_URL:-http://localhost:8085}
       - VITE_PDF_API_URL=${VITE_PDF_API_URL:-http://localhost:8001}
       - VITE_WHATSAPP_API_URL=${VITE_WHATSAPP_API_URL:-http://localhost:8002}
+      - VITE_ADMIN_API_URL=${VITE_ADMIN_API_URL:-http://localhost:8087}
     depends_on:
       - backend-quarkus
       - auth-service
       - module-catalog-service
       - profile-service
       - subscription-service
+      - usage-service
+      - admin-service
 
   # -------------------------------------------------------
   # Auth Service (dev mode)
@@ -128,6 +131,60 @@ services:
       # JWT (Supabase)
       - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
       - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
+      # CORS
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+
+  # -------------------------------------------------------
+  # Usage Service (dev mode)
+  # Contadores de uso diário, quota/rate-limit e auditoria de uso de módulo.
+  # Chamado via ModuleAccessToken pelos serviços de módulo (PDF, WhatsApp, futuros).
+  # Banco: Supabase (mesmo banco, por enquanto)
+  # -------------------------------------------------------
+  usage-service:
+    build:
+      context: ./usage-service
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8086:8086"
+    environment:
+      # Banco — Supabase (Direct connection)
+      - QUARKUS_DATASOURCE_JDBC_URL=${QUARKUS_DATASOURCE_JDBC_URL}
+      - QUARKUS_DATASOURCE_USERNAME=${QUARKUS_DATASOURCE_USERNAME}
+      - QUARKUS_DATASOURCE_PASSWORD=${QUARKUS_DATASOURCE_PASSWORD}
+      # ModuleAccessToken (validação local, mesmo segredo do auth-service)
+      - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
+      # CORS
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+
+  # -------------------------------------------------------
+  # Admin Service (dev mode)
+  # Tenants, clientes, usuários administrativos, níveis de acesso e visão
+  # admin de assinaturas. Usado apenas pelo Frontend Administrativo.
+  # Banco: Supabase (mesmo banco, por enquanto)
+  # -------------------------------------------------------
+  admin-service:
+    build:
+      context: ./admin-service
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8087:8087"
+    environment:
+      # Banco — Supabase (Direct connection)
+      - QUARKUS_DATASOURCE_JDBC_URL=${QUARKUS_DATASOURCE_JDBC_URL}
+      - QUARKUS_DATASOURCE_USERNAME=${QUARKUS_DATASOURCE_USERNAME}
+      - QUARKUS_DATASOURCE_PASSWORD=${QUARKUS_DATASOURCE_PASSWORD}
+      # JWT (Supabase)
+      - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
+      - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
+      # Supabase Admin API (opcional — criação/reset de senha de usuários admin)
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+      - VITE_SUPABASE_SERVICE_ROLE_KEY=${VITE_SUPABASE_SERVICE_ROLE_KEY}
+      # Mailer (criação/reset de senha de usuários admin)
+      - QUARKUS_MAILER_FROM=${QUARKUS_MAILER_FROM:-noreply@localhost}
+      - QUARKUS_MAILER_HOST=${QUARKUS_MAILER_HOST:-localhost}
+      - QUARKUS_MAILER_PORT=${QUARKUS_MAILER_PORT:-1025}
+      - QUARKUS_MAILER_USERNAME=${QUARKUS_MAILER_USERNAME:-}
+      - QUARKUS_MAILER_PASSWORD=${QUARKUS_MAILER_PASSWORD:-}
       # CORS
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
 
