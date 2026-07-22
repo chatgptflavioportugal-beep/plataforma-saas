@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { api } from '@/shared/services/api'
+import { subscriptionApi } from '@/shared/services/subscriptionApi'
 import { Button } from '@/shared/components/Button'
 import { Spinner } from '@/shared/components/Spinner'
 import { useTenant } from '@/core/workspaces/TenantContext'
@@ -616,7 +616,7 @@ export function SubscriptionsPage() {
   } = useQuery({
     queryKey: ['profile-subscriptions', currentTenant?.tenant.id],
     queryFn: async () => {
-      const { data } = await api.get<ProfileModuleSubscription[]>('/api/v1/subscriptions/modules')
+      const { data } = await subscriptionApi.get<ProfileModuleSubscription[]>('/api/v1/subscriptions/modules')
       return data
     },
     enabled: !!currentTenant,
@@ -627,7 +627,7 @@ export function SubscriptionsPage() {
   // ── Mutation: cancelar assinatura ─────────────────────────────────────────
   const cancelMutation = useMutation({
     mutationFn: async (subscriptionId: string) => {
-      await api.post(`/api/v1/subscriptions/modules/${subscriptionId}/cancel`)
+      await subscriptionApi.post(`/api/v1/subscriptions/modules/${subscriptionId}/cancel`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile-subscriptions'] })
@@ -642,7 +642,7 @@ export function SubscriptionsPage() {
   // ── Mutation: reativar assinatura ─────────────────────────────────────────
   const reactivateMutation = useMutation({
     mutationFn: async (subscriptionId: string) => {
-      await api.post(`/api/v1/subscriptions/modules/${subscriptionId}/reactivate`)
+      await subscriptionApi.post(`/api/v1/subscriptions/modules/${subscriptionId}/reactivate`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile-subscriptions'] })

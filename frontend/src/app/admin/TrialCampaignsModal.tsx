@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/shared/services/api'
+import { subscriptionApi } from '@/shared/services/subscriptionApi'
 import type { TrialCampaign, TrialCampaignStatus } from '@/shared/types'
 
 export const STATUS_LABELS: Record<TrialCampaignStatus, string> = {
@@ -104,7 +104,7 @@ export function TrialCampaignsModal({ planId, planVersionModuleId, moduleName, i
   const { data: allCampaigns = [], isLoading } = useQuery({
     queryKey: ['trial-campaigns-by-plan', planId],
     queryFn: async () => {
-      const { data } = await api.get<TrialCampaign[]>(`/api/v1/admin/trial-campaigns/by-plan/${planId}`)
+      const { data } = await subscriptionApi.get<TrialCampaign[]>(`/api/v1/admin/trial-campaigns/by-plan/${planId}`)
       return data
     },
   })
@@ -118,7 +118,7 @@ export function TrialCampaignsModal({ planId, planVersionModuleId, moduleName, i
   }
 
   const createMutation = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => api.post('/api/v1/admin/trial-campaigns', payload),
+    mutationFn: (payload: Record<string, unknown>) => subscriptionApi.post('/api/v1/admin/trial-campaigns', payload),
     onSuccess: () => {
       invalidate()
       setShowCreate(false)
@@ -133,7 +133,7 @@ export function TrialCampaignsModal({ planId, planVersionModuleId, moduleName, i
 
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) =>
-      api.put(`/api/v1/admin/trial-campaigns/${id}`, payload),
+      subscriptionApi.put(`/api/v1/admin/trial-campaigns/${id}`, payload),
     onSuccess: () => {
       invalidate()
       setEditingId(null)
@@ -146,7 +146,7 @@ export function TrialCampaignsModal({ planId, planVersionModuleId, moduleName, i
   })
 
   const closeMutation = useMutation({
-    mutationFn: (id: string) => api.post(`/api/v1/admin/trial-campaigns/${id}/close`, {}),
+    mutationFn: (id: string) => subscriptionApi.post(`/api/v1/admin/trial-campaigns/${id}/close`, {}),
     onSuccess: invalidate,
   })
 

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { api } from '@/shared/services/api'
+import { profileApi } from '@/shared/services/profileApi'
 import { useTenant } from '@/core/workspaces/TenantContext'
 import type { CompanyMember, Invitation, AccessLevel } from '@/shared/types'
 
@@ -57,7 +57,7 @@ function InviteModal({
   const { data: accessLevels = [], isLoading: loadingLevels } = useQuery({
     queryKey: ['access-levels', tenantId],
     queryFn: async () => {
-      const { data } = await api.get<AccessLevel[]>(`/api/v1/tenants/${tenantId}/access-levels`)
+      const { data } = await profileApi.get<AccessLevel[]>(`/api/v1/tenants/${tenantId}/access-levels`)
       return data
     },
   })
@@ -66,7 +66,7 @@ function InviteModal({
 
   const mutation = useMutation({
     mutationFn: async () => {
-      await api.post(`/api/v1/tenants/${tenantId}/invitations`, { email, accessLevelId })
+      await profileApi.post(`/api/v1/tenants/${tenantId}/invitations`, { email, accessLevelId })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invitations', tenantId] })
@@ -217,7 +217,7 @@ export function CompanyMembersPage() {
   const { data: members = [], isLoading: loadingMembers } = useQuery({
     queryKey: ['members', tenantId],
     queryFn: async () => {
-      const { data } = await api.get<CompanyMember[]>(`/api/v1/tenants/${tenantId}/members`)
+      const { data } = await profileApi.get<CompanyMember[]>(`/api/v1/tenants/${tenantId}/members`)
       return data
     },
     enabled: !!tenantId,
@@ -227,7 +227,7 @@ export function CompanyMembersPage() {
   const { data: invitations = [], isLoading: loadingInvitations } = useQuery({
     queryKey: ['invitations', tenantId],
     queryFn: async () => {
-      const { data } = await api.get<Invitation[]>(`/api/v1/tenants/${tenantId}/invitations`)
+      const { data } = await profileApi.get<Invitation[]>(`/api/v1/tenants/${tenantId}/invitations`)
       return data
     },
     enabled: !!tenantId && canManage,
@@ -236,13 +236,13 @@ export function CompanyMembersPage() {
 
   const removeMemberMutation = useMutation({
     mutationFn: (userId: string) =>
-      api.delete(`/api/v1/tenants/${tenantId}/members/${userId}`),
+      profileApi.delete(`/api/v1/tenants/${tenantId}/members/${userId}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['members', tenantId] }),
   })
 
   const cancelInvitationMutation = useMutation({
     mutationFn: (invId: string) =>
-      api.delete(`/api/v1/tenants/${tenantId}/invitations/${invId}`),
+      profileApi.delete(`/api/v1/tenants/${tenantId}/invitations/${invId}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['invitations', tenantId] }),
   })
 

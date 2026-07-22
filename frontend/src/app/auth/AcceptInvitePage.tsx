@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { api, setActiveTenant } from '@/shared/services/api'
+import { setActiveTenant } from '@/shared/services/api'
+import { profileApi } from '@/shared/services/profileApi'
 import { useAuth } from '@/core/auth/AuthContext'
 import type { InvitationPreview } from '@/shared/types'
 
@@ -27,7 +28,7 @@ export function AcceptInvitePage() {
   const { data: preview, isLoading, isError } = useQuery({
     queryKey: ['invite-preview', token],
     queryFn: async () => {
-      const { data } = await api.get<InvitationPreview>(`/api/v1/public/invitations/${token}`)
+      const { data } = await profileApi.get<InvitationPreview>(`/api/v1/public/invitations/${token}`)
       return data
     },
     enabled: !!token,
@@ -36,7 +37,7 @@ export function AcceptInvitePage() {
 
   const acceptMutation = useMutation({
     mutationFn: async () => {
-      const { data } = await api.post<{ tenant_id: string; role: string }>(
+      const { data } = await profileApi.post<{ tenant_id: string; role: string }>(
         `/api/v1/invitations/${token}/accept`
       )
       return data

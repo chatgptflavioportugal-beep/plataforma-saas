@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { api } from '@/shared/services/api'
+import { profileApi } from '@/shared/services/profileApi'
 import { useTenant } from '@/core/workspaces/TenantContext'
 import type {
   AccessLevel,
@@ -544,12 +544,12 @@ function AccessLevelFormModal({
         adminPermissionKeys: Array.from(selectedAdminKeys),
       }
       if (isEdit) {
-        await api.put(`/api/v1/tenants/${tenantId}/access-levels/${level!.id}`, body)
+        await profileApi.put(`/api/v1/tenants/${tenantId}/access-levels/${level!.id}`, body)
         if (status !== level!.status) {
-          await api.patch(`/api/v1/tenants/${tenantId}/access-levels/${level!.id}/status`, { status })
+          await profileApi.patch(`/api/v1/tenants/${tenantId}/access-levels/${level!.id}/status`, { status })
         }
       } else {
-        await api.post(`/api/v1/tenants/${tenantId}/access-levels`, body)
+        await profileApi.post(`/api/v1/tenants/${tenantId}/access-levels`, body)
       }
     },
     onSuccess: () => {
@@ -863,7 +863,7 @@ export function AccessLevelsPage() {
   const { data: accessLevels = [], isLoading } = useQuery({
     queryKey: ['access-levels', tenantId],
     queryFn: async () => {
-      const { data } = await api.get<AccessLevel[]>(`/api/v1/tenants/${tenantId}/access-levels`)
+      const { data } = await profileApi.get<AccessLevel[]>(`/api/v1/tenants/${tenantId}/access-levels`)
       return data
     },
     enabled: !!tenantId,
@@ -872,7 +872,7 @@ export function AccessLevelsPage() {
   const { data: permissionTree } = useQuery({
     queryKey: ['access-levels-tree', tenantId],
     queryFn: async () => {
-      const { data } = await api.get<PermissionTreeResponse>(
+      const { data } = await profileApi.get<PermissionTreeResponse>(
         `/api/v1/tenants/${tenantId}/access-levels/available-modules`
       )
       return data
@@ -885,14 +885,14 @@ export function AccessLevelsPage() {
 
   const toggleStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: 'ACTIVE' | 'INACTIVE' }) => {
-      await api.patch(`/api/v1/tenants/${tenantId}/access-levels/${id}/status`, { status })
+      await profileApi.patch(`/api/v1/tenants/${tenantId}/access-levels/${id}/status`, { status })
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['access-levels', tenantId] }),
   })
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/api/v1/tenants/${tenantId}/access-levels/${id}`)
+      await profileApi.delete(`/api/v1/tenants/${tenantId}/access-levels/${id}`)
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['access-levels', tenantId] }),
   })

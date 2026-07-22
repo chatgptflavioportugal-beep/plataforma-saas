@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { api } from '@/shared/services/api'
+import { subscriptionApi } from '@/shared/services/subscriptionApi'
 import { Button } from '@/shared/components/Button'
 import { Spinner } from '@/shared/components/Spinner'
 import { useTenant } from '@/core/workspaces/TenantContext'
@@ -914,7 +914,7 @@ export function PlansPage() {
   const { data: modules = [], isLoading } = useQuery({
     queryKey: ['module-billing-options'],
     queryFn: async () => {
-      const { data } = await api.get<ModuleBillingOptionRaw[]>('/api/v1/public/modules/billing-options')
+      const { data } = await subscriptionApi.get<ModuleBillingOptionRaw[]>('/api/v1/public/modules/billing-options')
       return data.map(raw => ({
         module_id: raw.module_id,
         module_name: raw.module_name,
@@ -931,7 +931,7 @@ export function PlansPage() {
   const { data: subscriptions = [] } = useQuery({
     queryKey: ['profile-subscriptions', currentTenant?.tenant.id],
     queryFn: async () => {
-      const { data } = await api.get<ProfileModuleSubscriptionRaw[]>('/api/v1/subscriptions/modules')
+      const { data } = await subscriptionApi.get<ProfileModuleSubscriptionRaw[]>('/api/v1/subscriptions/modules')
       return data.map(raw => ({
         ...raw,
         limits: parseJson<ProfileModuleSubscription['limits']>(raw.limitsJson) ?? [],
@@ -947,7 +947,7 @@ export function PlansPage() {
   const { data: trialEligibility = [] } = useQuery({
     queryKey: ['trial-eligibility', currentTenant?.tenant.id],
     queryFn: async () => {
-      const { data } = await api.get<TrialEligibility[]>('/api/v1/subscriptions/trial-eligibility')
+      const { data } = await subscriptionApi.get<TrialEligibility[]>('/api/v1/subscriptions/trial-eligibility')
       return data
     },
     enabled: !!currentTenant,
@@ -979,7 +979,7 @@ export function PlansPage() {
           billing_cycle: isAnnual ? 'ANNUAL' : 'MONTHLY',
         })),
       }
-      await api.post('/api/v1/subscriptions/modules', payload)
+      await subscriptionApi.post('/api/v1/subscriptions/modules', payload)
     },
     onSuccess: () => {
       setConfiguration({})

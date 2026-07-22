@@ -18,9 +18,117 @@ services:
       - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
       - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
       - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080}
+      - VITE_AUTH_API_URL=${VITE_AUTH_API_URL:-http://localhost:8082}
+      - VITE_CATALOG_API_URL=${VITE_CATALOG_API_URL:-http://localhost:8083}
+      - VITE_PROFILE_API_URL=${VITE_PROFILE_API_URL:-http://localhost:8084}
+      - VITE_SUBSCRIPTION_API_URL=${VITE_SUBSCRIPTION_API_URL:-http://localhost:8085}
       - VITE_PDF_API_URL=${VITE_PDF_API_URL:-http://localhost:8001}
     depends_on:
       - backend-quarkus
+      - auth-service
+      - module-catalog-service
+      - profile-service
+      - subscription-service
+
+  # -------------------------------------------------------
+  # Auth Service (dev mode)
+  # Emissão/validação de ProfileAccessToken e ModuleAccessToken.
+  # Banco: Supabase (mesmo banco do backend-quarkus, por enquanto)
+  # -------------------------------------------------------
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8082:8082"
+    environment:
+      # Banco — Supabase (Direct connection)
+      - QUARKUS_DATASOURCE_JDBC_URL=${QUARKUS_DATASOURCE_JDBC_URL}
+      - QUARKUS_DATASOURCE_USERNAME=${QUARKUS_DATASOURCE_USERNAME}
+      - QUARKUS_DATASOURCE_PASSWORD=${QUARKUS_DATASOURCE_PASSWORD}
+      # JWT (Supabase)
+      - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
+      - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
+      # ProfileAccessToken / ModuleAccessToken (segredos compartilhados com
+      # backend-quarkus e backend-python, que validam esses tokens)
+      - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
+      - PROFILE_ACCESS_TOKEN_SECRET=${PROFILE_ACCESS_TOKEN_SECRET}
+      # CORS
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+
+  # -------------------------------------------------------
+  # Module Catalog Service (dev mode)
+  # Catálogo de módulos/serviços/grupos + resolução de rota (/api/v1/services/resolve-route).
+  # Banco: Supabase (mesmo banco, por enquanto)
+  # -------------------------------------------------------
+  module-catalog-service:
+    build:
+      context: ./module-catalog-service
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8083:8083"
+    environment:
+      # Banco — Supabase (Direct connection)
+      - QUARKUS_DATASOURCE_JDBC_URL=${QUARKUS_DATASOURCE_JDBC_URL}
+      - QUARKUS_DATASOURCE_USERNAME=${QUARKUS_DATASOURCE_USERNAME}
+      - QUARKUS_DATASOURCE_PASSWORD=${QUARKUS_DATASOURCE_PASSWORD}
+      # JWT (Supabase)
+      - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
+      - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
+      # CORS
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+
+  # -------------------------------------------------------
+  # Profile Service (dev mode)
+  # Tenant (empresa/individual), membros, convites, níveis de acesso.
+  # Banco: Supabase (mesmo banco, por enquanto)
+  # -------------------------------------------------------
+  profile-service:
+    build:
+      context: ./profile-service
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8084:8084"
+    environment:
+      # Banco — Supabase (Direct connection)
+      - QUARKUS_DATASOURCE_JDBC_URL=${QUARKUS_DATASOURCE_JDBC_URL}
+      - QUARKUS_DATASOURCE_USERNAME=${QUARKUS_DATASOURCE_USERNAME}
+      - QUARKUS_DATASOURCE_PASSWORD=${QUARKUS_DATASOURCE_PASSWORD}
+      # JWT (Supabase)
+      - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
+      - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
+      # Link base para e-mails de convite
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:3000}
+      # Mailer (convites por e-mail)
+      - QUARKUS_MAILER_FROM=${QUARKUS_MAILER_FROM:-noreply@localhost}
+      - QUARKUS_MAILER_HOST=${QUARKUS_MAILER_HOST:-localhost}
+      - QUARKUS_MAILER_PORT=${QUARKUS_MAILER_PORT:-1025}
+      - QUARKUS_MAILER_USERNAME=${QUARKUS_MAILER_USERNAME:-}
+      - QUARKUS_MAILER_PASSWORD=${QUARKUS_MAILER_PASSWORD:-}
+      # CORS
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+
+  # -------------------------------------------------------
+  # Subscription Service (dev mode)
+  # Planos, assinaturas de módulo, trials, configurações da plataforma.
+  # Banco: Supabase (mesmo banco, por enquanto)
+  # -------------------------------------------------------
+  subscription-service:
+    build:
+      context: ./subscription-service
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8085:8085"
+    environment:
+      # Banco — Supabase (Direct connection)
+      - QUARKUS_DATASOURCE_JDBC_URL=${QUARKUS_DATASOURCE_JDBC_URL}
+      - QUARKUS_DATASOURCE_USERNAME=${QUARKUS_DATASOURCE_USERNAME}
+      - QUARKUS_DATASOURCE_PASSWORD=${QUARKUS_DATASOURCE_PASSWORD}
+      # JWT (Supabase)
+      - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
+      - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
+      # CORS
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
 
   # -------------------------------------------------------
   # Backend Quarkus (dev mode)
@@ -46,9 +154,9 @@ services:
       # Python
       - PYTHON_AI_BASE_URL=http://backend-python:8001
       - PYTHON_AI_INTERNAL_TOKEN=${PYTHON_AI_INTERNAL_TOKEN}
-      # ModuleAccessToken
+      # ModuleAccessToken — apenas validação local (ModuleTokenFilter); a emissão
+      # agora é feita pelo auth-service
       - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
-      - PROFILE_ACCESS_TOKEN_SECRET=${PROFILE_ACCESS_TOKEN_SECRET}
       # CORS
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
     depends_on:

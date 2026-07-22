@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTenant } from './TenantContext'
-import { api, setActiveTenant } from '@/shared/services/api'
+import { setActiveTenant } from '@/shared/services/api'
+import { profileApi } from '@/shared/services/profileApi'
 import type { UserTenant } from '@/shared/types'
 
 function PersonIcon({ className }: { className?: string }) {
@@ -112,7 +113,7 @@ export function ProfileSwitcher() {
     setIsCreatingIndividual(true)
     setCreateError(null)
     try {
-      const { data } = await api.post<{ id: string }>('/api/v1/public/individual-tenant')
+      const { data } = await profileApi.post<{ id: string }>('/api/v1/public/individual-tenant')
       setActiveTenant(data.id)
       window.location.href = '/app/dashboard'
     } catch {

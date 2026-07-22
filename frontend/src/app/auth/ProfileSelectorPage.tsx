@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { api, setActiveTenant } from '@/shared/services/api'
+import { setActiveTenant } from '@/shared/services/api'
+import { profileApi } from '@/shared/services/profileApi'
 import { useAuth } from '@/core/auth/AuthContext'
 import type { UserTenant } from '@/shared/types'
 
@@ -39,7 +40,7 @@ export function ProfileSelectorPage() {
   const { data: tenants = [], isLoading } = useQuery({
     queryKey: ['profile-selector-tenants'],
     queryFn: async () => {
-      const { data } = await api.get<UserTenant[]>('/api/v1/tenants/mine')
+      const { data } = await profileApi.get<UserTenant[]>('/api/v1/tenants/mine')
       return data
     },
     retry: false,
@@ -57,7 +58,7 @@ export function ProfileSelectorPage() {
     setIsCreatingIndividual(true)
     setCreateError(null)
     try {
-      const { data } = await api.post<{ id: string }>('/api/v1/public/individual-tenant')
+      const { data } = await profileApi.post<{ id: string }>('/api/v1/public/individual-tenant')
       setActiveTenant(data.id)
       window.location.href = '/app/dashboard'
     } catch {

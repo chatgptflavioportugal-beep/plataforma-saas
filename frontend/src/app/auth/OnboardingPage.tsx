@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import type { AxiosError } from 'axios'
-import { api, setActiveTenant } from '@/shared/services/api'
+import { setActiveTenant } from '@/shared/services/api'
+import { profileApi } from '@/shared/services/profileApi'
 import { Button } from '@/shared/components/Button'
 import { Input } from '@/shared/components/Input'
 
@@ -46,7 +47,7 @@ export function OnboardingPage() {
     setIsCreatingIndividual(true)
     setError(null)
     try {
-      const { data } = await api.post<{ id: string }>('/api/v1/public/individual-tenant')
+      const { data } = await profileApi.post<{ id: string }>('/api/v1/public/individual-tenant')
       setActiveTenant(data.id)
       window.location.href = '/app/dashboard'
     } catch (err) {
@@ -73,7 +74,7 @@ export function OnboardingPage() {
   async function onSubmitBusiness(data: BusinessForm) {
     setError(null)
     try {
-      const res = await api.post<{ id: string }>('/api/v1/public/onboarding', {
+      const res = await profileApi.post<{ id: string }>('/api/v1/public/onboarding', {
         name: data.company_name,
         slug: data.company_slug,
       })

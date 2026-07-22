@@ -25,13 +25,7 @@ api.interceptors.request.use(async (config) => {
   return config
 })
 
-const SKIP_SIGNOUT_URLS = [
-  '/api/v1/tenants/mine',
-  '/api/v1/tenants/',
-  '/api/v1/public/individual-tenant',
-  '/api/v1/public/onboarding',
-  '/api/v1/profile/access-token',
-]
+const SKIP_SIGNOUT_URLS: string[] = []
 
 api.interceptors.response.use(
   (response) => response,

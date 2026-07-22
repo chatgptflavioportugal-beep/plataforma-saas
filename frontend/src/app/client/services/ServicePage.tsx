@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/shared/services/api'
+import { catalogApi } from '@/shared/services/catalogApi'
 import type { ResolvedServiceRoute } from '@/shared/types'
 import { getServiceComponent } from '@/modules/serviceRegistry'
 import { ModuleProvider, useModule } from '@/core/modules/ModuleContext'
@@ -13,7 +13,7 @@ export function ServicePage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['service-route', routeKey],
     queryFn: async () => {
-      const { data } = await api.get<ResolvedServiceRoute>(
+      const { data } = await catalogApi.get<ResolvedServiceRoute>(
         `/api/v1/services/resolve-route/${routeKey}`,
       )
       return data

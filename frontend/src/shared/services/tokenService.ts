@@ -1,4 +1,4 @@
-import { api } from './api'
+import { authApi } from './authApi'
 import { decodeJwt } from '../utils/jwt'
 import type { ModuleTokenClaims, ProfileTokenClaims, TokenStorage } from '../types/tokens'
 
@@ -29,7 +29,7 @@ function isExpiredOrExpiringSoon(expiresAt: string): boolean {
 // ─── ProfileAccessToken ──────────────────────────────────────────────────────
 
 export async function fetchProfileToken(tenantId: string): Promise<string> {
-  const { data } = await api.post<{ profileAccessToken: string; expiresAt: string }>(
+  const { data } = await authApi.post<{ profileAccessToken: string; expiresAt: string }>(
     '/api/v1/profile/access-token',
     null,
     { headers: { 'X-Tenant-ID': tenantId } }
@@ -105,7 +105,7 @@ export async function fetchModuleToken(
   moduleSlug: string,
   tenantId: string
 ): Promise<ModuleTokenResponse> {
-  const { data } = await api.post<ModuleTokenResponse>(
+  const { data } = await authApi.post<ModuleTokenResponse>(
     `/api/v1/module-token/${moduleSlug}`,
     null,
     { headers: { 'X-Tenant-ID': tenantId } }
@@ -183,7 +183,7 @@ export function clearAllTokens(): void {
  * permissões ou assinatura e forçar a renovação de PAT/MAT em cache sem esperar expirar.
  */
 export async function fetchPermissionsVersion(tenantId: string): Promise<number> {
-  const { data } = await api.get<{ permissionsVersion: number }>(
+  const { data } = await authApi.get<{ permissionsVersion: number }>(
     '/api/v1/profile/permissions-version',
     { headers: { 'X-Tenant-ID': tenantId } }
   )

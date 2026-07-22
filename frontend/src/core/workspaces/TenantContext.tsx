@@ -2,7 +2,8 @@ import { createContext, useContext, useState, useEffect, useRef, useCallback, ty
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { AxiosError } from 'axios'
-import { api, setActiveTenant } from '@/shared/services/api'
+import { setActiveTenant } from '@/shared/services/api'
+import { profileApi } from '@/shared/services/profileApi'
 import { fetchProfileToken, fetchPermissionsVersion, clearAllTokens } from '@/shared/services/tokenService'
 import { decodeJwt } from '@/shared/utils/jwt'
 import type { ProfileTokenClaims } from '@/shared/types/tokens'
@@ -51,7 +52,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const { data: userTenants = [], isLoading: tenantsLoading, isFetching: tenantsFetching, isError: tenantsError } = useQuery({
     queryKey: ['user-tenants', user?.id],
     queryFn: async () => {
-      const { data } = await api.get<UserTenant[]>('/api/v1/tenants/mine')
+      const { data } = await profileApi.get<UserTenant[]>('/api/v1/tenants/mine')
       return data
     },
     enabled: !!user,
@@ -155,7 +156,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const { data: currentTenant, isLoading: tenantLoading, error: tenantProfileErrorObj } = useQuery({
     queryKey: ['tenant-profile', activeTenantId],
     queryFn: async () => {
-      const { data } = await api.get<TenantProfile>(`/api/v1/tenants/${activeTenantId}/profile`)
+      const { data } = await profileApi.get<TenantProfile>(`/api/v1/tenants/${activeTenantId}/profile`)
       return data
     },
     enabled: !!activeTenantId,

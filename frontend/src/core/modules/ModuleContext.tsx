@@ -14,7 +14,7 @@ import {
   isModuleTokenExpiringSoon,
 } from '@/shared/services/tokenService'
 import { createModuleApi } from '@/shared/services/moduleApi'
-import { api } from '@/shared/services/api'
+import { subscriptionApi } from '@/shared/services/subscriptionApi'
 import { decodeJwt } from '@/shared/utils/jwt'
 import type { ModuleTokenClaims, ProfileTokenClaims } from '@/shared/types/tokens'
 import type { AxiosInstance } from 'axios'
@@ -113,7 +113,7 @@ export function ModuleProvider({ moduleSlug, children }: ModuleProviderProps) {
     setActivationMessage('Estamos preparando seu acesso. Aguarde alguns segundos...')
     try {
       // Corpo em snake_case: o backend usa Jackson com property-naming-strategy=SNAKE_CASE
-      await api.post('/api/v1/subscriptions/free', { module_slug: moduleSlug })
+      await subscriptionApi.post('/api/v1/subscriptions/free', { module_slug: moduleSlug })
       await fetchProfileToken(activeTenantId)
       queryClient.invalidateQueries({ queryKey: ['dashboard-modules'] })
       const data = await fetchModuleToken(moduleSlug, activeTenantId)
