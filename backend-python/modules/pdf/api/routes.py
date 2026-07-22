@@ -10,7 +10,7 @@ from modules.pdf.repository import pdf_jobs_repository
 from modules.pdf.schemas.pdf_job import PdfJobOut, job_to_out
 from modules.pdf.services.merge import merge_service
 from security.dependencies.current_user import CurrentUser
-from security.permissions.decorators import require_permission
+from middleware.module_token_middleware import require_permission
 from services.storage.local_storage import file_exists, read_file
 
 router = APIRouter(prefix="/pdf", tags=["PDF"])

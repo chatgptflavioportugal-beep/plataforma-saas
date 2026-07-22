@@ -141,9 +141,6 @@ services:
     ports:
       - "8080:8080"
     environment:
-      #SupaBase
-      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
-      - VITE_SUPABASE_SERVICE_ROLE_KEY=${VITE_SUPABASE_SERVICE_ROLE_KEY}
       # Banco — Supabase (Direct connection)
       - QUARKUS_DATASOURCE_JDBC_URL=${QUARKUS_DATASOURCE_JDBC_URL}
       - QUARKUS_DATASOURCE_USERNAME=${QUARKUS_DATASOURCE_USERNAME}
@@ -151,18 +148,8 @@ services:
       # JWT
       - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
       - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
-      # Python
-      - PYTHON_AI_BASE_URL=http://backend-python:8001
-      - PYTHON_AI_INTERNAL_TOKEN=${PYTHON_AI_INTERNAL_TOKEN}
-      # ModuleAccessToken — apenas validação local (ModuleTokenFilter); a emissão
-      # agora é feita pelo auth-service
-      - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
       # CORS
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
-    depends_on:
-      - backend-python
-    volumes:
-      - pdf-storage:/tmp/saas-pdf
 
   # -------------------------------------------------------
   # Backend Python (FastAPI)

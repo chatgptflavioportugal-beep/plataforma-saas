@@ -10,7 +10,8 @@ from security.tokens.module_token import validate_module_access_token
 def require_permission(module_slug: str, permission: str | None = None) -> Callable[..., CurrentUser]:
     """
     Fábrica de dependency FastAPI: valida o ModuleAccessToken do módulo `module_slug`
-    e, se `permission` for informado, garante que o usuário a possui.
+    e, se `permission` for informado, garante que o usuário a possui. Tudo vem das
+    claims do próprio token — nenhuma rota precisa consultar outro serviço.
 
     Uso:
         auth: CurrentUser = Depends(require_permission("pdf", "pdf-merge"))

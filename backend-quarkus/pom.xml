@@ -60,39 +60,6 @@
             <artifactId>quarkus-smallrye-openapi</artifactId>
         </dependency>
 
-        <!-- Scheduler (alertas de trial) -->
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-scheduler</artifactId>
-        </dependency>
-
-        <!-- REST Client (para chamar Python) -->
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-rest-client-reactive-jackson</artifactId>
-        </dependency>
-
-
-        <!-- JWT customizado (ProfileAccessToken / ModuleAccessToken) via JJWT
-             Separado do SmallRye JWT que valida tokens Supabase (ES256). -->
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-api</artifactId>
-            <version>0.12.6</version>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-impl</artifactId>
-            <version>0.12.6</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-jackson</artifactId>
-            <version>0.12.6</version>
-            <scope>runtime</scope>
-        </dependency>
-
         <!-- Testes -->
         <dependency>
             <groupId>io.quarkus</groupId>

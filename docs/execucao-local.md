@@ -23,20 +23,22 @@ export QUARKUS_DATASOURCE_USERNAME=postgres
 export QUARKUS_DATASOURCE_PASSWORD=postgres
 export SUPABASE_JWT_JWKS_URL=https://[project].supabase.co/auth/v1/.well-known/jwks.json
 export SUPABASE_JWT_ISSUER=https://[project].supabase.co/auth/v1
-export PYTHON_AI_BASE_URL=http://localhost:8001
-export PYTHON_AI_INTERNAL_TOKEN=dev-internal-token
 
 ./mvnw quarkus:dev
 # Acesse: http://localhost:8080
 # Swagger UI: http://localhost:8080/q/swagger-ui
 ```
 
-## Backend Python
+## Backend Python (PDF Service)
+
+O frontend chama o backend-python diretamente (VITE_PDF_API_URL), sem passar pelo
+backend-quarkus. A autorização é feita só pelo ModuleAccessToken emitido pelo
+auth-service — não há mais token interno de proxy.
 
 ```bash
 cd backend-python
 cp .env.example .env
-# Edite .env com INTERNAL_TOKEN (mesmo valor do PYTHON_AI_INTERNAL_TOKEN)
+# Edite .env com MODULE_ACCESS_TOKEN_SECRET (mesmo valor usado pelo auth-service)
 
 python -m venv venv
 # Windows:
