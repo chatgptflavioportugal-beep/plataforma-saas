@@ -1,30 +1,41 @@
 # SaaS Platform
 
-Plataforma SaaS modular com multi-tenant, controle de planos, free trial e módulo de PDF.
+Plataforma SaaS modular com multi-tenant, controle de planos, free trial e módulos independentes (PDF, WhatsApp, ...), em arquitetura de microsserviços + micro-frontends.
 
 ## Arquitetura
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                   FRONTEND (React 18)                    │
-│          /app (empresas)   |   /admin (SUPER_ADMIN)     │
-└──────────────────────┬──────────────────────────────────┘
-                       │ JWT (Supabase Auth)
-         ┌─────────────▼───────────────┐
-         │    SUPABASE AUTH             │
-         └─────────────┬───────────────┘
-                       │ JWT
-┌──────────────────────▼──────────────────────────────────┐
-│              BACKEND QUARKUS (Gateway)                   │
-│  • Valida JWT   • Resolve tenant   • Verifica plano     │
-│  • Auditoria    • Trial / Bloqueio • Proxy para Python  │
-└────────────┬──────────────────────┬─────────────────────┘
-             │                      │
-    ┌────────▼────────┐   ┌─────────▼──────────┐
-    │  SUPABASE DB    │   │  BACKEND PYTHON      │
-    │  PostgreSQL+RLS │   │  FastAPI + pypdf     │
-    └─────────────────┘   └────────────────────┘
+                    ┌───────────────┐        ┌────────────────────┐
+                    │  Front Host    │        │  Frontend Admin     │
+                    │  (login,       │        │  (independente,     │
+                    │  dashboard,    │        │  só admin-service)  │
+                    │  navegação)    │        └──────────┬──────────┘
+                    └───────┬────────┘                   │
+                            │ Module Federation                     
+              ┌─────────────┴─────────────┐               │
+              ▼                           ▼               ▼
+     ┌─────────────────┐       ┌──────────────────┐  ┌─────────────┐
+     │  PDF Frontend    │       │ WhatsApp Frontend │  │Admin Service │
+     └────────┬─────────┘       └─────────┬─────────┘  │  (Quarkus)   │
+              │ ModuleAccessToken          │            └─────────────┘
+              ▼                            ▼
+     ┌─────────────────┐       ┌──────────────────┐
+     │   PDF Service     │       │ WhatsApp Service  │   ...cada módulo novo:
+     │   (FastAPI)        │       │   (FastAPI)        │   backend + micro-frontend
+     └─────────────────┘       └──────────────────┘   próprios, cadastrados no
+                                                          Module Catalog Service.
+
+Front Host também consome, via Supabase JWT: Auth Service, Profile Service,
+Subscription Service e Module Catalog Service (todos Quarkus). Nenhum desses
+serviços de módulo (PDF/WhatsApp/...) passa pelo backend-quarkus — o Host só
+entrega o ModuleAccessToken; quem chama o backend do módulo é o próprio
+Micro Frontend.
 ```
+
+`backend-quarkus` (monolito original) e `frontend` (SPA original) continuam de pé,
+mas o caminho novo para features é sempre: `<módulo>-service` (Python) +
+`<módulo>-frontend` (Micro Frontend), cadastrados no Module Catalog Service e
+carregados sob demanda pelo Front Host.
 
 ## Pré-requisitos
 
@@ -65,11 +76,13 @@ supabase db push
 docker-compose up --build
 ```
 
-- Frontend: http://localhost:3000
-- Quarkus API: http://localhost:8080
-- Python API: http://localhost:8001
-- Swagger Quarkus: http://localhost:8080/q/swagger-ui
-- Swagger Python: http://localhost:8001/docs
+- Front Host (novo, login/dashboard/navegação): http://localhost:5100
+- Frontend Admin (novo, independente): http://localhost:5200
+- PDF Frontend / WhatsApp Frontend (Micro Frontends, carregados pelo Host): http://localhost:5101 / http://localhost:5102
+- Frontend legado (SPA original, ainda ativo em paralelo): http://localhost:3000
+- Quarkus API: http://localhost:8080 — Swagger: http://localhost:8080/q/swagger-ui
+- PDF Service: http://localhost:8001/docs · WhatsApp Service: http://localhost:8002/docs
+- Admin Service: http://localhost:8087/q/swagger-ui
 
 ### 5. Sem Docker — manualmente
 
@@ -94,7 +107,7 @@ docker-compose up --build backend-quarkus
 ### Após alterar código do Python
 
 ```bash
-docker-compose up --build backend-python
+docker-compose up --build pdf-service
 ```
 
 ### Reiniciar um serviço com rebuild
@@ -102,7 +115,7 @@ docker-compose up --build backend-python
 ```bash
 docker-compose up --build --force-recreate frontend
 docker-compose up --build --force-recreate backend-quarkus
-docker-compose up --build --force-recreate backend-python
+docker-compose up --build --force-recreate pdf-service
 ```
 
 ### Ver logs em tempo real
@@ -114,7 +127,7 @@ docker-compose logs -f
 # Serviço específico
 docker-compose logs -f frontend
 docker-compose logs -f backend-quarkus
-docker-compose logs -f backend-python
+docker-compose logs -f pdf-service
 ```
 
 ### Parar tudo
@@ -139,9 +152,20 @@ docker-compose down -v
 
 ```
 saas-plataforma/
-├── frontend/          React 18 + TypeScript + Vite
-├── backend-quarkus/   Java 21 + Quarkus 3
-├── backend-python/    Python 3.11 + FastAPI
+├── frontend-host/          Front Host — login, dashboard, navegação, Module Federation
+├── frontend-admin/         Frontend Admin — independente, só fala com admin-service
+├── pdf-frontend/            Micro Frontend do módulo PDF (remote MF)
+├── whatsapp-frontend/       Micro Frontend do módulo WhatsApp (remote MF)
+├── frontend/                 SPA original — ainda ativo em paralelo, não modificado
+├── backend-quarkus/          Java 21 + Quarkus 3 (monolito original)
+├── auth-service/              Emissão/validação de ProfileAccessToken e ModuleAccessToken
+├── profile-service/            Tenants, membros, convites, níveis de acesso
+├── subscription-service/       Planos, assinaturas de módulo, trials
+├── module-catalog-service/     Catálogo de módulos/serviços + resolução de rota
+├── usage-service/                Contadores de uso/quota por módulo
+├── admin-service/                 Tenants/clientes/usuários admin — só para frontend-admin
+├── pdf-service/                     Python 3.11 + FastAPI (módulo PDF)
+├── whatsapp-service/                 Python 3.11 + FastAPI (módulo WhatsApp, esqueleto)
 ├── database/
 │   ├── migrations/    Scripts SQL versionados
 │   ├── seeds/         Dados iniciais

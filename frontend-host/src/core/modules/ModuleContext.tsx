@@ -1,0 +1,185 @@
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useMemo,
+  type ReactNode,
+} from 'react'
+import { useTenant } from '@/core/workspaces/TenantContext'
+import {
+  fetchModuleToken,
+  fetchProfileToken,
+  getCachedModuleToken,
+  isModuleTokenExpiringSoon,
+} from '@/shared/services/tokenService'
+import { subscriptionApi } from '@/shared/services/subscriptionApi'
+import { decodeJwt } from '@/shared/utils/jwt'
+import type { ModuleTokenClaims, ProfileTokenClaims } from '@/shared/types/tokens'
+import { isAxiosError } from 'axios'
+import { useQueryClient } from '@tanstack/react-query'
+
+interface ModuleContextValue {
+  moduleSlug: string
+  /** ModuleAccessToken bruto — repassado por prop ao Micro Frontend do módulo via Module Federation. O Host nunca chama o backend do módulo diretamente. */
+  moduleToken: string | null
+  permissions: string[]
+  limits: ModuleTokenClaims['limits']
+  planName: string | null
+  isLoading: boolean
+  /** Mensagem exibida durante a ativação automática do plano Free (primeiro acesso). */
+  activationMessage: string | null
+  error: string | null
+  hasPermission: (key: string) => boolean
+  /** Força renovação manual do token (ex: após o Micro Frontend detectar 401). */
+  refreshToken: () => Promise<void>
+}
+
+const ModuleCtx = createContext<ModuleContextValue | null>(null)
+
+interface ModuleProviderProps {
+  moduleSlug: string
+  children: ReactNode
+}
+
+const NO_PERMISSION_MESSAGE =
+  'Você não possui permissão para ativar este módulo. Solicite ao proprietário da empresa ' +
+  'ou a um administrador que realize a ativação do plano Free.'
+
+/**
+ * Provê o ModuleAccessToken para um módulo específico. O componente exposto
+ * pelo Micro Frontend do módulo (via Module Federation) recebe o token bruto
+ * por prop e monta seu próprio cliente HTTP — o Host nunca chama o backend
+ * do módulo (pdf-service, whatsapp-service, ...) diretamente.
+ */
+export function ModuleProvider({ moduleSlug, children }: ModuleProviderProps) {
+  const { activeTenantId, profileAccessToken, permissionsVersion } = useTenant()
+  const queryClient = useQueryClient()
+
+  const [moduleToken, setModuleToken] = useState<string | null>(() =>
+    getCachedModuleToken(moduleSlug, permissionsVersion ?? undefined)
+  )
+  const [isLoading, setIsLoading]                     = useState(!moduleToken)
+  const [activationMessage, setActivationMessage]     = useState<string | null>(null)
+  const [error, setError]                             = useState<string | null>(null)
+
+  // Checagem local de permissão para ativar um módulo Free — usa exclusivamente
+  // as claims já decodificadas do Profile Token (sem consultar banco/backend).
+  const canActivateFreeModule = () => {
+    if (!profileAccessToken) return false
+    try {
+      const claims = decodeJwt<ProfileTokenClaims>(profileAccessToken)
+      return (
+        claims.profileType === 'INDIVIDUAL' ||
+        claims.profileRole === 'OWNER' ||
+        claims.permissions.includes('profile.plans.subscribe')
+      )
+    } catch {
+      return false
+    }
+  }
+
+  const loadToken = async () => {
+    if (!activeTenantId) return
+    setIsLoading(true)
+    setError(null)
+    setActivationMessage(null)
+    try {
+      const data = await fetchModuleToken(moduleSlug, activeTenantId)
+      setModuleToken(data.moduleAccessToken)
+    } catch (err) {
+      if (isAxiosError(err) && err.response?.status === 409 && err.response.data?.code === 'FREE_PLAN_NOT_ACTIVATED') {
+        if (!canActivateFreeModule()) {
+          setError(NO_PERMISSION_MESSAGE)
+          setModuleToken(null)
+          setIsLoading(false)
+          return
+        }
+        await activateFreeModuleAndRetry()
+        return
+      }
+      setError('Sem acesso a este módulo. Verifique sua assinatura.')
+      setModuleToken(null)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const activateFreeModuleAndRetry = async () => {
+    if (!activeTenantId) return
+    setActivationMessage('Estamos preparando seu acesso. Aguarde alguns segundos...')
+    try {
+      // Corpo em snake_case: o backend usa Jackson com property-naming-strategy=SNAKE_CASE
+      await subscriptionApi.post('/api/v1/subscriptions/free', { module_slug: moduleSlug })
+      await fetchProfileToken(activeTenantId)
+      queryClient.invalidateQueries({ queryKey: ['dashboard-modules'] })
+      const data = await fetchModuleToken(moduleSlug, activeTenantId)
+      setModuleToken(data.moduleAccessToken)
+    } catch (err) {
+      if (isAxiosError(err) && err.response?.status === 403) {
+        setError(NO_PERMISSION_MESSAGE)
+      } else {
+        setError('Não foi possível ativar o plano gratuito. Tente novamente.')
+      }
+      setModuleToken(null)
+    } finally {
+      setActivationMessage(null)
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!activeTenantId) return
+    const cached = getCachedModuleToken(moduleSlug, permissionsVersion ?? undefined)
+    if (cached && !isModuleTokenExpiringSoon(moduleSlug)) {
+      setModuleToken(cached)
+      setIsLoading(false)
+      return
+    }
+    loadToken()
+    // Agenda renovação automática 2 min antes de expirar (token de 30 min → renova em 28 min)
+    const interval = setInterval(() => {
+      if (isModuleTokenExpiringSoon(moduleSlug)) {
+        loadToken()
+      }
+    }, 60 * 1000) // verifica a cada minuto
+    return () => clearInterval(interval)
+    // permissionsVersion muda quando nível de acesso/permissões/assinatura são alterados —
+    // força reavaliação do cache (já invalidado pelo polling do TenantContext) sem esperar o MAT expirar.
+  }, [moduleSlug, activeTenantId, permissionsVersion])
+
+  const claims = useMemo<ModuleTokenClaims | null>(() => {
+    if (!moduleToken) return null
+    try {
+      return decodeJwt<ModuleTokenClaims>(moduleToken)
+    } catch {
+      return null
+    }
+  }, [moduleToken])
+
+  const hasPermission = (key: string) =>
+    (claims?.permissions ?? []).includes(key)
+
+  return (
+    <ModuleCtx.Provider value={{
+      moduleSlug,
+      moduleToken,
+      permissions: claims?.permissions ?? [],
+      limits:      claims?.limits ?? {},
+      planName:    claims?.planName ?? null,
+      isLoading,
+      activationMessage,
+      error,
+      hasPermission,
+      refreshToken: loadToken,
+    }}>
+      {children}
+    </ModuleCtx.Provider>
+  )
+}
+
+export function useModule(): ModuleContextValue {
+  const ctx = useContext(ModuleCtx)
+  if (!ctx) throw new Error('useModule deve ser usado dentro de ModuleProvider')
+  return ctx
+}

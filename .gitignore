@@ -1,23 +1,35 @@
 # Secrets — nunca commitar
 .env
 *.env.local
-backend-python/config/.env.*
+pdf-service/config/.env.*
 
 # Frontend
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend-host/node_modules/
+frontend-host/dist/
+frontend-host/.vite/
+frontend-admin/node_modules/
+frontend-admin/dist/
+frontend-admin/.vite/
+pdf-frontend/node_modules/
+pdf-frontend/dist/
+pdf-frontend/.vite/
+whatsapp-frontend/node_modules/
+whatsapp-frontend/dist/
+whatsapp-frontend/.vite/
 
 # Quarkus
 backend-quarkus/target/
 backend-quarkus/.mvn/wrapper/maven-wrapper.jar
 
 # Python
-backend-python/**/__pycache__/
-backend-python/.venv/
-backend-python/venv/
-backend-python/**/*.pyc
-backend-python/.pytest_cache/
+pdf-service/**/__pycache__/
+pdf-service/.venv/
+pdf-service/venv/
+pdf-service/**/*.pyc
+pdf-service/.pytest_cache/
 whatsapp-service/**/__pycache__/
 whatsapp-service/.venv/
 whatsapp-service/venv/

@@ -34,9 +34,9 @@ UPDATE plans SET features = features || '{"signature.sign": true}'
 WHERE code IN ('pro', 'enterprise');
 ```
 
-### 3. Backend Python (se necessário)
+### 3. Backend Python (serviço dedicado do novo módulo)
 
-Crie o serviço em `backend-python/services/signature_service.py` e o router em `backend-python/routers/signature_router.py`. Registre em `main.py`:
+Cada módulo tem seu próprio microsserviço Python (ex: `pdf-service`, `whatsapp-service`). Para "Assinatura Digital", crie `signature-service/` seguindo a mesma estrutura de `pdf-service/` (`routes/`, `security/`, `middleware/`, `services/`, `validators/`, `schemas/`, `repository/`, `storage/`, `permissions/`, `health/`). Registre o router em `main.py`:
 
 ```python
 from routers import signature_router

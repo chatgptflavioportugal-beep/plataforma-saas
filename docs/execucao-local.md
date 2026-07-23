@@ -29,14 +29,14 @@ export SUPABASE_JWT_ISSUER=https://[project].supabase.co/auth/v1
 # Swagger UI: http://localhost:8080/q/swagger-ui
 ```
 
-## Backend Python (PDF Service)
+## PDF Service
 
-O frontend chama o backend-python diretamente (VITE_PDF_API_URL), sem passar pelo
+O frontend chama o pdf-service diretamente (VITE_PDF_API_URL), sem passar pelo
 backend-quarkus. A autorização é feita só pelo ModuleAccessToken emitido pelo
 auth-service — não há mais token interno de proxy.
 
 ```bash
-cd backend-python
+cd pdf-service
 cp .env.example .env
 # Edite .env com MODULE_ACCESS_TOKEN_SECRET (mesmo valor usado pelo auth-service)
 
@@ -89,7 +89,7 @@ database/seeds/0001_plans.sql
 
 ### Python
 ```bash
-cd backend-python
+cd pdf-service
 pytest tests/
 ```
 

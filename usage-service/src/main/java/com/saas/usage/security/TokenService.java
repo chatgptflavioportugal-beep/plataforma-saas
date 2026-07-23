@@ -16,7 +16,7 @@ import java.util.UUID;
 
 /**
  * Validação local do ModuleAccessToken (MAT), emitido pelo auth-service.
- * Mesmo padrão usado pelo backend-quarkus/backend-python: nenhum round-trip de rede,
+ * Mesmo padrão usado pelo backend-quarkus/pdf-service: nenhum round-trip de rede,
  * apenas verificação de assinatura HMAC com o segredo compartilhado.
  */
 @ApplicationScoped

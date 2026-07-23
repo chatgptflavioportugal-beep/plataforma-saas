@@ -33,6 +33,8 @@ services:
       - subscription-service
       - usage-service
       - admin-service
+      - pdf-service
+      - whatsapp-service
 
   # -------------------------------------------------------
   # Auth Service (dev mode)
@@ -54,7 +56,7 @@ services:
       - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
       - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
       # ProfileAccessToken / ModuleAccessToken (segredos compartilhados com
-      # backend-quarkus e backend-python, que validam esses tokens)
+      # backend-quarkus e pdf-service, que validam esses tokens)
       - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
       - PROFILE_ACCESS_TOKEN_SECRET=${PROFILE_ACCESS_TOKEN_SECRET}
       # CORS
@@ -210,11 +212,13 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
 
   # -------------------------------------------------------
-  # Backend Python (FastAPI)
+  # PDF Service (FastAPI)
+  # Módulo PDF (merge, histórico de jobs, download). Frontend chama direto
+  # (VITE_PDF_API_URL), sem passar pelo backend-quarkus.
   # -------------------------------------------------------
-  backend-python:
+  pdf-service:
     build:
-      context: ./backend-python
+      context: ./pdf-service
       dockerfile: Dockerfile
     ports:
       - "8001:8001"
@@ -243,6 +247,103 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - DATABASE_URL=${DATABASE_URL}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+
+  # -------------------------------------------------------
+  # PDF Frontend (Micro Frontend, Module Federation remote)
+  # Exclusivo do módulo PDF — chama só o pdf-service. Carregado sob demanda
+  # pelo Front Host via Module Federation (remoteEntry.js).
+  # -------------------------------------------------------
+  pdf-frontend:
+    build:
+      context: ./pdf-frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5101:5101"
+    volumes:
+      - ./pdf-frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_PDF_API_URL=${VITE_PDF_API_URL:-http://localhost:8001}
+    depends_on:
+      - pdf-service
+
+  # -------------------------------------------------------
+  # WhatsApp Frontend (Micro Frontend, Module Federation remote)
+  # Exclusivo do módulo WhatsApp — chama só o whatsapp-service. Carregado sob
+  # demanda pelo Front Host via Module Federation (remoteEntry.js).
+  # -------------------------------------------------------
+  whatsapp-frontend:
+    build:
+      context: ./whatsapp-frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5102:5102"
+    volumes:
+      - ./whatsapp-frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_WHATSAPP_API_URL=${VITE_WHATSAPP_API_URL:-http://localhost:8002}
+    depends_on:
+      - whatsapp-service
+
+  # -------------------------------------------------------
+  # Front Host (Module Federation host)
+  # Login, dashboard, navegação e estado global. Carrega os Micro Frontends
+  # de módulo (pdf-frontend, whatsapp-frontend) sob demanda via Module
+  # Federation — nunca chama o backend de um módulo diretamente.
+  # -------------------------------------------------------
+  frontend-host:
+    build:
+      context: ./frontend-host
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5100:5100"
+    volumes:
+      - ./frontend-host:/app
+      - /app/node_modules
+    environment:
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080}
+      - VITE_AUTH_API_URL=${VITE_AUTH_API_URL:-http://localhost:8082}
+      - VITE_CATALOG_API_URL=${VITE_CATALOG_API_URL:-http://localhost:8083}
+      - VITE_PROFILE_API_URL=${VITE_PROFILE_API_URL:-http://localhost:8084}
+      - VITE_SUBSCRIPTION_API_URL=${VITE_SUBSCRIPTION_API_URL:-http://localhost:8085}
+      - VITE_ADMIN_APP_URL=${VITE_ADMIN_APP_URL:-http://localhost:5200}
+      - VITE_PDF_REMOTE_URL=${VITE_PDF_REMOTE_URL:-http://localhost:5101}
+      - VITE_WHATSAPP_REMOTE_URL=${VITE_WHATSAPP_REMOTE_URL:-http://localhost:5102}
+    depends_on:
+      - auth-service
+      - module-catalog-service
+      - profile-service
+      - subscription-service
+      - pdf-frontend
+      - whatsapp-frontend
+
+  # -------------------------------------------------------
+  # Frontend Admin (projeto React independente)
+  # Usado só por administradores da plataforma. Consome exclusivamente o
+  # Admin Service — nunca PDF/WhatsApp/Usage Service. Não é federado no Host.
+  # -------------------------------------------------------
+  frontend-admin:
+    build:
+      context: ./frontend-admin
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5200:5200"
+    volumes:
+      - ./frontend-admin:/app
+      - /app/node_modules
+    environment:
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+      - VITE_ADMIN_API_URL=${VITE_ADMIN_API_URL:-http://localhost:8087}
+      - VITE_CATALOG_API_URL=${VITE_CATALOG_API_URL:-http://localhost:8083}
+      - VITE_SUBSCRIPTION_API_URL=${VITE_SUBSCRIPTION_API_URL:-http://localhost:8085}
+    depends_on:
+      - admin-service
+      - module-catalog-service
+      - subscription-service
 
 volumes:
   pdf-storage:
