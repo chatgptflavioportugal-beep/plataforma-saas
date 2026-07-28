@@ -2,15 +2,37 @@ import { Suspense } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { catalogApi } from '@/shared/services/catalogApi'
-import type { ResolvedServiceRoute } from '@/shared/types'
+import { subscriptionApi } from '@/shared/services/subscriptionApi'
+import { useTenant } from '@/core/workspaces/TenantContext'
+import type { DashboardModuleItem, ResolvedServiceRoute, ServiceAccessStatus } from '@/shared/types'
 import { getServiceComponent } from '@/modules/serviceRegistry'
 import { ModuleProvider, useModule } from '@/core/modules/ModuleContext'
+
+/**
+ * Deriva o accessStatus (ALLOWED/DENIED/EXPIRED) cruzando o catálogo (módulo/serviço
+ * existe?) com a mesma lista usada pelo Dashboard (assinatura + permissão do membro já
+ * resolvidas no subscription-service). A gate de segurança real continua sendo a emissão
+ * do ModuleAccessToken (auth-service) — isto aqui é só para dar a mensagem de UX correta
+ * antes de tentar montar o componente do serviço.
+ */
+function resolveAccessStatus(route: ResolvedServiceRoute, modules: DashboardModuleItem[]): ServiceAccessStatus {
+  if (route.accessStatus === 'NOT_FOUND') return 'NOT_FOUND'
+
+  const module = modules.find((m) => m.moduleId === route.moduleId)
+  if (!module) return 'DENIED'
+  if (module.accessStatus === 'EXPIRED') return 'EXPIRED'
+  if (module.accessStatus === 'LOCKED') return 'DENIED'
+
+  const hasService = module.services.some((s) => s.serviceId === route.serviceId)
+  return hasService ? 'ALLOWED' : 'DENIED'
+}
 
 export function ServicePage() {
   const { routeKey = '' } = useParams<{ routeKey: string }>()
   const navigate = useNavigate()
+  const { currentTenant } = useTenant()
 
-  const { data, isLoading, isError } = useQuery({
+  const { data: route, isLoading: isRouteLoading, isError: isRouteError } = useQuery({
     queryKey: ['service-route', routeKey],
     queryFn: async () => {
       const { data } = await catalogApi.get<ResolvedServiceRoute>(
@@ -22,7 +44,16 @@ export function ServicePage() {
     retry: false,
   })
 
-  if (isLoading) {
+  const { data: modules, isLoading: isModulesLoading, isError: isModulesError } = useQuery({
+    queryKey: ['dashboard-modules', currentTenant?.tenant?.id],
+    queryFn: async () => {
+      const { data } = await subscriptionApi.get<DashboardModuleItem[]>('/api/v1/dashboard/modules')
+      return data
+    },
+    enabled: !!currentTenant && route?.accessStatus === 'FOUND',
+  })
+
+  if (isRouteLoading || (route?.accessStatus === 'FOUND' && isModulesLoading)) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
@@ -30,24 +61,26 @@ export function ServicePage() {
     )
   }
 
-  if (isError || !data) {
+  if (isRouteError || !route || (route.accessStatus === 'FOUND' && (isModulesError || !modules))) {
     return <ServiceFeedback icon="❌" title="Erro ao carregar serviço" description="Tente novamente mais tarde." onBack={() => navigate('/app/dashboard')} />
   }
 
-  if (data.accessStatus === 'NOT_FOUND') {
+  const accessStatus = resolveAccessStatus(route, modules ?? [])
+
+  if (accessStatus === 'NOT_FOUND') {
     return <ServiceFeedback icon="🔍" title="Serviço não encontrado" description="O endereço acessado não corresponde a nenhum serviço da plataforma." onBack={() => navigate('/app/dashboard')} />
   }
 
-  if (data.accessStatus === 'DENIED') {
-    return <ServiceFeedback icon="🚫" title="Acesso não permitido" description={`Você não possui permissão para acessar "${data.serviceName ?? routeKey}". Entre em contato com o administrador da conta.`} onBack={() => navigate('/app/dashboard')} />
+  if (accessStatus === 'DENIED') {
+    return <ServiceFeedback icon="🚫" title="Acesso não permitido" description={`Você não possui permissão para acessar "${route.serviceName ?? routeKey}". Entre em contato com o administrador da conta.`} onBack={() => navigate('/app/dashboard')} />
   }
 
-  if (data.accessStatus === 'EXPIRED') {
+  if (accessStatus === 'EXPIRED') {
     return (
       <ServiceFeedback
         icon="⚠️"
         title="Assinatura expirada"
-        description={`Sua assinatura do módulo "${data.moduleName ?? routeKey}" expirou. Para continuar utilizando este módulo, renove sua assinatura ou escolha outro plano.`}
+        description={`Sua assinatura do módulo "${route.moduleName ?? routeKey}" expirou. Para continuar utilizando este módulo, renove sua assinatura ou escolha outro plano.`}
         onBack={() => navigate('/app/dashboard')}
         primaryAction={{ label: 'Renovar assinatura', onClick: () => navigate('/app/billing/plans') }}
       />
@@ -62,14 +95,14 @@ export function ServicePage() {
       <ServiceFeedback
         icon="🚧"
         title="Serviço em breve"
-        description={`O serviço "${data.serviceName}" ainda não possui uma tela implementada. Em breve estará disponível.`}
+        description={`O serviço "${route.serviceName}" ainda não possui uma tela implementada. Em breve estará disponível.`}
         onBack={() => navigate('/app/dashboard')}
       />
     )
   }
 
   // Envolve com ModuleProvider para que o componente tenha acesso ao ModuleAccessToken
-  const moduleSlug = data.moduleSlug ?? routeKey.split('-')[0]
+  const moduleSlug = route.moduleSlug ?? routeKey.split('-')[0]
 
   return (
     <ModuleProvider moduleSlug={moduleSlug}>

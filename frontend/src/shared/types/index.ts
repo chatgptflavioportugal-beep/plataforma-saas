@@ -238,6 +238,9 @@ export interface DashboardModuleService {
 
 export type ServiceAccessStatus = 'ALLOWED' | 'DENIED' | 'EXPIRED' | 'NOT_FOUND'
 
+/** Status do catálogo (module-catalog-service) — não inclui checagem de assinatura/permissão. */
+export type CatalogServiceStatus = 'FOUND' | 'NOT_FOUND'
+
 export interface ResolvedServiceRoute {
   serviceId?: string
   serviceName?: string
@@ -246,7 +249,7 @@ export interface ResolvedServiceRoute {
   moduleId?: string
   moduleName?: string
   moduleSlug?: string
-  accessStatus: ServiceAccessStatus
+  accessStatus: CatalogServiceStatus
 }
 
 export interface DashboardModuleItem {

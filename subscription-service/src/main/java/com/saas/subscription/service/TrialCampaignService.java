@@ -6,9 +6,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.BadRequestException;
 
-import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Dono de toda a regra de negócio de Trial Campaign — o "Subscription Service"
@@ -212,58 +210,10 @@ public class TrialCampaignService {
         throw new BadRequestException(NO_VACANCY_MESSAGE);
     }
 
-    // ─── Regra de elegibilidade do plano (Free não pode ter Trial) ───────────────
-
-    /**
-     * O plano Free já é gratuito permanentemente, então não faz sentido oferecer
-     * Trial para ele. "Free" aqui é o plano com code = 'free' (plans.code é
-     * restrito por CHECK constraint a free/starter/pro/enterprise) — não o preço
-     * do módulo, já que um mesmo módulo pode ter preço zero dentro de um plano
-     * pago sem que o plano em si seja o Free. Retorna false se o id não existir
-     * (o chamador já valida existência separadamente).
-     */
-    public boolean isFreePlanVersionModule(String planVersionModuleId) {
-        Number count = (Number) em.createNativeQuery(
-            "SELECT COUNT(*) FROM plan_version_modules pvm " +
-            "JOIN plans p ON p.id = pvm.plan_id " +
-            "WHERE pvm.id::text = :id AND p.code = 'free'"
-        ).setParameter("id", planVersionModuleId).getSingleResult();
-        return count.longValue() > 0;
-    }
-
-    // ─── Cancelamento em massa (nova versão do plano) ────────────────────────────
-
-    /**
-     * Cancela todas as campanhas ACTIVE/SCHEDULED vinculadas a qualquer módulo da
-     * versão de plano informada — usado quando uma nova versão do plano é criada, já
-     * que a campanha promovia especificamente aquela versão antiga. Não mexe em
-     * used_slots, module_trial_history nem profile_module_subscriptions: participantes
-     * que já entraram continuam normalmente, só novas adesões deixam de ser possíveis.
-     * Retorna os ids cancelados para o chamador registrar auditoria.
-     */
-    @SuppressWarnings("unchecked")
-    @Transactional
-    public List<UUID> cancelCampaignsForPlanVersion(String oldPlanId, String reason, UUID actorUserId) {
-        List<String> ids = em.createNativeQuery(
-            "SELECT tc.id::text FROM trial_campaigns tc " +
-            "JOIN plan_version_modules pvm ON pvm.id = tc.plan_version_module_id " +
-            "WHERE pvm.plan_id::text = :oldPlanId AND tc.status IN ('ACTIVE', 'SCHEDULED')"
-        ).setParameter("oldPlanId", oldPlanId).getResultList();
-
-        if (ids.isEmpty()) return List.of();
-
-        em.createNativeQuery(
-            "UPDATE trial_campaigns SET status = 'CANCELLED', cancelled_at = NOW(), cancel_reason = :reason, " +
-            "updated_at = NOW(), updated_by_user_id = :actorUserId " +
-            "WHERE id::text IN (:ids)"
-        )
-            .setParameter("reason", reason)
-            .setParameter("actorUserId", actorUserId)
-            .setParameter("ids", ids)
-            .executeUpdate();
-
-        return ids.stream().map(UUID::fromString).collect(Collectors.toList());
-    }
+    // Regra de elegibilidade do plano (Free não pode ter Trial) e cancelamento em
+    // massa ao gerar nova versão de plano agora vivem em
+    // admin-service.TrialCampaignAdminService — são administração do catálogo de
+    // campanhas (trial_campaigns), não elegibilidade/reivindicação por tenant.
 
     // ─── Configuração global ──────────────────────────────────────────────────────
 

@@ -1,14 +1,11 @@
 package com.saas.catalog.controller;
 
-import com.saas.catalog.security.TenantContext;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.SecurityContext;
 
 import java.util.*;
 
@@ -22,25 +19,19 @@ public class ServiceRouteResource {
     EntityManager em;
 
     /**
-     * Resolve um serviço pelo routeKey e valida o acesso do perfil ativo.
+     * Resolve um serviço pelo routeKey — catálogo puro, sem checagem de assinatura
+     * ou permissão (isso é responsabilidade do subscription-service/profile-service;
+     * o frontend resolve o accessStatus separadamente via subscription-service).
      *
      * accessStatus:
-     *   ALLOWED         — serviço existe, módulo acessível e perfil tem permissão
-     *   DENIED          — serviço existe, mas módulo não acessível ou membro sem permissão
-     *   EXPIRED         — serviço existe, mas a assinatura do módulo venceu
+     *   FOUND           — serviço existe e está ativo
      *   NOT_FOUND       — routeKey não corresponde a nenhum serviço ativo
      */
     @GET
     @Path("/resolve-route/{routeKey}")
     @SuppressWarnings("unchecked")
-    public Response resolveRoute(@PathParam("routeKey") String routeKey,
-                                 @Context SecurityContext secCtx) {
-        var ctx = TenantContext.from(secCtx);
-        UUID tenantId = ctx.getTenantId();
-        UUID userId   = ctx.getUserId();
-        String role   = ctx.getUserRole();
-
-        // 1. Busca o serviço pelo routeKey — permission_key é calculado a partir dos slugs
+    public Response resolveRoute(@PathParam("routeKey") String routeKey) {
+        // Busca o serviço pelo routeKey — permission_key é calculado a partir dos slugs
         List<Object[]> svcRows = em.createNativeQuery("""
             SELECT
               s.id::text,
@@ -82,81 +73,8 @@ public class ServiceRouteResource {
             ? moduleSlug + "." + groupSlug + "." + serviceSlug
             : moduleSlug + "." + serviceSlug;
 
-        // 2. Verifica se o módulo é acessível para o tenant (SUBSCRIBED, TRIAL, EXPIRED ou FREE).
-        //    TRIAL_CANCELLED conta como acesso válido — cancelar o Trial só cancela a
-        //    renovação, o acesso permanece até expires_at (trial_end_at).
-        List<Object[]> accessRows = em.createNativeQuery("""
-            SELECT
-              pms.id::text,
-              pms.status,
-              (pms.status IN ('ACTIVE', 'TRIAL', 'TRIAL_CANCELLED') AND pms.expires_at IS NOT NULL AND pms.expires_at < NOW())
-                AS past_expiry
-            FROM profile_module_subscriptions pms
-            WHERE pms.module_id = :moduleId
-              AND pms.tenant_id = :tenantId
-              AND pms.status IN ('ACTIVE', 'TRIAL', 'TRIAL_CANCELLED', 'EXPIRED', 'PENDING_PAYMENT')
-            LIMIT 1
-        """)
-        .setParameter("moduleId", UUID.fromString(moduleId))
-        .setParameter("tenantId", tenantId)
-        .getResultList();
-
-        boolean isExpiredSub = false;
-        boolean isSubscribed = false;
-        if (!accessRows.isEmpty()) {
-            Object[] arow = accessRows.get(0);
-            String subStatus  = (String) arow[1];
-            boolean pastExpiry = Boolean.TRUE.equals(arow[2]);
-            isExpiredSub = "EXPIRED".equals(subStatus) || "PENDING_PAYMENT".equals(subStatus) || pastExpiry;
-            isSubscribed = ("ACTIVE".equals(subStatus) || "TRIAL".equals(subStatus) || "TRIAL_CANCELLED".equals(subStatus)) && !pastExpiry;
-        }
-
-        // Verifica se módulo possui plano free
-        boolean hasFreePlan = false;
-        if (!isSubscribed) {
-            List<?> freePlanRows = em.createNativeQuery("""
-                SELECT 1 FROM plan_version_modules pvm
-                WHERE pvm.module_id = :moduleId
-                  AND pvm.status = 'active'
-                  AND pvm.monthly_price = 0
-                LIMIT 1
-            """).setParameter("moduleId", UUID.fromString(moduleId)).getResultList();
-            hasFreePlan = !freePlanRows.isEmpty();
-        }
-
-        boolean hasModuleAccess = isSubscribed || hasFreePlan;
-
-        if (!hasModuleAccess) {
-            String status = isExpiredSub ? "EXPIRED" : "DENIED";
-            return Response.ok(buildResult(serviceId, serviceName, sRouteKey, permKey,
-                    moduleId, moduleName, moduleSlug, status)).build();
-        }
-
-        // 3. Para membros com nível de acesso, verificar permissão no serviço (subscribed ou free)
-        if ("member".equals(role) && hasModuleAccess) {
-            List<?> permRows = em.createNativeQuery("""
-                SELECT 1
-                FROM profile_access_level_permissions palp
-                JOIN user_tenants ut ON ut.access_level_id = palp.access_level_id
-                WHERE ut.user_id = :userId
-                  AND ut.tenant_id = :tenantId
-                  AND ut.is_active = TRUE
-                  AND palp.service_id = :serviceId
-                LIMIT 1
-            """)
-            .setParameter("userId", userId)
-            .setParameter("tenantId", tenantId)
-            .setParameter("serviceId", UUID.fromString(serviceId))
-            .getResultList();
-
-            if (permRows.isEmpty()) {
-                return Response.ok(buildResult(serviceId, serviceName, sRouteKey, permKey,
-                        moduleId, moduleName, moduleSlug, "DENIED")).build();
-            }
-        }
-
         return Response.ok(buildResult(serviceId, serviceName, sRouteKey, permKey,
-                moduleId, moduleName, moduleSlug, "ALLOWED")).build();
+                moduleId, moduleName, moduleSlug, "FOUND")).build();
     }
 
     private Map<String, Object> buildResult(String serviceId, String serviceName,

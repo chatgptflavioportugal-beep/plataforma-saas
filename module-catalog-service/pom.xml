@@ -38,8 +38,8 @@
             <artifactId>quarkus-resteasy-reactive-jackson</artifactId>
         </dependency>
 
-        <!-- JWT — validação do Supabase JWT (ES256), usada pelo TenantResolutionFilter
-             e pelo @Authenticated dos endpoints administrativos -->
+        <!-- JWT — validação do Supabase JWT (ES256), usada pelo @Authenticated dos
+             endpoints de leitura do catálogo -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-smallrye-jwt</artifactId>

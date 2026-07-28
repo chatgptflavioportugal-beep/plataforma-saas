@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { subscriptionApi } from '@/shared/services/subscriptionApi'
-import { catalogApi } from '@/shared/services/catalogApi'
+import { adminApi } from '@/shared/services/adminApi'
 import { useAuth } from '@/core/auth/AuthContext'
 import type {
   Plan, PlanVersionModule, PlatformModule,
@@ -59,7 +58,7 @@ function PlanModulePicker({
   const { data: allPlans = [] } = useQuery({
     queryKey: ['admin-plans-current'],
     queryFn: async () => {
-      const { data } = await subscriptionApi.get<Plan[]>('/api/v1/admin/plans')
+      const { data } = await adminApi.get<Plan[]>('/api/v1/admin/plans')
       return data
     },
   })
@@ -71,7 +70,7 @@ function PlanModulePicker({
   const { data: modules = [] } = useQuery({
     queryKey: ['plan-modules', planId],
     queryFn: async () => {
-      const { data } = await subscriptionApi.get<PlanVersionModule[]>(`/api/v1/admin/plans/${planId}/modules`)
+      const { data } = await adminApi.get<PlanVersionModule[]>(`/api/v1/admin/plans/${planId}/modules`)
       return data
     },
     enabled: !!planId,
@@ -278,7 +277,7 @@ function EditCampaignModal({ campaign, onClose, onSaved }: { campaign: TrialCamp
   const [error, setError] = useState<string | null>(null)
 
   const mutation = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => subscriptionApi.put(`/api/v1/admin/trial-campaigns/${campaign.id}`, payload),
+    mutationFn: (payload: Record<string, unknown>) => adminApi.put(`/api/v1/admin/trial-campaigns/${campaign.id}`, payload),
     onSuccess: () => { onSaved(); onClose() },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
@@ -361,7 +360,7 @@ function ParticipantsTab({ campaignId }: { campaignId: string }) {
   const { data: participants = [], isLoading } = useQuery({
     queryKey: ['trial-campaign-participants', campaignId],
     queryFn: async () => {
-      const { data } = await subscriptionApi.get<TrialCampaignParticipant[]>(`/api/v1/admin/trial-campaigns/${campaignId}/participants`)
+      const { data } = await adminApi.get<TrialCampaignParticipant[]>(`/api/v1/admin/trial-campaigns/${campaignId}/participants`)
       return data
     },
   })
@@ -417,7 +416,7 @@ function HistoryTab({ campaignId }: { campaignId: string }) {
   const { data: history = [], isLoading } = useQuery({
     queryKey: ['trial-campaign-history', campaignId],
     queryFn: async () => {
-      const { data } = await subscriptionApi.get<TrialCampaignHistoryEntry[]>(`/api/v1/admin/trial-campaigns/${campaignId}/history`)
+      const { data } = await adminApi.get<TrialCampaignHistoryEntry[]>(`/api/v1/admin/trial-campaigns/${campaignId}/history`)
       return data
     },
   })
@@ -520,7 +519,7 @@ function CampaignDetailDrawer({ campaignId, onClose }: { campaignId: string; onC
   const { data: detail, isLoading } = useQuery({
     queryKey: ['trial-campaign-detail', campaignId],
     queryFn: async () => {
-      const { data } = await subscriptionApi.get<TrialCampaign>(`/api/v1/admin/trial-campaigns/${campaignId}`)
+      const { data } = await adminApi.get<TrialCampaign>(`/api/v1/admin/trial-campaigns/${campaignId}`)
       return data
     },
   })
@@ -629,7 +628,7 @@ export function AdminTrialsPage() {
       if (filters.hasSlots) params.hasSlots = true
       if (searchInput) params.search = searchInput
       if (sortBy) { params.sortBy = sortBy; params.sortDir = sortDir }
-      const { data } = await subscriptionApi.get<TrialCampaignListResult>('/api/v1/admin/trial-campaigns', { params })
+      const { data } = await adminApi.get<TrialCampaignListResult>('/api/v1/admin/trial-campaigns', { params })
       return data
     },
   })
@@ -641,7 +640,7 @@ export function AdminTrialsPage() {
   const { data: modules = [] } = useQuery({
     queryKey: ['admin-modules-all'],
     queryFn: async () => {
-      const { data } = await catalogApi.get<PlatformModule[]>('/api/v1/admin/modules')
+      const { data } = await adminApi.get<PlatformModule[]>('/api/v1/admin/modules')
       return data
     },
   })
@@ -649,7 +648,7 @@ export function AdminTrialsPage() {
   const { data: plansForFilter = [] } = useQuery({
     queryKey: ['admin-plans-current-all'],
     queryFn: async () => {
-      const { data } = await subscriptionApi.get<Plan[]>('/api/v1/admin/plans')
+      const { data } = await adminApi.get<Plan[]>('/api/v1/admin/plans')
       return data.filter((p) => p.is_current_version)
     },
   })
@@ -667,7 +666,7 @@ export function AdminTrialsPage() {
   }
 
   const createMutation = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => subscriptionApi.post('/api/v1/admin/trial-campaigns', payload),
+    mutationFn: (payload: Record<string, unknown>) => adminApi.post('/api/v1/admin/trial-campaigns', payload),
     onSuccess: () => {
       invalidateList()
       setShowCreate(false)
@@ -683,7 +682,7 @@ export function AdminTrialsPage() {
   })
 
   const cancelMutation = useMutation({
-    mutationFn: (id: string) => subscriptionApi.post(`/api/v1/admin/trial-campaigns/${id}/cancel`, {}),
+    mutationFn: (id: string) => adminApi.post(`/api/v1/admin/trial-campaigns/${id}/cancel`, {}),
     onSuccess: () => {
       invalidateList()
       setCancelCampaign(null)

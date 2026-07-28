@@ -1,8 +1,8 @@
-package com.saas.subscription.controller;
+package com.saas.admin.controller;
 
-import com.saas.subscription.security.AdminAuthService;
-import com.saas.subscription.service.AuditService;
-import com.saas.subscription.service.TrialCampaignService;
+import com.saas.admin.security.AdminAuthService;
+import com.saas.admin.service.AdminAuditService;
+import com.saas.admin.service.TrialCampaignAdminService;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -21,15 +21,18 @@ import java.util.stream.Collectors;
 
 /**
  * Administração de Trial Campaigns — CRUD, cancelamento, auditoria e relatórios
- * (indicadores + participantes + histórico). Regras de elegibilidade/seleção em
- * tempo real ficam em TrialCampaignService; este recurso só cuida do ciclo de
- * vida administrativo das campanhas.
+ * (indicadores + participantes + histórico). Movido de subscription-service
+ * para admin-service (único dono de trial_campaigns). Regras de elegibilidade/
+ * seleção em tempo real por tenant (checkEligibility/claimSlotOrThrow/
+ * resolveCatalogOffer/resolveModuleTrialStatus) continuam em
+ * subscription-service.TrialCampaignService — este recurso só cuida do ciclo
+ * de vida administrativo das campanhas.
  */
 @Path("/api/v1/admin/trial-campaigns")
 @Authenticated
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-public class TrialCampaignResource {
+public class AdminTrialCampaignResource {
 
     // Status que podem ser atribuídos diretamente por criação/edição. CANCELLED só
     // é alcançável pela ação dedicada POST /{id}/cancel (confirmação + auditoria).
@@ -37,8 +40,8 @@ public class TrialCampaignResource {
 
     @Inject EntityManager em;
     @Inject AdminAuthService adminAuth;
-    @Inject AuditService auditService;
-    @Inject TrialCampaignService trialCampaignService;
+    @Inject AdminAuditService auditService;
+    @Inject TrialCampaignAdminService trialCampaignAdminService;
 
     public record TrialCampaignRequest(
         String planVersionModuleId,
@@ -84,7 +87,7 @@ public class TrialCampaignResource {
             "ORDER BY pm.name, tc.priority DESC, tc.created_at DESC"
         ).setParameter("planId", planId).getResultList();
 
-        return Response.ok(rows.stream().map(TrialCampaignResource::mapRow).collect(Collectors.toList())).build();
+        return Response.ok(rows.stream().map(AdminTrialCampaignResource::mapRow).collect(Collectors.toList())).build();
     }
 
     @GET
@@ -297,8 +300,8 @@ public class TrialCampaignResource {
 
         List<Object[]> rows = em.createNativeQuery(
             "SELECT al.action, up.full_name, al.created_at::text " +
-            "FROM audit_logs al " +
-            "LEFT JOIN user_profiles up ON up.id = al.user_id " +
+            "FROM admin_audit_logs al " +
+            "LEFT JOIN user_profiles up ON up.id = al.actor_user_id " +
             "WHERE al.resource = 'trial_campaigns' AND al.resource_id = :id " +
             "ORDER BY al.created_at ASC"
         ).setParameter("id", id).getResultList();
@@ -336,13 +339,13 @@ public class TrialCampaignResource {
         // O plano Free já é a modalidade gratuita permanente do módulo — Trial não
         // faz sentido nele. Validação de negócio fica na camada de serviço para não
         // depender só do Controller nem do que o Frontend deixa de listar.
-        if (trialCampaignService.isFreePlanVersionModule(req.planVersionModuleId())) {
-            auditService.log(null, UUID.fromString(userId), "trial_campaign.creation_denied", "trial_campaigns",
+        if (trialCampaignAdminService.isFreePlanVersionModule(req.planVersionModuleId())) {
+            auditService.log(userId, "trial_campaign.creation_denied", "trial_campaigns",
                 req.planVersionModuleId(),
                 Map.of(
                     "reason", "Free plans do not support Trial campaigns.",
                     "planVersionModuleId", req.planVersionModuleId()
-                ), null);
+                ));
             throw new BadRequestException("Não é permitido criar campanhas Trial para o plano Free.");
         }
 
@@ -366,8 +369,8 @@ public class TrialCampaignResource {
             .setParameter("userId", userId)
             .executeUpdate();
 
-        auditService.log(null, UUID.fromString(userId), "trial_campaign.created", "trial_campaigns", id.toString(),
-            Map.of("name", req.name(), "status", status, "days", req.days(), "maxSlots", req.maxSlots()), null);
+        auditService.log(userId, "trial_campaign.created", "trial_campaigns", id.toString(),
+            Map.of("name", req.name(), "status", status, "days", req.days(), "maxSlots", req.maxSlots()));
 
         return Response.ok(Map.of("id", id.toString(), "created", true)).build();
     }
@@ -442,8 +445,8 @@ public class TrialCampaignResource {
                 .executeUpdate();
         }
 
-        auditService.log(null, UUID.fromString(userId), "trial_campaign.updated", "trial_campaigns", id,
-            Map.of("statusBefore", oldStatus, "statusAfter", status), null);
+        auditService.log(userId, "trial_campaign.updated", "trial_campaigns", id,
+            Map.of("statusBefore", oldStatus, "statusAfter", status));
 
         return Response.ok(Map.of("id", id, "updated", true, "termsLocked", termsLocked)).build();
     }
@@ -462,7 +465,7 @@ public class TrialCampaignResource {
 
         if (updated == 0) throw new NotFoundException("Campanha de Trial não encontrada");
 
-        auditService.log(null, UUID.fromString(userId), "trial_campaign.closed", "trial_campaigns", id, null);
+        auditService.log(userId, "trial_campaign.closed", "trial_campaigns", id, null);
         return Response.ok(Map.of("id", id, "status", "CLOSED")).build();
     }
 
@@ -486,8 +489,8 @@ public class TrialCampaignResource {
         if (updated == 0)
             return Response.status(404).entity(Map.of("error", "Campanha não encontrada ou não pode mais ser cancelada")).build();
 
-        auditService.log(null, UUID.fromString(userId), "trial_campaign.cancelled", "trial_campaigns", id,
-            Map.of("reason", reason), null);
+        auditService.log(userId, "trial_campaign.cancelled", "trial_campaigns", id,
+            Map.of("reason", reason));
         return Response.ok(Map.of("id", id, "status", "CANCELLED")).build();
     }
 

@@ -1,5 +1,6 @@
-package com.saas.catalog.controller;
+package com.saas.admin.controller;
 
+import com.saas.admin.security.AdminAuthService;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -7,7 +8,6 @@ import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import org.eclipse.microprofile.jwt.JsonWebToken;
 
 import java.util.List;
 import java.util.Map;
@@ -15,70 +15,21 @@ import java.util.Map;
 /**
  * CRUD administrativo do catálogo de módulos/serviços/grupos de serviços da plataforma.
  *
- * Movido de AdminResource (backend-quarkus). Não usa TenantContext — autorização é feita
- * via papel administrativo global (user_profiles.system_role / admin_access_level), a
- * mesma checagem que existia no monólito.
+ * Movido de module-catalog-service (que por sua vez havia herdado de AdminResource no
+ * backend-quarkus) para consolidar toda escrita estrutural da plataforma em admin-service,
+ * conforme o princípio de responsabilidade única — module-catalog-service permanece
+ * exclusivamente leitura (ver ServiceRouteResource).
  */
 @Path("/api/v1/admin/modules")
 @Authenticated
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-public class ModuleCatalogAdminResource {
+public class AdminModuleCatalogResource {
 
     @Inject EntityManager em;
-    @Inject JsonWebToken  jwt;
 
-    // ----------------------------------------------------------------
-    // Autorização
-    // ----------------------------------------------------------------
-
-    private String currentUserId() {
-        String userId = jwt.getSubject();
-        if (userId == null) throw new ForbiddenException("Não autenticado");
-        return userId;
-    }
-
-    /**
-     * Exige que o usuário seja SUPER_ADMIN ou ADMIN_USER ativo com a permissão especificada.
-     */
-    private void requireAdminPermission(String permissionKey) {
-        String userId = currentUserId();
-        try {
-            Object[] row = (Object[]) em.createNativeQuery(
-                "SELECT system_role, is_active, admin_access_level_id::text " +
-                "FROM user_profiles WHERE id::text = :id"
-            ).setParameter("id", userId).getSingleResult();
-
-            String role = (String) row[0];
-            boolean isActive = Boolean.TRUE.equals(row[1]);
-
-            if ("SUPER_ADMIN".equals(role)) return;
-
-            if (!"ADMIN_USER".equals(role))
-                throw new ForbiddenException("Acesso restrito à área administrativa");
-
-            if (!isActive)
-                throw new ForbiddenException("Usuário administrativo inativo");
-
-            if (permissionKey == null) return;
-
-            String accessLevelId = (String) row[2];
-            if (accessLevelId == null)
-                throw new ForbiddenException("Você não possui permissão para executar esta ação");
-
-            long has = ((Number) em.createNativeQuery(
-                "SELECT COUNT(*) FROM admin_access_level_permissions " +
-                "WHERE access_level_id::text = :lvl AND permission_key = :key"
-            ).setParameter("lvl", accessLevelId).setParameter("key", permissionKey)
-             .getSingleResult()).longValue();
-
-            if (has == 0)
-                throw new ForbiddenException("Você não possui permissão para executar esta ação");
-
-        } catch (jakarta.persistence.NoResultException e) {
-            throw new ForbiddenException("Perfil de usuário não encontrado");
-        }
-    }
+    @Inject
+    AdminAuthService adminAuth;
 
     private static final java.util.regex.Pattern SLUG_PATTERN =
         java.util.regex.Pattern.compile("^[a-z0-9][a-z0-9_-]*$|^[a-z0-9]$");
@@ -104,7 +55,7 @@ public class ModuleCatalogAdminResource {
     @GET
     @SuppressWarnings("unchecked")
     public Response listModules(@QueryParam("search") String search, @QueryParam("is_active") Boolean isActive) {
-        requireAdminPermission("admin.modules.view");
+        adminAuth.requireAdminPermission("admin.modules.view");
         StringBuilder sql = new StringBuilder(
             "SELECT m.id::text, m.name, m.slug, m.description, m.module_url, m.icon_path, " +
             "  m.is_active, m.sort_order, m.created_at::text, m.updated_at::text, " +
@@ -144,7 +95,7 @@ public class ModuleCatalogAdminResource {
     @POST
     @Transactional
     public Response createModule(Map<String, Object> body) {
-        requireAdminPermission("admin.modules.create");
+        adminAuth.requireAdminPermission("admin.modules.create");
         String name = (String) body.get("name");
         String slug = (String) body.get("slug");
         String moduleUrl = (String) body.get("module_url");
@@ -197,7 +148,7 @@ public class ModuleCatalogAdminResource {
     @Path("/{id}")
     @Transactional
     public Response updateModule(@PathParam("id") String id, Map<String, Object> body) {
-        requireAdminPermission("admin.modules.edit");
+        adminAuth.requireAdminPermission("admin.modules.edit");
         String name = (String) body.get("name");
         String slug = (String) body.get("slug");
         String moduleUrl = (String) body.get("module_url");
@@ -242,7 +193,7 @@ public class ModuleCatalogAdminResource {
     @Consumes(MediaType.WILDCARD)
     @Transactional
     public Response toggleModuleStatus(@PathParam("id") String id) {
-        requireAdminPermission("admin.modules.activate");
+        adminAuth.requireAdminPermission("admin.modules.activate");
         int updated = em.createNativeQuery(
             "UPDATE platform_modules SET is_active = NOT is_active WHERE id::text = :id"
         ).setParameter("id", id).executeUpdate();
@@ -259,7 +210,7 @@ public class ModuleCatalogAdminResource {
     @Path("/{moduleId}/services")
     @SuppressWarnings("unchecked")
     public Response listModuleServices(@PathParam("moduleId") String moduleId) {
-        requireAdminPermission("admin.services.view");
+        adminAuth.requireAdminPermission("admin.services.view");
         List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
             "SELECT s.id::text, s.module_id::text, s.name, s.slug, s.description, " +
             "  s.icon_path, s.is_active, s.sort_order, s.created_at::text, s.updated_at::text, " +
@@ -287,7 +238,7 @@ public class ModuleCatalogAdminResource {
     @Transactional
     @SuppressWarnings("unchecked")
     public Response createModuleService(@PathParam("moduleId") String moduleId, Map<String, Object> body) {
-        requireAdminPermission("admin.services.create");
+        adminAuth.requireAdminPermission("admin.services.create");
         String name = (String) body.get("name");
         String slug = (String) body.get("slug");
         if (name == null || name.isBlank())
@@ -388,7 +339,7 @@ public class ModuleCatalogAdminResource {
             @PathParam("moduleId") String moduleId,
             @PathParam("id") String id,
             Map<String, Object> body) {
-        requireAdminPermission("admin.services.edit");
+        adminAuth.requireAdminPermission("admin.services.edit");
         String name = (String) body.get("name");
         String slug = (String) body.get("slug");
         if (name == null || name.isBlank())
@@ -481,7 +432,7 @@ public class ModuleCatalogAdminResource {
     public Response toggleModuleServiceStatus(
             @PathParam("moduleId") String moduleId,
             @PathParam("id") String id) {
-        requireAdminPermission("admin.services.activate");
+        adminAuth.requireAdminPermission("admin.services.activate");
         int updated = em.createNativeQuery(
             "UPDATE platform_module_services SET is_active = NOT is_active WHERE id::text = :id AND module_id::text = :moduleId"
         ).setParameter("id", id).setParameter("moduleId", moduleId).executeUpdate();
@@ -498,7 +449,7 @@ public class ModuleCatalogAdminResource {
     @Path("/{moduleId}/service-groups")
     @SuppressWarnings("unchecked")
     public Response listModuleServiceGroups(@PathParam("moduleId") String moduleId) {
-        requireAdminPermission("admin.services.groups.view");
+        adminAuth.requireAdminPermission("admin.services.groups.view");
         List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
             "SELECT g.id::text, g.module_id::text, g.name, g.slug, g.description, g.icon_path, " +
             "  g.sort_order, g.status, g.created_at::text, g.updated_at::text, " +
@@ -524,7 +475,7 @@ public class ModuleCatalogAdminResource {
     @Transactional
     @SuppressWarnings("unchecked")
     public Response createModuleServiceGroup(@PathParam("moduleId") String moduleId, Map<String, Object> body) {
-        requireAdminPermission("admin.services.groups.create");
+        adminAuth.requireAdminPermission("admin.services.groups.create");
         String name = (String) body.get("name");
         String slug = (String) body.get("slug");
         if (name == null || name.isBlank())
@@ -576,7 +527,7 @@ public class ModuleCatalogAdminResource {
             @PathParam("moduleId") String moduleId,
             @PathParam("id") String id,
             Map<String, Object> body) {
-        requireAdminPermission("admin.services.groups.edit");
+        adminAuth.requireAdminPermission("admin.services.groups.edit");
         String name = (String) body.get("name");
         String slug = (String) body.get("slug");
         if (name == null || name.isBlank())
@@ -619,7 +570,7 @@ public class ModuleCatalogAdminResource {
         String newStatus = body instanceof Map<?,?> ? (String) body.get("status") : null;
         if (!List.of("ACTIVE", "INACTIVE").contains(newStatus))
             return Response.status(400).entity(Map.of("error", "Status inválido. Use ACTIVE ou INACTIVE")).build();
-        requireAdminPermission("ACTIVE".equals(newStatus) ? "admin.services.groups.activate" : "admin.services.groups.deactivate");
+        adminAuth.requireAdminPermission("ACTIVE".equals(newStatus) ? "admin.services.groups.activate" : "admin.services.groups.deactivate");
 
         if ("INACTIVE".equals(newStatus)) {
             long activeCount = ((Number) em.createNativeQuery(

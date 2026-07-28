@@ -3,7 +3,11 @@
 
 services:
   # -------------------------------------------------------
-  # Frontend React (dev server)
+  # [DEPRECADO] Frontend React (monólito legado)
+  # Substituído por frontend-host + frontend-admin + pdf-frontend +
+  # whatsapp-frontend (Module Federation). Mantido rodando apenas para não
+  # quebrar quem ainda aponta para ele; não recebe mais funcionalidades novas
+  # — só correções de segurança críticas até ser removido do compose/repo.
   # -------------------------------------------------------
   frontend:
     build:
@@ -52,6 +56,10 @@ services:
       - QUARKUS_DATASOURCE_JDBC_URL=${QUARKUS_DATASOURCE_JDBC_URL}
       - QUARKUS_DATASOURCE_USERNAME=${QUARKUS_DATASOURCE_USERNAME}
       - QUARKUS_DATASOURCE_PASSWORD=${QUARKUS_DATASOURCE_PASSWORD}
+      # Opcional: AUTH_DB_USERNAME/AUTH_DB_PASSWORD apontam para a role de
+      # least privilege dedicada (database/migrations/0051_least_privilege_roles.sql)
+      #       - AUTH_DB_USERNAME=${AUTH_DB_USERNAME:-}
+      #       - AUTH_DB_PASSWORD=${AUTH_DB_PASSWORD:-}
       # JWT (Supabase)
       - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
       - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
@@ -59,12 +67,15 @@ services:
       # backend-quarkus e pdf-service, que validam esses tokens)
       - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
       - PROFILE_ACCESS_TOKEN_SECRET=${PROFILE_ACCESS_TOKEN_SECRET}
+      # Subscription Service — resolução de acesso a módulo (assinatura/plano/limites)
+      - SUBSCRIPTION_SERVICE_URL=${SUBSCRIPTION_SERVICE_URL:-http://subscription-service:8085}
       # CORS
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
 
   # -------------------------------------------------------
   # Module Catalog Service (dev mode)
-  # Catálogo de módulos/serviços/grupos + resolução de rota (/api/v1/services/resolve-route).
+  # Catálogo de módulos/serviços/grupos — somente leitura (GET). Todo CRUD
+  # administrativo do catálogo vive em admin-service.
   # Banco: Supabase (mesmo banco, por enquanto)
   # -------------------------------------------------------
   module-catalog-service:
@@ -78,6 +89,11 @@ services:
       - QUARKUS_DATASOURCE_JDBC_URL=${QUARKUS_DATASOURCE_JDBC_URL}
       - QUARKUS_DATASOURCE_USERNAME=${QUARKUS_DATASOURCE_USERNAME}
       - QUARKUS_DATASOURCE_PASSWORD=${QUARKUS_DATASOURCE_PASSWORD}
+      # Opcional: CATALOG_DB_USERNAME/CATALOG_DB_PASSWORD apontam para a role
+      # de least privilege dedicada, somente leitura
+      # (database/migrations/0051_least_privilege_roles.sql)
+      #       - CATALOG_DB_USERNAME=${CATALOG_DB_USERNAME:-}
+      #       - CATALOG_DB_PASSWORD=${CATALOG_DB_PASSWORD:-}
       # JWT (Supabase)
       - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
       - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
@@ -100,6 +116,10 @@ services:
       - QUARKUS_DATASOURCE_JDBC_URL=${QUARKUS_DATASOURCE_JDBC_URL}
       - QUARKUS_DATASOURCE_USERNAME=${QUARKUS_DATASOURCE_USERNAME}
       - QUARKUS_DATASOURCE_PASSWORD=${QUARKUS_DATASOURCE_PASSWORD}
+      # Opcional: PROFILE_DB_USERNAME/PROFILE_DB_PASSWORD apontam para a role
+      # de least privilege dedicada (database/migrations/0051_least_privilege_roles.sql)
+      #       - PROFILE_DB_USERNAME=${PROFILE_DB_USERNAME:-}
+      #       - PROFILE_DB_PASSWORD=${PROFILE_DB_PASSWORD:-}
       # JWT (Supabase)
       - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
       - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
@@ -130,9 +150,16 @@ services:
       - QUARKUS_DATASOURCE_JDBC_URL=${QUARKUS_DATASOURCE_JDBC_URL}
       - QUARKUS_DATASOURCE_USERNAME=${QUARKUS_DATASOURCE_USERNAME}
       - QUARKUS_DATASOURCE_PASSWORD=${QUARKUS_DATASOURCE_PASSWORD}
+      # Opcional: SUBSCRIPTION_DB_USERNAME/SUBSCRIPTION_DB_PASSWORD apontam
+      # para a role de least privilege dedicada
+      # (database/migrations/0051_least_privilege_roles.sql)
+      #       - SUBSCRIPTION_DB_USERNAME=${SUBSCRIPTION_DB_USERNAME:-}
+      #       - SUBSCRIPTION_DB_PASSWORD=${SUBSCRIPTION_DB_PASSWORD:-}
       # JWT (Supabase)
       - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
       - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
+      # Admin Service — checagem de permissão administrativa (requireAdminPermission)
+      - ADMIN_SERVICE_URL=${ADMIN_SERVICE_URL:-http://admin-service:8087}
       # CORS
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
 
@@ -153,6 +180,10 @@ services:
       - QUARKUS_DATASOURCE_JDBC_URL=${QUARKUS_DATASOURCE_JDBC_URL}
       - QUARKUS_DATASOURCE_USERNAME=${QUARKUS_DATASOURCE_USERNAME}
       - QUARKUS_DATASOURCE_PASSWORD=${QUARKUS_DATASOURCE_PASSWORD}
+      # Opcional: USAGE_DB_USERNAME/USAGE_DB_PASSWORD apontam para a role de
+      # least privilege dedicada (database/migrations/0051_least_privilege_roles.sql)
+      #       - USAGE_DB_USERNAME=${USAGE_DB_USERNAME:-}
+      #       - USAGE_DB_PASSWORD=${USAGE_DB_PASSWORD:-}
       # ModuleAccessToken (validação local, mesmo segredo do auth-service)
       - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
       # CORS
@@ -175,6 +206,10 @@ services:
       - QUARKUS_DATASOURCE_JDBC_URL=${QUARKUS_DATASOURCE_JDBC_URL}
       - QUARKUS_DATASOURCE_USERNAME=${QUARKUS_DATASOURCE_USERNAME}
       - QUARKUS_DATASOURCE_PASSWORD=${QUARKUS_DATASOURCE_PASSWORD}
+      # Opcional: ADMIN_DB_USERNAME/ADMIN_DB_PASSWORD apontam para a role de
+      # least privilege dedicada (database/migrations/0051_least_privilege_roles.sql)
+      #       - ADMIN_DB_USERNAME=${ADMIN_DB_USERNAME:-}
+      #       - ADMIN_DB_PASSWORD=${ADMIN_DB_PASSWORD:-}
       # JWT (Supabase)
       - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
       - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
@@ -187,11 +222,19 @@ services:
       - QUARKUS_MAILER_PORT=${QUARKUS_MAILER_PORT:-1025}
       - QUARKUS_MAILER_USERNAME=${QUARKUS_MAILER_USERNAME:-}
       - QUARKUS_MAILER_PASSWORD=${QUARKUS_MAILER_PASSWORD:-}
+      # Subscription Service — cancelar/reativar assinatura em nome de um admin
+      - SUBSCRIPTION_SERVICE_URL=${SUBSCRIPTION_SERVICE_URL:-http://subscription-service:8085}
       # CORS
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
 
   # -------------------------------------------------------
-  # Backend Quarkus (dev mode)
+  # [DEPRECADO] Backend Quarkus (monólito legado)
+  # Todas as responsabilidades já migraram para os microsserviços dedicados
+  # (auth/module-catalog/profile/subscription/usage/admin/pdf/whatsapp) —
+  # com.saas.resource.PublicResource é hoje o único controller restante
+  # (só expõe /api/v1/public/health). Nenhum frontend ativo depende mais
+  # deste serviço para dados; mantido no compose apenas até a remoção física
+  # ser decidida explicitamente.
   # Banco: Supabase (direto — sem postgres local)
   # -------------------------------------------------------
   backend-quarkus:
@@ -323,7 +366,8 @@ services:
   # -------------------------------------------------------
   # Frontend Admin (projeto React independente)
   # Usado só por administradores da plataforma. Consome exclusivamente o
-  # Admin Service — nunca PDF/WhatsApp/Usage Service. Não é federado no Host.
+  # Admin Service — nunca module-catalog-service/subscription-service/PDF/
+  # WhatsApp/Usage Service diretamente. Não é federado no Host.
   # -------------------------------------------------------
   frontend-admin:
     build:
@@ -338,12 +382,8 @@ services:
       - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
       - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
       - VITE_ADMIN_API_URL=${VITE_ADMIN_API_URL:-http://localhost:8087}
-      - VITE_CATALOG_API_URL=${VITE_CATALOG_API_URL:-http://localhost:8083}
-      - VITE_SUBSCRIPTION_API_URL=${VITE_SUBSCRIPTION_API_URL:-http://localhost:8085}
     depends_on:
       - admin-service
-      - module-catalog-service
-      - subscription-service
 
 volumes:
   pdf-storage:

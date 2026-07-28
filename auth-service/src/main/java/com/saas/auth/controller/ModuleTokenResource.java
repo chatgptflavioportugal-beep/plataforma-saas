@@ -1,5 +1,6 @@
 package com.saas.auth.controller;
 
+import com.saas.auth.client.SubscriptionServiceClient;
 import com.saas.auth.repository.UserTenantRepository;
 import com.saas.auth.security.TenantContext;
 import com.saas.auth.security.TokenService;
@@ -8,9 +9,11 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -25,10 +28,11 @@ import java.util.UUID;
  * O MAT carrega apenas permissões e limites do módulo solicitado.
  * Validade curta (padrão 30 min), renovável pelo frontend.
  *
- * TODO (Fase 4 — subscription-service): a checagem de assinatura/plano feita aqui
- * (consulta a profile_module_subscriptions/plan_version_modules) deve migrar para o
- * subscription-service, que passará a chamar este serviço apenas para assinar o
- * token já com os claims resolvidos.
+ * A checagem de assinatura/plano (profile_module_subscriptions/
+ * plan_version_modules/plan_version_module_limits) é resolvida pelo
+ * subscription-service via SubscriptionServiceClient — este serviço apenas
+ * carrega as permissões de módulo do usuário (domínio de perfil/nível de
+ * acesso, não de assinatura) e assina o token com os claims já resolvidos.
  */
 @Path("/api/v1/module-token/{moduleSlug}")
 @Authenticated
@@ -45,111 +49,67 @@ public class ModuleTokenResource {
     @Inject
     UserTenantRepository userTenantRepository;
 
+    @Inject
+    @RestClient
+    SubscriptionServiceClient subscriptionServiceClient;
+
     @POST
     @SuppressWarnings("unchecked")
     public Response generate(
             @PathParam("moduleSlug") String moduleSlug,
-            @Context SecurityContext secCtx
+            @Context SecurityContext secCtx,
+            @Context HttpHeaders httpHeaders
     ) {
         var ctx = TenantContext.from(secCtx);
         UUID userId   = ctx.getUserId();
         UUID tenantId = ctx.getTenantId();
         String role   = ctx.getUserRole();
 
-        // 1. Resolve o módulo pelo slug
-        List<Object[]> moduleRows = em.createNativeQuery("""
-            SELECT id::text, name FROM platform_modules
-            WHERE slug = :slug AND is_active = TRUE
-        """).setParameter("slug", moduleSlug).getResultList();
-
-        if (moduleRows.isEmpty()) {
-            return Response.status(404).entity(Map.of("error", "Módulo não encontrado: " + moduleSlug)).build();
+        String authorization = httpHeaders.getHeaderString(HttpHeaders.AUTHORIZATION);
+        Map<String, Object> access;
+        try (Response upstream = subscriptionServiceClient.resolveModuleAccess(
+                authorization, tenantId.toString(), moduleSlug)) {
+            access = upstream.readEntity(Map.class);
         }
 
-        String moduleId   = (String) moduleRows.get(0)[0];
-        String moduleName = (String) moduleRows.get(0)[1];
-
-        // 2. Verifica acesso em três etapas (da mais específica para a mais ampla):
-        //    a) profile_module_subscriptions ACTIVE  → SUBSCRIPTION
-        //    b) plan_version_modules free (price=0) sem assinatura → ainda não ativado
-        //       (o front deve chamar POST /api/v1/subscriptions/free e tentar de novo)
-        //    c) moduleSlugSet do TenantContext        → TENANT_SUBSCRIPTION (caminho legado)
-        //       O moduleSlugSet vem da assinatura principal do tenant (tenant_subscriptions),
-        //       que é o acesso que funcionava antes desta feature.
-
-        List<Object[]> subRows = em.createNativeQuery("""
-            SELECT pms.id::text, pvm.id::text, p.name, p.code,
-                   (pms.expires_at IS NOT NULL AND pms.expires_at < NOW()) AS past_expiry
-            FROM profile_module_subscriptions pms
-            JOIN plan_version_modules pvm ON pvm.id = pms.plan_version_id
-            JOIN plans p ON p.id = pvm.plan_id
-            WHERE pms.module_id = :moduleId
-              AND pms.tenant_id = :tenantId
-              AND pms.status IN ('ACTIVE', 'TRIAL', 'TRIAL_CANCELLED')
-            LIMIT 1
-        """)
-        .setParameter("moduleId", UUID.fromString(moduleId))
-        .setParameter("tenantId", tenantId)
-        .getResultList();
-
-        // Assinatura ativa mas vencida: bloqueia direto, não cai para FREE_PLAN/TENANT_SUBSCRIPTION.
-        if (!subRows.isEmpty() && Boolean.TRUE.equals(subRows.get(0)[4])) {
-            return Response.status(403).entity(Map.of(
-                    "code", "MODULE_EXPIRED",
-                    "error", "Assinatura deste módulo expirou",
-                    "moduleSlug", moduleSlug
-            )).build();
-        }
-
-        String planName    = null;
-        String accessSource;
-        String planVersionId = null;
-
-        if (!subRows.isEmpty()) {
-            planVersionId = (String) subRows.get(0)[1];
-            planName      = (String) subRows.get(0)[2];
-            accessSource  = "SUBSCRIPTION";
-        } else {
-            // b) Plano free associado ao módulo, mas ainda não ativado (sem linha em
-            //    profile_module_subscriptions). Não emite token — o front deve chamar
-            //    POST /api/v1/subscriptions/free para ativar e então tentar de novo.
-            List<Object[]> freeRows = em.createNativeQuery("""
-                SELECT pvm.id::text, p.name
-                FROM plan_version_modules pvm
-                JOIN plans p ON p.id = pvm.plan_id
-                WHERE pvm.module_id = :moduleId
-                  AND pvm.status = 'active'
-                  AND pvm.monthly_price = 0
-                LIMIT 1
-            """).setParameter("moduleId", UUID.fromString(moduleId)).getResultList();
-
-            if (!freeRows.isEmpty()) {
+        String resolution = (String) access.get("resolution");
+        switch (resolution) {
+            case "MODULE_NOT_FOUND":
+                return Response.status(404).entity(Map.of("error", "Módulo não encontrado: " + moduleSlug)).build();
+            case "MODULE_EXPIRED":
+                return Response.status(403).entity(Map.of(
+                        "code", "MODULE_EXPIRED",
+                        "error", "Assinatura deste módulo expirou",
+                        "moduleSlug", moduleSlug
+                )).build();
+            case "FREE_PLAN_NOT_ACTIVATED":
                 return Response.status(409).entity(Map.of(
                         "code", "FREE_PLAN_NOT_ACTIVATED",
                         "error", "Plano gratuito disponível para este módulo, mas ainda não ativado",
                         "moduleSlug", moduleSlug,
-                        "moduleId", moduleId,
-                        "planVersionId", freeRows.get(0)[0]
+                        "moduleId", access.get("moduleId"),
+                        "planVersionId", access.get("planVersionId")
                 )).build();
-            } else if (ctx.hasFeature(moduleSlug)) {
-                // c) Acesso via assinatura principal do tenant (legado, compatibilidade)
-                planName     = ctx.getPlanCode();
-                accessSource = "TENANT_SUBSCRIPTION";
-            } else {
+            case "NO_ACCESS":
                 return Response.status(403).entity(Map.of(
                         "error", "Acesso negado ao módulo: sem assinatura ativa nem plano gratuito",
                         "moduleSlug", moduleSlug
                 )).build();
-            }
+            default:
+                // "GRANTED" segue para emissão do token abaixo.
         }
 
-        // 3. Carrega permissões do módulo para o usuário
+        String moduleId     = (String) access.get("moduleId");
+        String moduleName   = (String) access.get("moduleName");
+        String planName     = (String) access.get("planName");
+        String accessSource = (String) access.get("accessSource");
+        Map<String, Object> limits = (Map<String, Object>) access.get("limits");
+
+        // Carrega permissões do módulo para o usuário (domínio de perfil/nível de
+        // acesso — não muda com a migração da checagem de assinatura/plano).
         List<String> permissions = loadModulePermissions(userId, tenantId, moduleId, moduleSlug, role);
 
-        // 4. Carrega limites do plano (plan_version_module_limits)
-        Map<String, Object> limits = loadPlanLimits(moduleId, planVersionId, moduleSlug);
-
-        // 5. Versão de permissões para invalidação
+        // Versão de permissões para invalidação
         int permissionsVersion = userTenantRepository.resolvePermissionsVersion(userId, tenantId);
 
         long expiryMinutes = 30;
@@ -218,32 +178,6 @@ public class ModuleTokenResource {
         }
 
         return permissions;
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> loadPlanLimits(String moduleId, String planVersionId, String moduleSlug) {
-        if (planVersionId == null) return Map.of();
-
-        // planVersionId é o id de plan_version_modules (não de plan_versions)
-        List<Object[]> limitRows = em.createNativeQuery("""
-            SELECT pvml.code, pvml.limit_value
-            FROM plan_version_module_limits pvml
-            WHERE pvml.plan_version_module_id = :planVersionId
-        """)
-        .setParameter("planVersionId", UUID.fromString(planVersionId))
-        .getResultList();
-
-        // pvml.code é persistido como "<moduleSlug>.<limitCode>" (estável entre
-        // upgrades/downgrades de plano); o token remove o prefixo pois já
-        // carrega o moduleSlug em sua própria claim.
-        String prefix = moduleSlug + ".";
-        Map<String, Object> limits = new java.util.LinkedHashMap<>();
-        for (Object[] row : limitRows) {
-            String code = (String) row[0];
-            String key = (code != null && code.startsWith(prefix)) ? code.substring(prefix.length()) : code;
-            limits.put(key, row[1]);
-        }
-        return limits;
     }
 
 }

@@ -1,7 +1,7 @@
-package com.saas.resource;
+package com.saas.subscription.controller;
 
-import com.saas.security.TenantContext;
-import com.saas.service.TrialCampaignService;
+import com.saas.subscription.security.TenantContext;
+import com.saas.subscription.service.TrialCampaignService;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -12,7 +12,6 @@ import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Path("/api/v1/dashboard")
 @Authenticated

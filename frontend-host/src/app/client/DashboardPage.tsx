@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '@/core/auth/AuthContext'
 import { useTenant } from '@/core/workspaces/TenantContext'
-import { api } from '@/shared/services/api'
+import { subscriptionApi } from '@/shared/services/subscriptionApi'
 import type { DashboardModuleItem, DashboardModuleService } from '@/shared/types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -435,7 +435,7 @@ export function DashboardPage() {
   const { data: modules = [], isLoading } = useQuery({
     queryKey: ['dashboard-modules', currentTenant?.tenant?.id],
     queryFn: async () => {
-      const { data } = await api.get<DashboardModuleItem[]>('/api/v1/dashboard/modules')
+      const { data } = await subscriptionApi.get<DashboardModuleItem[]>('/api/v1/dashboard/modules')
       return data
     },
     enabled: !!currentTenant,

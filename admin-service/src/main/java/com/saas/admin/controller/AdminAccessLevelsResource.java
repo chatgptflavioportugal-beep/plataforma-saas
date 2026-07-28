@@ -104,6 +104,12 @@ public class AdminAccessLevelsResource {
             group("settings", "Configurações da Plataforma", List.of(
                 perm("admin.settings.view", "Visualizar configurações"),
                 perm("admin.settings.edit", "Editar configurações")
+            )),
+            group("feature_flags", "Feature Flags", List.of(
+                perm("admin.feature_flags.view",     "Visualizar feature flags"),
+                perm("admin.feature_flags.create",   "Criar feature flag"),
+                perm("admin.feature_flags.edit",     "Editar feature flag"),
+                perm("admin.feature_flags.activate", "Ativar/desativar feature flag")
             ))
         );
     }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { subscriptionApi } from '@/shared/services/subscriptionApi'
+import { adminApi } from '@/shared/services/adminApi'
 import { useAuth } from '@/core/auth/AuthContext'
 import type { PlatformSetting } from '@/shared/types'
 
@@ -16,7 +16,7 @@ export function AdminPlatformSettingsPage() {
   const { data: settings = [], isLoading } = useQuery({
     queryKey: ['admin-platform-settings'],
     queryFn: async () => {
-      const { data } = await subscriptionApi.get<PlatformSetting[]>('/api/v1/admin/platform-settings')
+      const { data } = await adminApi.get<PlatformSetting[]>('/api/v1/admin/platform-settings')
       return data
     },
   })
@@ -30,7 +30,7 @@ export function AdminPlatformSettingsPage() {
   }, [cooldownSetting, cooldownDays])
 
   const saveMutation = useMutation({
-    mutationFn: (value: string) => subscriptionApi.put('/api/v1/admin/platform-settings/trial_reuse_cooldown_days', { value }),
+    mutationFn: (value: string) => adminApi.put('/api/v1/admin/platform-settings/trial_reuse_cooldown_days', { value }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-platform-settings'] })
       setError(null)

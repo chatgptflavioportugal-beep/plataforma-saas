@@ -1,5 +1,6 @@
 package com.saas.admin.controller;
 
+import com.saas.admin.client.SubscriptionServiceClient;
 import com.saas.admin.security.AdminAuthService;
 import com.saas.admin.service.AdminAuditService;
 import com.saas.admin.service.TenantService;
@@ -8,8 +9,11 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import java.util.List;
 import java.util.Map;
@@ -28,6 +32,13 @@ public class AdminResource {
     @Inject EntityManager em;
     @Inject AdminAuthService adminAuth;
     @Inject AdminAuditService auditService;
+
+    @Inject
+    @RestClient
+    SubscriptionServiceClient subscriptionServiceClient;
+
+    @Context
+    HttpHeaders httpHeaders;
 
     // ----------------------------------------------------------------
     // Dashboard stats
@@ -550,34 +561,75 @@ public class AdminResource {
 
     @POST
     @Path("/subscriptions/{id}/cancel")
-    @Transactional
     public Response adminCancelSubscription(@PathParam("id") String id) {
         adminAuth.requireAdminPermission("admin.subscriptions.cancel");
-        int updated = em.createNativeQuery(
-            "UPDATE profile_module_subscriptions " +
-            "SET status = 'CANCELED', canceled_at = NOW(), updated_at = NOW() " +
-            "WHERE id::text = :id AND status = 'ACTIVE'"
-        ).setParameter("id", id).executeUpdate();
-        if (updated == 0)
-            return Response.status(404).entity(Map.of("error", "Assinatura não encontrada ou já cancelada")).build();
-        auditService.log(adminAuth.currentUserId(), "subscription.cancel", "profile_module_subscriptions", id, Map.of());
-        return Response.ok(Map.of("success", true, "id", id, "status", "CANCELED")).build();
+        // profile_module_subscriptions pertence a subscription-service — a escrita
+        // acontece lá (AdminSubscriptionResource); aqui só repassamos a chamada.
+        String authorization = httpHeaders.getHeaderString(HttpHeaders.AUTHORIZATION);
+        try (Response upstream = subscriptionServiceClient.cancelSubscription(authorization, id)) {
+            return Response.status(upstream.getStatus()).entity(upstream.readEntity(Map.class)).build();
+        }
     }
 
     @POST
     @Path("/subscriptions/{id}/reactivate")
-    @Transactional
     public Response adminReactivateSubscription(@PathParam("id") String id) {
         adminAuth.requireAdminPermission("admin.subscriptions.reactivate");
+        String authorization = httpHeaders.getHeaderString(HttpHeaders.AUTHORIZATION);
+        try (Response upstream = subscriptionServiceClient.reactivateSubscription(authorization, id)) {
+            return Response.status(upstream.getStatus()).entity(upstream.readEntity(Map.class)).build();
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // Gestão Global — Bloqueio/Desbloqueio/Suspensão/Ativação
+    // ----------------------------------------------------------------
+
+    private static final List<String> VALID_TENANT_STATUSES = List.of("trial", "active", "suspended", "cancelled");
+
+    public record UpdateStatusRequest(String status) {}
+
+    @PATCH
+    @Path("/tenants/{id}/status")
+    @Transactional
+    public Response updateTenantStatus(@PathParam("id") String id, UpdateStatusRequest req) {
+        String status = req != null ? req.status() : null;
+        if (status == null || !VALID_TENANT_STATUSES.contains(status))
+            return Response.status(400).entity(Map.of("error", "status inválido: deve ser um de " + VALID_TENANT_STATUSES)).build();
+
+        adminAuth.requireAdminPermission("active".equals(status) ? "admin.companies.activate" : "admin.companies.deactivate");
+
         int updated = em.createNativeQuery(
-            "UPDATE profile_module_subscriptions " +
-            "SET status = 'ACTIVE', canceled_at = NULL, updated_at = NOW() " +
-            "WHERE id::text = :id AND status = 'CANCELED' AND (expires_at IS NULL OR expires_at > NOW())"
-        ).setParameter("id", id).executeUpdate();
+            "UPDATE tenants SET status = :status, updated_at = NOW() WHERE id::text = :id"
+        ).setParameter("status", status).setParameter("id", id).executeUpdate();
+
         if (updated == 0)
-            return Response.status(404).entity(Map.of("error", "Assinatura não encontrada, não está cancelada ou já expirou")).build();
-        auditService.log(adminAuth.currentUserId(), "subscription.reactivate", "profile_module_subscriptions", id, Map.of());
-        return Response.ok(Map.of("success", true, "id", id, "status", "ACTIVE")).build();
+            return Response.status(404).entity(Map.of("error", "Empresa não encontrada")).build();
+
+        auditService.log(adminAuth.currentUserId(), "tenant." + status, "tenants", id, Map.of("status", status));
+        return Response.ok(Map.of("id", id, "status", status)).build();
+    }
+
+    @PATCH
+    @Path("/customers/{id}/status")
+    @Transactional
+    public Response updateCustomerStatus(@PathParam("id") String id, UpdateStatusRequest req) {
+        String status = req != null ? req.status() : null;
+        if (!List.of("active", "inactive").contains(status))
+            return Response.status(400).entity(Map.of("error", "status inválido: deve ser 'active' ou 'inactive'")).build();
+
+        adminAuth.requireAdminPermission("active".equals(status) ? "admin.clients.activate" : "admin.clients.deactivate");
+
+        boolean isActive = "active".equals(status);
+        int updated = em.createNativeQuery(
+            "UPDATE user_profiles SET is_active = :isActive, updated_at = NOW() WHERE id::text = :id"
+        ).setParameter("isActive", isActive).setParameter("id", id).executeUpdate();
+
+        if (updated == 0)
+            return Response.status(404).entity(Map.of("error", "Cliente não encontrado")).build();
+
+        auditService.log(adminAuth.currentUserId(), "customer." + status, "user_profiles", id, Map.of("isActive", isActive));
+        return Response.ok(Map.of("id", id, "status", status)).build();
     }
 
     // ----------------------------------------------------------------

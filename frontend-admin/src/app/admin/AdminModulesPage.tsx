@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { catalogApi } from '@/shared/services/catalogApi'
+import { adminApi } from '@/shared/services/adminApi'
 import { useAuth } from '@/core/auth/AuthContext'
 
 // ─── tipos ───────────────────────────────────────────────────────────────────
@@ -273,9 +273,9 @@ function ModuleForm({ module, onClose, onSaved }: { module?: PlatformModule; onC
         is_active: form.is_active, sort_order: parseInt(form.sort_order) || 99,
       }
       if (module) {
-        await catalogApi.patch(`/api/v1/admin/modules/${module.id}`, payload)
+        await adminApi.patch(`/api/v1/admin/modules/${module.id}`, payload)
       } else {
-        await catalogApi.post('/api/v1/admin/modules', payload)
+        await adminApi.post('/api/v1/admin/modules', payload)
       }
       onSaved()
     } catch (err: unknown) {
@@ -405,9 +405,9 @@ function GroupForm({
         sort_order: parseInt(form.sort_order) || 99,
       }
       if (group) {
-        await catalogApi.patch(`/api/v1/admin/modules/${moduleId}/service-groups/${group.id}`, payload)
+        await adminApi.patch(`/api/v1/admin/modules/${moduleId}/service-groups/${group.id}`, payload)
       } else {
-        await catalogApi.post(`/api/v1/admin/modules/${moduleId}/service-groups`, payload)
+        await adminApi.post(`/api/v1/admin/modules/${moduleId}/service-groups`, payload)
       }
       onSaved()
     } catch (err: unknown) {
@@ -533,9 +533,9 @@ function ServiceForm({
         service_group_id: form.service_group_id || null,
       }
       if (service) {
-        await catalogApi.patch(`/api/v1/admin/modules/${moduleId}/services/${service.id}`, payload)
+        await adminApi.patch(`/api/v1/admin/modules/${moduleId}/services/${service.id}`, payload)
       } else {
-        await catalogApi.post(`/api/v1/admin/modules/${moduleId}/services`, payload)
+        await adminApi.post(`/api/v1/admin/modules/${moduleId}/services`, payload)
       }
       onSaved()
     } catch (err: unknown) {
@@ -646,7 +646,7 @@ function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () 
   const { data: groups = [], isLoading: groupsLoading } = useQuery({
     queryKey: ['admin-module-service-groups', module.id],
     queryFn: async () => {
-      const { data } = await catalogApi.get<ServiceGroup[]>(`/api/v1/admin/modules/${module.id}/service-groups`)
+      const { data } = await adminApi.get<ServiceGroup[]>(`/api/v1/admin/modules/${module.id}/service-groups`)
       return data
     },
     staleTime: 15_000,
@@ -655,7 +655,7 @@ function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () 
   const { data: services = [], isLoading: servicesLoading } = useQuery({
     queryKey: ['admin-module-services', module.id],
     queryFn: async () => {
-      const { data } = await catalogApi.get<ModuleService[]>(`/api/v1/admin/modules/${module.id}/services`)
+      const { data } = await adminApi.get<ModuleService[]>(`/api/v1/admin/modules/${module.id}/services`)
       return data
     },
     staleTime: 15_000,
@@ -663,13 +663,13 @@ function ServicesPanel({ module, onBack }: { module: PlatformModule; onBack: () 
 
   const toggleServiceStatus = useMutation({
     mutationFn: (serviceId: string) =>
-      catalogApi.patch(`/api/v1/admin/modules/${module.id}/services/${serviceId}/status`, {}),
+      adminApi.patch(`/api/v1/admin/modules/${module.id}/services/${serviceId}/status`, {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-module-services', module.id] }),
   })
 
   const toggleGroupStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: 'ACTIVE' | 'INACTIVE' }) => {
-      await catalogApi.patch(`/api/v1/admin/modules/${module.id}/service-groups/${id}/status`, { status })
+      await adminApi.patch(`/api/v1/admin/modules/${module.id}/service-groups/${id}/status`, { status })
     },
     onSuccess: () => {
       setGroupStatusError(null)
@@ -920,7 +920,7 @@ export function AdminModulesPage() {
       const params: Record<string, string> = {}
       if (search.trim()) params.search = search.trim()
       if (filterActive !== null) params.is_active = String(filterActive)
-      const { data } = await catalogApi.get<PlatformModule[]>('/api/v1/admin/modules', { params })
+      const { data } = await adminApi.get<PlatformModule[]>('/api/v1/admin/modules', { params })
       return data
     },
     staleTime: 15_000,
@@ -928,7 +928,7 @@ export function AdminModulesPage() {
   })
 
   const toggleStatus = useMutation({
-    mutationFn: (id: string) => catalogApi.patch(`/api/v1/admin/modules/${id}/status`, {}),
+    mutationFn: (id: string) => adminApi.patch(`/api/v1/admin/modules/${id}/status`, {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-modules'] }),
   })
 

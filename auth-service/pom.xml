@@ -44,6 +44,13 @@
             <artifactId>quarkus-smallrye-jwt</artifactId>
         </dependency>
 
+        <!-- REST Client Reactive — chamada ao subscription-service (resolução de
+             acesso a módulo: assinatura/plano/limites). -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-rest-client-reactive-jackson</artifactId>
+        </dependency>
+
         <!-- ORM — EntityManager para SQL nativo (mesmo padrão do backend-quarkus) -->
         <dependency>
             <groupId>io.quarkus</groupId>

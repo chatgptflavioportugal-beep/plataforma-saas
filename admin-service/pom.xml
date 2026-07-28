@@ -44,6 +44,14 @@
             <artifactId>quarkus-smallrye-jwt</artifactId>
         </dependency>
 
+        <!-- REST Client Reactive — chamada ao subscription-service (cancelar/reativar
+             assinatura em nome de um admin; a tabela profile_module_subscriptions
+             pertence a subscription-service). -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-rest-client-reactive-jackson</artifactId>
+        </dependency>
+
         <!-- ORM — EntityManager para SQL nativo + AdminAuditLog (Panache entity) -->
         <dependency>
             <groupId>io.quarkus</groupId>

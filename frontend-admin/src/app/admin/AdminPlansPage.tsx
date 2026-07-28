@@ -1,7 +1,6 @@
 import { useState, useEffect, useId } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { subscriptionApi } from '@/shared/services/subscriptionApi'
-import { catalogApi } from '@/shared/services/catalogApi'
+import { adminApi } from '@/shared/services/adminApi'
 import { useAuth } from '@/core/auth/AuthContext'
 import type { Plan, PlanVersionModule, PlanVersionModuleLimit, PlatformModule } from '@/shared/types'
 import { TrialCampaignsModal } from './TrialCampaignsModal'
@@ -200,7 +199,7 @@ function PlanCreateForm({ onClose, onSaved }: PlanCreateFormProps) {
         plan_type: form.plan_type,
         sort_order: parseInt(form.sort_order) || 99,
       }
-      await subscriptionApi.post('/api/v1/admin/plans', payload)
+      await adminApi.post('/api/v1/admin/plans', payload)
       onSaved()
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
@@ -431,7 +430,7 @@ function VersionHistoryModal({ planCode, planName, onClose }: { planCode: string
   const { data: versions = [], isLoading } = useQuery({
     queryKey: ['plan-versions', planCode],
     queryFn: async () => {
-      const { data } = await subscriptionApi.get<Plan[]>(`/api/v1/admin/plans/${planCode}/versions`)
+      const { data } = await adminApi.get<Plan[]>(`/api/v1/admin/plans/${planCode}/versions`)
       return data
     },
   })
@@ -597,7 +596,7 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
   const { data: fetchedModules, isLoading: loadingModules } = useQuery({
     queryKey: ['plan-modules', plan.id],
     queryFn: async () => {
-      const { data } = await subscriptionApi.get<PlanVersionModule[]>(`/api/v1/admin/plans/${plan.id}/modules`)
+      const { data } = await adminApi.get<PlanVersionModule[]>(`/api/v1/admin/plans/${plan.id}/modules`)
       return data
     },
     staleTime: 0,
@@ -614,7 +613,7 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
   const { data: allPlatformModules = [] } = useQuery({
     queryKey: ['platform-modules-active'],
     queryFn: async () => {
-      const { data } = await catalogApi.get<PlatformModule[]>('/api/v1/admin/modules?is_active=true')
+      const { data } = await adminApi.get<PlatformModule[]>('/api/v1/admin/modules?is_active=true')
       return data
     },
   })
@@ -761,7 +760,7 @@ function EditPlanModal({ plan, onClose, onSaved }: EditPlanModalProps) {
           })),
         })),
       }
-      await subscriptionApi.post(`/api/v1/admin/plans/${plan.id}/edit`, payload)
+      await adminApi.post(`/api/v1/admin/plans/${plan.id}/edit`, payload)
       onSaved()
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
@@ -1294,7 +1293,7 @@ export function AdminPlansPage() {
   const { data: plans = [], isLoading } = useQuery({
     queryKey: ['admin-plans'],
     queryFn: async () => {
-      const { data } = await subscriptionApi.get<Plan[]>('/api/v1/admin/plans')
+      const { data } = await adminApi.get<Plan[]>('/api/v1/admin/plans')
       return data
     },
     staleTime: 15_000,
@@ -1302,13 +1301,13 @@ export function AdminPlansPage() {
   })
 
   const toggleStatus = useMutation({
-    mutationFn: (id: string) => subscriptionApi.patch(`/api/v1/admin/plans/${id}/status`, {}),
+    mutationFn: (id: string) => adminApi.patch(`/api/v1/admin/plans/${id}/status`, {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-plans'] }),
   })
 
   const [popularError, setPopularError] = useState<string | null>(null)
   const setPopular = useMutation({
-    mutationFn: (id: string) => subscriptionApi.patch(`/api/v1/admin/plans/${id}/popular`, {}),
+    mutationFn: (id: string) => adminApi.patch(`/api/v1/admin/plans/${id}/popular`, {}),
     onSuccess: () => { setPopularError(null); qc.invalidateQueries({ queryKey: ['admin-plans'] }) },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error

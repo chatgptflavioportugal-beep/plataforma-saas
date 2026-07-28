@@ -1,6 +1,6 @@
-package com.saas.subscription.controller;
+package com.saas.admin.controller;
 
-import com.saas.subscription.security.AdminAuthService;
+import com.saas.admin.security.AdminAuthService;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -15,14 +15,16 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Configurações Gerais da Plataforma — tabela chave/valor simples. Hoje só expõe
- * o cooldown de reutilização de Trial, mas é genérica para futuras configurações.
+ * Configurações Gerais da Plataforma — tabela chave/valor simples. Movido de
+ * subscription-service para admin-service (Configurações Globais). Hoje só
+ * expõe o cooldown de reutilização de Trial, mas é genérica para futuras
+ * configurações.
  */
 @Path("/api/v1/admin/platform-settings")
 @Authenticated
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-public class PlatformSettingsResource {
+public class AdminPlatformSettingsResource {
 
     @Inject EntityManager em;
     @Inject AdminAuthService adminAuth;

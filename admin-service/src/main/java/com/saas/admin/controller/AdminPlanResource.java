@@ -1,7 +1,7 @@
-package com.saas.subscription.controller;
+package com.saas.admin.controller;
 
-import com.saas.subscription.security.AdminAuthService;
-import com.saas.subscription.service.PlanService;
+import com.saas.admin.security.AdminAuthService;
+import com.saas.admin.service.AdminPlanService;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
@@ -13,17 +13,18 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * CRUD administrativo de planos, versionamento e módulos/limitações de cada versão.
- * Movido de AdminResource (backend-quarkus). Não usa TenantContext — autorização é
- * feita via papel administrativo global, a mesma checagem que existia no monólito.
+ * CRUD administrativo de planos, versionamento e módulos/limitações de cada
+ * versão. Movido de subscription-service (PlanAdminResource) para
+ * consolidar em admin-service, único dono de plans/plan_version_modules/
+ * plan_version_module_limits.
  */
 @Path("/api/v1/admin/plans")
 @Authenticated
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-public class PlanAdminResource {
+public class AdminPlanResource {
 
-    @Inject PlanService planService;
+    @Inject AdminPlanService planService;
     @Inject AdminAuthService adminAuth;
 
     // ----------------------------------------------------------------
@@ -222,8 +223,8 @@ public class PlanAdminResource {
     // Helpers
     // ----------------------------------------------------------------
 
-    private PlanService.PlanRequest mapToRequest(Map<String, Object> body) {
-        return new PlanService.PlanRequest(
+    private AdminPlanService.PlanRequest mapToRequest(Map<String, Object> body) {
+        return new AdminPlanService.PlanRequest(
             (String) body.get("name"),
             (String) body.get("code"),
             (String) body.get("description"),
@@ -238,8 +239,8 @@ public class PlanAdminResource {
         );
     }
 
-    private PlanService.PlanVersionModuleRequest mapToPlanVersionModuleRequest(Map<String, Object> body) {
-        return new PlanService.PlanVersionModuleRequest(
+    private AdminPlanService.PlanVersionModuleRequest mapToPlanVersionModuleRequest(Map<String, Object> body) {
+        return new AdminPlanService.PlanVersionModuleRequest(
             (String) body.get("module_id"),
             body.get("monthly_price")         != null ? new BigDecimal(body.get("monthly_price").toString())         : null,
             body.get("annual_monthly_price")  != null ? new BigDecimal(body.get("annual_monthly_price").toString())  : null,
@@ -248,8 +249,8 @@ public class PlanAdminResource {
         );
     }
 
-    private PlanService.PlanVersionModuleLimitRequest mapToPlanVersionModuleLimitRequest(Map<String, Object> body) {
-        return new PlanService.PlanVersionModuleLimitRequest(
+    private AdminPlanService.PlanVersionModuleLimitRequest mapToPlanVersionModuleLimitRequest(Map<String, Object> body) {
+        return new AdminPlanService.PlanVersionModuleLimitRequest(
             (String) body.get("title"),
             (String) body.get("description"),
             (String) body.get("code"),
@@ -260,16 +261,16 @@ public class PlanAdminResource {
     }
 
     @SuppressWarnings("unchecked")
-    private List<PlanService.PlanModuleWithLimitsRequest> mapToPlanModuleWithLimitsRequests(Map<String, Object> body) {
+    private List<AdminPlanService.PlanModuleWithLimitsRequest> mapToPlanModuleWithLimitsRequests(Map<String, Object> body) {
         Object raw = body.get("modules");
         if (!(raw instanceof List<?> list)) return null;
         return list.stream().map(item -> {
             Map<String, Object> m = (Map<String, Object>) item;
-            List<PlanService.PlanVersionModuleLimitRequest> limits = null;
+            List<AdminPlanService.PlanVersionModuleLimitRequest> limits = null;
             if (m.get("limits") instanceof List<?> ll) {
                 limits = ll.stream().map(li -> {
                     Map<String, Object> l = (Map<String, Object>) li;
-                    return new PlanService.PlanVersionModuleLimitRequest(
+                    return new AdminPlanService.PlanVersionModuleLimitRequest(
                         (String) l.get("title"),
                         (String) l.get("description"),
                         (String) l.get("code"),
@@ -279,7 +280,7 @@ public class PlanAdminResource {
                     );
                 }).collect(java.util.stream.Collectors.toList());
             }
-            return new PlanService.PlanModuleWithLimitsRequest(
+            return new AdminPlanService.PlanModuleWithLimitsRequest(
                 (String) m.get("module_id"),
                 m.get("monthly_price")        != null ? new BigDecimal(m.get("monthly_price").toString())        : null,
                 m.get("annual_monthly_price") != null ? new BigDecimal(m.get("annual_monthly_price").toString()) : null,

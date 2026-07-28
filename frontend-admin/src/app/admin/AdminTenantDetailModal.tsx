@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/shared/services/adminApi'
+import { useAuth } from '@/core/auth/AuthContext'
 
 interface TenantMember {
   full_name: string | null
@@ -83,6 +84,11 @@ interface Props {
 }
 
 export function AdminTenantDetailModal({ tenantId, onClose }: Props) {
+  const { isSuperAdmin, hasAdminPermission } = useAuth()
+  const qc = useQueryClient()
+  const canActivate   = isSuperAdmin || hasAdminPermission('admin.companies.activate')
+  const canDeactivate = isSuperAdmin || hasAdminPermission('admin.companies.deactivate')
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
@@ -100,6 +106,16 @@ export function AdminTenantDetailModal({ tenantId, onClose }: Props) {
     enabled: !!tenantId,
     retry: false,
     staleTime: 30_000,
+  })
+
+  const changeStatus = useMutation({
+    mutationFn: async (status: string) => {
+      await adminApi.patch(`/api/v1/admin/tenants/${tenantId}/status`, { status })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-tenant-detail', tenantId] })
+      qc.invalidateQueries({ queryKey: ['admin-tenants'] })
+    },
   })
 
   if (!tenantId) return null
@@ -171,6 +187,28 @@ export function AdminTenantDetailModal({ tenantId, onClose }: Props) {
                   )}
                   <Row label="Criada em" value={fmt(data.created_at)} />
                 </div>
+                {(canActivate || canDeactivate) && (
+                  <div className="flex gap-2 mt-3">
+                    {data.status !== 'active' && canActivate && (
+                      <button
+                        onClick={() => changeStatus.mutate('active')}
+                        disabled={changeStatus.isPending}
+                        className="px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs font-medium transition-colors disabled:opacity-50"
+                      >
+                        Reativar empresa
+                      </button>
+                    )}
+                    {data.status !== 'suspended' && canDeactivate && (
+                      <button
+                        onClick={() => changeStatus.mutate('suspended')}
+                        disabled={changeStatus.isPending}
+                        className="px-3 py-1.5 rounded-lg bg-red-900 hover:bg-red-800 text-red-200 text-xs font-medium transition-colors disabled:opacity-50"
+                      >
+                        Suspender empresa
+                      </button>
+                    )}
+                  </div>
+                )}
               </section>
 
               {/* Proprietário */}

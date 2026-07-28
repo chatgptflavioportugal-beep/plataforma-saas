@@ -32,8 +32,15 @@ entrega o ModuleAccessToken; quem chama o backend do módulo é o próprio
 Micro Frontend.
 ```
 
-`backend-quarkus` (monolito original) e `frontend` (SPA original) continuam de pé,
-mas o caminho novo para features é sempre: `<módulo>-service` (Python) +
+**`backend-quarkus` (monólito original) e `frontend` (SPA original) estão
+deprecados.** Toda responsabilidade de negócio já migrou para os
+microsserviços dedicados — `backend-quarkus` hoje só expõe
+`GET /api/v1/public/health`, e `frontend` não faz mais nenhuma chamada de
+dados própria. Ambos continuam de pé no `docker-compose.yml` apenas para não
+quebrar quem ainda aponta para eles; não recebem mais funcionalidades novas
+(só correções de segurança críticas) até que a remoção física do compose e
+do repositório seja decidida explicitamente. O caminho novo para toda
+feature é sempre: `frontend-host`/`frontend-admin` + `<módulo>-service` +
 `<módulo>-frontend` (Micro Frontend), cadastrados no Module Catalog Service e
 carregados sob demanda pelo Front Host.
 

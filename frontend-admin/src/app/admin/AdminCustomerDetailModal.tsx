@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/shared/services/adminApi'
+import { useAuth } from '@/core/auth/AuthContext'
 
 interface IndividualProfile {
   id: string
@@ -76,6 +77,11 @@ interface Props {
 }
 
 export function AdminCustomerDetailModal({ customerId, onClose }: Props) {
+  const { isSuperAdmin, hasAdminPermission } = useAuth()
+  const qc = useQueryClient()
+  const canActivate   = isSuperAdmin || hasAdminPermission('admin.clients.activate')
+  const canDeactivate = isSuperAdmin || hasAdminPermission('admin.clients.deactivate')
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
@@ -93,6 +99,16 @@ export function AdminCustomerDetailModal({ customerId, onClose }: Props) {
     enabled: !!customerId,
     retry: false,
     staleTime: 30_000,
+  })
+
+  const changeStatus = useMutation({
+    mutationFn: async (status: 'active' | 'inactive') => {
+      await adminApi.patch(`/api/v1/admin/customers/${customerId}/status`, { status })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-customer-detail', customerId] })
+      qc.invalidateQueries({ queryKey: ['admin-customers'] })
+    },
   })
 
   if (!customerId) return null
@@ -165,6 +181,28 @@ export function AdminCustomerDetailModal({ customerId, onClose }: Props) {
                     }
                   />
                 </div>
+                {(canActivate || canDeactivate) && (
+                  <div className="flex gap-2 mt-3">
+                    {!data.is_active && canActivate && (
+                      <button
+                        onClick={() => changeStatus.mutate('active')}
+                        disabled={changeStatus.isPending}
+                        className="px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs font-medium transition-colors disabled:opacity-50"
+                      >
+                        Ativar cliente
+                      </button>
+                    )}
+                    {data.is_active && canDeactivate && (
+                      <button
+                        onClick={() => changeStatus.mutate('inactive')}
+                        disabled={changeStatus.isPending}
+                        className="px-3 py-1.5 rounded-lg bg-red-900 hover:bg-red-800 text-red-200 text-xs font-medium transition-colors disabled:opacity-50"
+                      >
+                        Inativar cliente
+                      </button>
+                    )}
+                  </div>
+                )}
               </section>
 
               {/* Perfil Individual */}
