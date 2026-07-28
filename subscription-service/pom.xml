@@ -44,13 +44,6 @@
             <artifactId>quarkus-smallrye-jwt</artifactId>
         </dependency>
 
-        <!-- REST Client Reactive — chamada ao admin-service (checagem de permissão administrativa).
-             Variante "reactive" para alinhar com quarkus-resteasy-reactive-jackson (mesma stack). -->
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-rest-client-reactive-jackson</artifactId>
-        </dependency>
-
         <!-- ORM — EntityManager para SQL nativo + AuditLog (Panache entity) -->
         <dependency>
             <groupId>io.quarkus</groupId>

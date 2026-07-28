@@ -158,8 +158,6 @@ services:
       # JWT (Supabase)
       - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
       - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
-      # Admin Service — checagem de permissão administrativa (requireAdminPermission)
-      - ADMIN_SERVICE_URL=${ADMIN_SERVICE_URL:-http://admin-service:8087}
       # CORS
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
 
@@ -222,8 +220,6 @@ services:
       - QUARKUS_MAILER_PORT=${QUARKUS_MAILER_PORT:-1025}
       - QUARKUS_MAILER_USERNAME=${QUARKUS_MAILER_USERNAME:-}
       - QUARKUS_MAILER_PASSWORD=${QUARKUS_MAILER_PASSWORD:-}
-      # Subscription Service — cancelar/reativar assinatura em nome de um admin
-      - SUBSCRIPTION_SERVICE_URL=${SUBSCRIPTION_SERVICE_URL:-http://subscription-service:8085}
       # CORS
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
 
@@ -382,8 +378,12 @@ services:
       - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
       - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
       - VITE_ADMIN_API_URL=${VITE_ADMIN_API_URL:-http://localhost:8087}
+      # Cancelar/reativar assinatura é ação do subscription-service — chamado
+      # diretamente, sem passar pelo admin-service.
+      - VITE_SUBSCRIPTION_API_URL=${VITE_SUBSCRIPTION_API_URL:-http://localhost:8085}
     depends_on:
       - admin-service
+      - subscription-service
 
 volumes:
   pdf-storage:

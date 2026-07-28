@@ -1,6 +1,5 @@
 package com.saas.admin.controller;
 
-import com.saas.admin.client.SubscriptionServiceClient;
 import com.saas.admin.security.AdminAuthService;
 import com.saas.admin.service.AdminAuditService;
 import com.saas.admin.service.TenantService;
@@ -9,11 +8,8 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import java.util.List;
 import java.util.Map;
@@ -32,13 +28,6 @@ public class AdminResource {
     @Inject EntityManager em;
     @Inject AdminAuthService adminAuth;
     @Inject AdminAuditService auditService;
-
-    @Inject
-    @RestClient
-    SubscriptionServiceClient subscriptionServiceClient;
-
-    @Context
-    HttpHeaders httpHeaders;
 
     // ----------------------------------------------------------------
     // Dashboard stats
@@ -559,27 +548,9 @@ public class AdminResource {
         return Response.ok(result).build();
     }
 
-    @POST
-    @Path("/subscriptions/{id}/cancel")
-    public Response adminCancelSubscription(@PathParam("id") String id) {
-        adminAuth.requireAdminPermission("admin.subscriptions.cancel");
-        // profile_module_subscriptions pertence a subscription-service — a escrita
-        // acontece lá (AdminSubscriptionResource); aqui só repassamos a chamada.
-        String authorization = httpHeaders.getHeaderString(HttpHeaders.AUTHORIZATION);
-        try (Response upstream = subscriptionServiceClient.cancelSubscription(authorization, id)) {
-            return Response.status(upstream.getStatus()).entity(upstream.readEntity(Map.class)).build();
-        }
-    }
-
-    @POST
-    @Path("/subscriptions/{id}/reactivate")
-    public Response adminReactivateSubscription(@PathParam("id") String id) {
-        adminAuth.requireAdminPermission("admin.subscriptions.reactivate");
-        String authorization = httpHeaders.getHeaderString(HttpHeaders.AUTHORIZATION);
-        try (Response upstream = subscriptionServiceClient.reactivateSubscription(authorization, id)) {
-            return Response.status(upstream.getStatus()).entity(upstream.readEntity(Map.class)).build();
-        }
-    }
+    // Cancelamento/reativação de assinatura são operações do domínio do
+    // subscription-service (profile_module_subscriptions) — o frontend-admin
+    // chama subscription-service diretamente em vez de passar por aqui.
 
     // ----------------------------------------------------------------
     // Gestão Global — Bloqueio/Desbloqueio/Suspensão/Ativação
