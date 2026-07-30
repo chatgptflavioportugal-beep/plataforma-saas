@@ -2,18 +2,19 @@
 
 Serviço FastAPI dedicado ao módulo PDF (merge, histórico de jobs, download). Recebe requisições diretamente do frontend, autenticadas por um `ModuleAccessToken` (JWT HMAC-SHA256) emitido pelo `auth-service` — não há proxy Quarkus no meio da chamada, e nenhuma rota consulta Auth/Profile/Subscription para autorização: tudo vem das claims do próprio token.
 
+A validação do token (assinatura, expiração, `tokenType`, `moduleSlug`, permissões, limites) não
+é implementada aqui — vem da biblioteca compartilhada
+[`platform-module-security`](../libs/platform-module-security), instalada em modo editável
+(ver `requirements.txt`). Nenhum outro módulo Python deve reimplementar essa lógica.
+
 ## Estrutura
 
 ```
 main.py                  # app FastAPI, lifespan (pool de conexões), CORS, registra routers
 config/                  # variáveis de ambiente por ambiente (.env.dev/.env.hml/.env.producao)
 app_logging/             # configuração central de logging
-exceptions/              # exceptions tipadas (401/403/400/erros de negócio), todas HTTPException
+exceptions/              # exceptions tipadas (400/erros de negócio), todas HTTPException
 responses/               # SuccessResponse/ErrorResponse/ValidationResponse
-security/
-    tokens/               # validação de ModuleAccessToken (JWT)
-    dependencies/         # CurrentUser — contexto do usuário autenticado
-middleware/               # require_permission()/require_limit() — dependencies FastAPI
 routes/                    # rotas HTTP (/pdf/merge, /pdf/jobs, /pdf/jobs/{id}/download)
 health/                    # GET /health
 permissions/               # chaves de permissão e de limite do módulo
@@ -36,9 +37,9 @@ tests/
 ## Fluxo de autenticação e permissão
 
 1. O frontend (via `pdf-frontend`, carregado pelo Front Host) envia `Authorization: Bearer <ModuleAccessToken>` para o endpoint.
-2. O endpoint declara `Depends(require_permission(<permission_key ou None>))` ou `Depends(require_limit(<limit_code>))`.
-3. `require_permission`/`require_limit` (em `middleware/module_token_middleware.py`) validam o token via `security/tokens/module_token.py`, conferem que ele pertence ao módulo `pdf` e, se uma permissão foi informada, que ela está na lista de permissões do token.
-4. O resultado é um `CurrentUser` (`security/dependencies/current_user.py`) com `tenant_id`, `user_id`, `permissions`, `limits` etc. — o endpoint não faz nenhuma validação manual, só usa o contexto já pronto.
+2. O endpoint declara `Depends(module_security("pdf", <permission_key ou None>))`, importado de `platform_security`.
+3. `module_security` valida o token, confere que ele pertence ao módulo `pdf` e, se uma permissão foi informada, que ela está na lista de permissões do token.
+4. O resultado é um `ModuleContext` (de `platform_security`) com `tenant_id`, `user_id`, `permissions`, `limits` etc. — o endpoint não faz nenhuma validação manual, só usa o contexto já pronto.
 
 Limites (`limits` no JWT) são checados em dois níveis:
 - **`max-file-size`**: comparado direto contra o tamanho do upload em `validators/merge_validator.py`.

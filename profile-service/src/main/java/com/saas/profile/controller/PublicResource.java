@@ -20,8 +20,7 @@ import java.util.UUID;
  * criação do tenant individual, e preview público de convite.
  *
  * A listagem de planos/módulos de billing (/api/v1/public/plans,
- * /api/v1/public/modules/billing-options) continua no backend-quarkus até a
- * Fase 4 (subscription-service).
+ * /api/v1/public/modules/billing-options) já migrou para o subscription-service.
  */
 @Path("/api/v1/public")
 @Produces(MediaType.APPLICATION_JSON)

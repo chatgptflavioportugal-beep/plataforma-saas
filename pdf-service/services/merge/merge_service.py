@@ -17,14 +17,14 @@ from validators.merge_validator import (
     validate_limits,
     validate_request,
 )
-from security.dependencies.current_user import CurrentUser
+from platform_security import ModuleContext
 from storage.local_storage import save_file, storage_dir_for_tenant
 from utils.text import normalize_filename
 
 logger = logging.getLogger(__name__)
 
 
-async def _validate_daily_limit(auth: CurrentUser) -> None:
+async def _validate_daily_limit(auth: ModuleContext) -> None:
     max_daily = auth.get_limit(LIMITE_PDF_DAILY_MERGES)
     if max_daily is None:
         return
@@ -33,7 +33,7 @@ async def _validate_daily_limit(auth: CurrentUser) -> None:
         raise ValidationError(f"Limite diário de {max_daily} merges atingido")
 
 
-async def execute(file_a: UploadFile, file_b: UploadFile, auth: CurrentUser) -> PdfJobOut:
+async def execute(file_a: UploadFile, file_b: UploadFile, auth: ModuleContext) -> PdfJobOut:
     validate_request(file_a, file_b)
     await _validate_daily_limit(auth)
 

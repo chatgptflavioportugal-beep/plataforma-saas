@@ -2,7 +2,6 @@ import os
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    MODULE_ACCESS_TOKEN_SECRET: str
     LOG_LEVEL: str = "INFO"
     CORS_ORIGINS: str = "http://localhost:3000"
     DATABASE_URL: str

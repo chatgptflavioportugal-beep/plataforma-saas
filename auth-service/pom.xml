@@ -67,6 +67,13 @@
             <artifactId>quarkus-smallrye-openapi</artifactId>
         </dependency>
 
+        <!-- Health check — /q/health, público (serviço emissor de PAT/MAT, precisa
+             ser monitorável) -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-smallrye-health</artifactId>
+        </dependency>
+
         <!-- JWT customizado (ProfileAccessToken / ModuleAccessToken) via JJWT
              Separado do SmallRye JWT que valida tokens Supabase (ES256). -->
         <dependency>

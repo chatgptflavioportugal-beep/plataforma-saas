@@ -1,0 +1,19 @@
+# Remote de Module Federation — servido estaticamente, sem SPA fallback
+# (não é navegado diretamente; o Front Host busca remoteEntry.js e os chunks).
+server {
+    listen       ${PORT};
+    server_name  _;
+    root         /usr/share/nginx/html;
+
+    location / {
+        add_header Access-Control-Allow-Origin * always;
+        add_header Cross-Origin-Resource-Policy cross-origin always;
+        try_files $uri =404;
+    }
+
+    location ~* \.(?:js|mjs)$ {
+        add_header Access-Control-Allow-Origin * always;
+        add_header Cross-Origin-Resource-Policy cross-origin always;
+        expires 5m;
+    }
+}

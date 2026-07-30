@@ -12,28 +12,12 @@ npm run dev
 # Acesse: http://localhost:3000
 ```
 
-## Backend Quarkus
-
-```bash
-cd backend-quarkus
-
-# Configure as variáveis de ambiente (ou crie um .env no diretório)
-export QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://localhost:5432/saas
-export QUARKUS_DATASOURCE_USERNAME=postgres
-export QUARKUS_DATASOURCE_PASSWORD=postgres
-export SUPABASE_JWT_JWKS_URL=https://[project].supabase.co/auth/v1/.well-known/jwks.json
-export SUPABASE_JWT_ISSUER=https://[project].supabase.co/auth/v1
-
-./mvnw quarkus:dev
-# Acesse: http://localhost:8080
-# Swagger UI: http://localhost:8080/q/swagger-ui
-```
-
 ## PDF Service
 
-O frontend chama o pdf-service diretamente (VITE_PDF_API_URL), sem passar pelo
-backend-quarkus. A autorização é feita só pelo ModuleAccessToken emitido pelo
-auth-service — não há mais token interno de proxy.
+O frontend chama o pdf-service diretamente (VITE_PDF_API_URL). A autorização é
+feita só pelo ModuleAccessToken emitido pelo auth-service, validado pela
+biblioteca compartilhada `libs/platform-module-security` (instalada em modo
+editável via `requirements.txt` — não requer nenhum passo extra).
 
 ```bash
 cd pdf-service
@@ -95,6 +79,6 @@ pytest tests/
 
 ### Quarkus
 ```bash
-cd backend-quarkus
+cd auth-service
 ./mvnw test
 ```

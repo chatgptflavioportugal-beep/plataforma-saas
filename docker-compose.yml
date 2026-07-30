@@ -30,7 +30,6 @@ services:
       - VITE_WHATSAPP_API_URL=${VITE_WHATSAPP_API_URL:-http://localhost:8002}
       - VITE_ADMIN_API_URL=${VITE_ADMIN_API_URL:-http://localhost:8087}
     depends_on:
-      - backend-quarkus
       - auth-service
       - module-catalog-service
       - profile-service
@@ -43,7 +42,7 @@ services:
   # -------------------------------------------------------
   # Auth Service (dev mode)
   # Emissão/validação de ProfileAccessToken e ModuleAccessToken.
-  # Banco: Supabase (mesmo banco do backend-quarkus, por enquanto)
+  # Banco: Supabase (compartilhado com os demais microsserviços Quarkus)
   # -------------------------------------------------------
   auth-service:
     build:
@@ -64,13 +63,13 @@ services:
       - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
       - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
       # ProfileAccessToken / ModuleAccessToken (segredos compartilhados com
-      # backend-quarkus e pdf-service, que validam esses tokens)
+      # pdf-service/whatsapp-service, que validam esses tokens)
       - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
       - PROFILE_ACCESS_TOKEN_SECRET=${PROFILE_ACCESS_TOKEN_SECRET}
       # Subscription Service — resolução de acesso a módulo (assinatura/plano/limites)
       - SUBSCRIPTION_SERVICE_URL=${SUBSCRIPTION_SERVICE_URL:-http://subscription-service:8085}
       # CORS
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
 
   # -------------------------------------------------------
   # Module Catalog Service (dev mode)
@@ -98,7 +97,7 @@ services:
       - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
       - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
       # CORS
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
 
   # -------------------------------------------------------
   # Profile Service (dev mode)
@@ -124,7 +123,7 @@ services:
       - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
       - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
       # Link base para e-mails de convite
-      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:3000}
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:5100}
       # Mailer (convites por e-mail)
       - QUARKUS_MAILER_FROM=${QUARKUS_MAILER_FROM:-noreply@localhost}
       - QUARKUS_MAILER_HOST=${QUARKUS_MAILER_HOST:-localhost}
@@ -132,7 +131,7 @@ services:
       - QUARKUS_MAILER_USERNAME=${QUARKUS_MAILER_USERNAME:-}
       - QUARKUS_MAILER_PASSWORD=${QUARKUS_MAILER_PASSWORD:-}
       # CORS
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
 
   # -------------------------------------------------------
   # Subscription Service (dev mode)
@@ -159,7 +158,7 @@ services:
       - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
       - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
       # CORS
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
 
   # -------------------------------------------------------
   # Usage Service (dev mode)
@@ -185,7 +184,7 @@ services:
       # ModuleAccessToken (validação local, mesmo segredo do auth-service)
       - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
       # CORS
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
 
   # -------------------------------------------------------
   # Admin Service (dev mode)
@@ -212,8 +211,10 @@ services:
       - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
       - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
       # Supabase Admin API (opcional — criação/reset de senha de usuários admin)
-      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
-      - VITE_SUPABASE_SERVICE_ROLE_KEY=${VITE_SUPABASE_SERVICE_ROLE_KEY}
+      # Sem prefixo VITE_: essa service-role key nunca deve ser confundida com
+      # uma variável de build-time de frontend.
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       # Mailer (criação/reset de senha de usuários admin)
       - QUARKUS_MAILER_FROM=${QUARKUS_MAILER_FROM:-noreply@localhost}
       - QUARKUS_MAILER_HOST=${QUARKUS_MAILER_HOST:-localhost}
@@ -221,51 +222,24 @@ services:
       - QUARKUS_MAILER_USERNAME=${QUARKUS_MAILER_USERNAME:-}
       - QUARKUS_MAILER_PASSWORD=${QUARKUS_MAILER_PASSWORD:-}
       # CORS
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
-
-  # -------------------------------------------------------
-  # [DEPRECADO] Backend Quarkus (monólito legado)
-  # Todas as responsabilidades já migraram para os microsserviços dedicados
-  # (auth/module-catalog/profile/subscription/usage/admin/pdf/whatsapp) —
-  # com.saas.resource.PublicResource é hoje o único controller restante
-  # (só expõe /api/v1/public/health). Nenhum frontend ativo depende mais
-  # deste serviço para dados; mantido no compose apenas até a remoção física
-  # ser decidida explicitamente.
-  # Banco: Supabase (direto — sem postgres local)
-  # -------------------------------------------------------
-  backend-quarkus:
-    build:
-      context: ./backend-quarkus
-      dockerfile: Dockerfile.dev
-    ports:
-      - "8080:8080"
-    environment:
-      # Banco — Supabase (Direct connection)
-      - QUARKUS_DATASOURCE_JDBC_URL=${QUARKUS_DATASOURCE_JDBC_URL}
-      - QUARKUS_DATASOURCE_USERNAME=${QUARKUS_DATASOURCE_USERNAME}
-      - QUARKUS_DATASOURCE_PASSWORD=${QUARKUS_DATASOURCE_PASSWORD}
-      # JWT
-      - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
-      - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
-      # CORS
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
 
   # -------------------------------------------------------
   # PDF Service (FastAPI)
   # Módulo PDF (merge, histórico de jobs, download). Frontend chama direto
-  # (VITE_PDF_API_URL), sem passar pelo backend-quarkus.
+  # (VITE_PDF_API_URL).
   # -------------------------------------------------------
   pdf-service:
     build:
-      context: ./pdf-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: pdf-service/Dockerfile
     ports:
       - "8001:8001"
     environment:
       - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - DATABASE_URL=${DATABASE_URL}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
       - PDF_STORAGE_PATH=/tmp/saas-pdf
     volumes:
       - pdf-storage:/tmp/saas-pdf
@@ -273,19 +247,19 @@ services:
   # -------------------------------------------------------
   # WhatsApp Service (FastAPI, dev mode)
   # Estrutura inicial — mensageria WhatsApp. Frontend chama direto
-  # (VITE_WHATSAPP_API_URL), sem passar pelo backend-quarkus.
+  # (VITE_WHATSAPP_API_URL).
   # -------------------------------------------------------
   whatsapp-service:
     build:
-      context: ./whatsapp-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: whatsapp-service/Dockerfile
     ports:
       - "8002:8002"
     environment:
       - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - DATABASE_URL=${DATABASE_URL}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
 
   # -------------------------------------------------------
   # PDF Frontend (Micro Frontend, Module Federation remote)
@@ -343,7 +317,6 @@ services:
     environment:
       - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
       - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
-      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080}
       - VITE_AUTH_API_URL=${VITE_AUTH_API_URL:-http://localhost:8082}
       - VITE_CATALOG_API_URL=${VITE_CATALOG_API_URL:-http://localhost:8083}
       - VITE_PROFILE_API_URL=${VITE_PROFILE_API_URL:-http://localhost:8084}

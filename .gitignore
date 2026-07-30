@@ -2,6 +2,9 @@
 .env
 *.env.local
 pdf-service/config/.env.*
+whatsapp-service/config/.env.*
+!pdf-service/config/.env.example
+!whatsapp-service/config/.env.example
 
 # Frontend
 frontend/node_modules/
@@ -21,8 +24,12 @@ whatsapp-frontend/dist/
 whatsapp-frontend/.vite/
 
 # Quarkus
-backend-quarkus/target/
-backend-quarkus/.mvn/wrapper/maven-wrapper.jar
+auth-service/target/
+profile-service/target/
+subscription-service/target/
+module-catalog-service/target/
+usage-service/target/
+admin-service/target/
 
 # Python
 pdf-service/**/__pycache__/
@@ -35,6 +42,12 @@ whatsapp-service/.venv/
 whatsapp-service/venv/
 whatsapp-service/**/*.pyc
 whatsapp-service/.pytest_cache/
+libs/**/__pycache__/
+libs/**/.venv/
+libs/**/venv/
+libs/**/*.pyc
+libs/**/.pytest_cache/
+libs/**/*.egg-info/
 
 # PDF storage local
 /tmp/saas-pdf/

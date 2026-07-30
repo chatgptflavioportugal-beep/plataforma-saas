@@ -34,9 +34,9 @@ def make_module_token(*, permissions: list[str], module_slug: str = "whatsapp") 
 
 @pytest.fixture
 def client(monkeypatch):
-    from config.config import settings
+    from platform_security.config import settings as security_settings
 
-    monkeypatch.setattr(settings, "MODULE_ACCESS_TOKEN_SECRET", SECRET)
+    monkeypatch.setattr(security_settings, "MODULE_ACCESS_TOKEN_SECRET", SECRET)
 
     with (
         patch("main.init_pool", new=AsyncMock()),

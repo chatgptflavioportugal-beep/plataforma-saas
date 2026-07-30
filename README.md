@@ -26,18 +26,18 @@ Plataforma SaaS modular com multi-tenant, controle de planos, free trial e módu
                                                           Module Catalog Service.
 
 Front Host também consome, via Supabase JWT: Auth Service, Profile Service,
-Subscription Service e Module Catalog Service (todos Quarkus). Nenhum desses
-serviços de módulo (PDF/WhatsApp/...) passa pelo backend-quarkus — o Host só
-entrega o ModuleAccessToken; quem chama o backend do módulo é o próprio
-Micro Frontend.
+Subscription Service e Module Catalog Service (todos Quarkus). Para os
+serviços de módulo (PDF/WhatsApp/...), o Host só entrega o ModuleAccessToken;
+quem chama o backend do módulo é o próprio Micro Frontend.
 ```
 
-**`backend-quarkus` (monólito original) e `frontend` (SPA original) estão
-deprecados.** Toda responsabilidade de negócio já migrou para os
-microsserviços dedicados — `backend-quarkus` hoje só expõe
-`GET /api/v1/public/health`, e `frontend` não faz mais nenhuma chamada de
-dados própria. Ambos continuam de pé no `docker-compose.yml` apenas para não
-quebrar quem ainda aponta para eles; não recebem mais funcionalidades novas
+O monólito Quarkus original (`backend-quarkus`) foi completamente removido do
+repositório — toda a responsabilidade de negócio já havia migrado para os
+microsserviços dedicados antes da remoção.
+
+**`frontend` (SPA original) está deprecado.** Não faz mais nenhuma chamada de
+dados própria de negócio. Continua de pé no `docker-compose.yml` apenas para
+não quebrar quem ainda aponta para ele; não recebe mais funcionalidades novas
 (só correções de segurança críticas) até que a remoção física do compose e
 do repositório seja decidida explicitamente. O caminho novo para toda
 feature é sempre: `frontend-host`/`frontend-admin` + `<módulo>-service` +
@@ -87,7 +87,7 @@ docker-compose up --build
 - Frontend Admin (novo, independente): http://localhost:5200
 - PDF Frontend / WhatsApp Frontend (Micro Frontends, carregados pelo Host): http://localhost:5101 / http://localhost:5102
 - Frontend legado (SPA original, ainda ativo em paralelo): http://localhost:3000
-- Quarkus API: http://localhost:8080 — Swagger: http://localhost:8080/q/swagger-ui
+- Auth Service: http://localhost:8082/q/swagger-ui
 - PDF Service: http://localhost:8001/docs · WhatsApp Service: http://localhost:8002/docs
 - Admin Service: http://localhost:8087/q/swagger-ui
 
@@ -108,7 +108,7 @@ docker-compose up --build frontend
 ### Após alterar código do Quarkus
 
 ```bash
-docker-compose up --build backend-quarkus
+docker-compose up --build auth-service
 ```
 
 ### Após alterar código do Python
@@ -121,7 +121,6 @@ docker-compose up --build pdf-service
 
 ```bash
 docker-compose up --build --force-recreate frontend
-docker-compose up --build --force-recreate backend-quarkus
 docker-compose up --build --force-recreate pdf-service
 ```
 
@@ -133,7 +132,6 @@ docker-compose logs -f
 
 # Serviço específico
 docker-compose logs -f frontend
-docker-compose logs -f backend-quarkus
 docker-compose logs -f pdf-service
 ```
 
@@ -164,7 +162,6 @@ saas-plataforma/
 ├── pdf-frontend/            Micro Frontend do módulo PDF (remote MF)
 ├── whatsapp-frontend/       Micro Frontend do módulo WhatsApp (remote MF)
 ├── frontend/                 SPA original — ainda ativo em paralelo, não modificado
-├── backend-quarkus/          Java 21 + Quarkus 3 (monolito original)
 ├── auth-service/              Emissão/validação de ProfileAccessToken e ModuleAccessToken
 ├── profile-service/            Tenants, membros, convites, níveis de acesso
 ├── subscription-service/       Planos, assinaturas de módulo, trials
@@ -173,6 +170,11 @@ saas-plataforma/
 ├── admin-service/                 Tenants/clientes/usuários admin — só para frontend-admin
 ├── pdf-service/                     Python 3.11 + FastAPI (módulo PDF)
 ├── whatsapp-service/                 Python 3.11 + FastAPI (módulo WhatsApp, esqueleto)
+├── libs/
+│   ├── platform-module-security/         Validação do ModuleAccessToken p/ módulos Python
+│   │                                       (usada por pdf-service e whatsapp-service)
+│   └── platform-module-security-quarkus/ Equivalente Java, p/ um futuro módulo em Quarkus
+│                                           (ainda sem consumidor — nenhum módulo Quarkus existe hoje)
 ├── database/
 │   ├── migrations/    Scripts SQL versionados
 │   ├── seeds/         Dados iniciais

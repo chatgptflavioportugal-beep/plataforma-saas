@@ -66,8 +66,9 @@ def _job_row(**overrides) -> dict:
 @pytest.fixture
 def client(monkeypatch, tmp_path):
     from config.config import settings
+    from platform_security.config import settings as security_settings
 
-    monkeypatch.setattr(settings, "MODULE_ACCESS_TOKEN_SECRET", SECRET)
+    monkeypatch.setattr(security_settings, "MODULE_ACCESS_TOKEN_SECRET", SECRET)
     monkeypatch.setattr(settings, "PDF_STORAGE_PATH", str(tmp_path))
 
     with (
