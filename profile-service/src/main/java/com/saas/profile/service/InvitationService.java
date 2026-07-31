@@ -29,7 +29,7 @@ public class InvitationService {
     @Inject
     UserTenantRepository userTenantRepository;
 
-    @ConfigProperty(name = "app.base-url", defaultValue = "http://localhost:3000")
+    @ConfigProperty(name = "app.base-url", defaultValue = "http://localhost:5100")
     String baseUrl;
 
     // ----------------------------------------------------------------

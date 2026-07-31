@@ -7,9 +7,6 @@ whatsapp-service/config/.env.*
 !whatsapp-service/config/.env.example
 
 # Frontend
-frontend/node_modules/
-frontend/dist/
-frontend/.vite/
 frontend-host/node_modules/
 frontend-host/dist/
 frontend-host/.vite/

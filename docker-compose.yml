@@ -3,43 +3,6 @@
 
 services:
   # -------------------------------------------------------
-  # [DEPRECADO] Frontend React (monólito legado)
-  # Substituído por frontend-host + frontend-admin + pdf-frontend +
-  # whatsapp-frontend (Module Federation). Mantido rodando apenas para não
-  # quebrar quem ainda aponta para ele; não recebe mais funcionalidades novas
-  # — só correções de segurança críticas até ser removido do compose/repo.
-  # -------------------------------------------------------
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.dev
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    environment:
-      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
-      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
-      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080}
-      - VITE_AUTH_API_URL=${VITE_AUTH_API_URL:-http://localhost:8082}
-      - VITE_CATALOG_API_URL=${VITE_CATALOG_API_URL:-http://localhost:8083}
-      - VITE_PROFILE_API_URL=${VITE_PROFILE_API_URL:-http://localhost:8084}
-      - VITE_SUBSCRIPTION_API_URL=${VITE_SUBSCRIPTION_API_URL:-http://localhost:8085}
-      - VITE_PDF_API_URL=${VITE_PDF_API_URL:-http://localhost:8001}
-      - VITE_WHATSAPP_API_URL=${VITE_WHATSAPP_API_URL:-http://localhost:8002}
-      - VITE_ADMIN_API_URL=${VITE_ADMIN_API_URL:-http://localhost:8087}
-    depends_on:
-      - auth-service
-      - module-catalog-service
-      - profile-service
-      - subscription-service
-      - usage-service
-      - admin-service
-      - pdf-service
-      - whatsapp-service
-
-  # -------------------------------------------------------
   # Auth Service (dev mode)
   # Emissão/validação de ProfileAccessToken e ModuleAccessToken.
   # Banco: Supabase (compartilhado com os demais microsserviços Quarkus)
@@ -69,7 +32,7 @@ services:
       # Subscription Service — resolução de acesso a módulo (assinatura/plano/limites)
       - SUBSCRIPTION_SERVICE_URL=${SUBSCRIPTION_SERVICE_URL:-http://subscription-service:8085}
       # CORS
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
 
   # -------------------------------------------------------
   # Module Catalog Service (dev mode)
@@ -97,7 +60,7 @@ services:
       - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
       - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
       # CORS
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
 
   # -------------------------------------------------------
   # Profile Service (dev mode)
@@ -131,7 +94,7 @@ services:
       - QUARKUS_MAILER_USERNAME=${QUARKUS_MAILER_USERNAME:-}
       - QUARKUS_MAILER_PASSWORD=${QUARKUS_MAILER_PASSWORD:-}
       # CORS
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
 
   # -------------------------------------------------------
   # Subscription Service (dev mode)
@@ -158,7 +121,7 @@ services:
       - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL}
       - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
       # CORS
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
 
   # -------------------------------------------------------
   # Usage Service (dev mode)
@@ -184,7 +147,7 @@ services:
       # ModuleAccessToken (validação local, mesmo segredo do auth-service)
       - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
       # CORS
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
 
   # -------------------------------------------------------
   # Admin Service (dev mode)
@@ -222,7 +185,7 @@ services:
       - QUARKUS_MAILER_USERNAME=${QUARKUS_MAILER_USERNAME:-}
       - QUARKUS_MAILER_PASSWORD=${QUARKUS_MAILER_PASSWORD:-}
       # CORS
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
 
   # -------------------------------------------------------
   # PDF Service (FastAPI)
@@ -239,7 +202,7 @@ services:
       - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - DATABASE_URL=${DATABASE_URL}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
       - PDF_STORAGE_PATH=/tmp/saas-pdf
     volumes:
       - pdf-storage:/tmp/saas-pdf
@@ -259,7 +222,7 @@ services:
       - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - DATABASE_URL=${DATABASE_URL}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
 
   # -------------------------------------------------------
   # PDF Frontend (Micro Frontend, Module Federation remote)

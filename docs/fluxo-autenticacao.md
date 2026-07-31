@@ -34,11 +34,16 @@ Request → Handler (Resource):
   9. Auditoria registrada
 ```
 
-## Área /admin
+## Área administrativa
 
-A área `/admin` no frontend só renderiza para usuários com `system_role = 'SUPER_ADMIN'` (verificado no `user_profiles`).
+O `frontend-admin` (app separado do Front Host, sem prefixo `/admin` nas suas
+próprias rotas) só renderiza para usuários com `system_role` igual a
+`SUPER_ADMIN` ou `ADMIN_USER` (verificado no `user_profiles` via
+`SuperAdminGuard`); dentro dele, cada rota é ainda filtrada por
+`AdminPermissionGuard` de acordo com as permissões granulares do
+`ADMIN_USER` (SUPER_ADMIN sempre tem acesso total).
 
-No Quarkus, o `AdminResource` lê o claim `system_role` do JWT e rejeita com 403 se não for SUPER_ADMIN.
+No `admin-service`, o `AdminResource` lê o claim `system_role` do JWT e rejeita com 403 se não for SUPER_ADMIN/ADMIN_USER.
 
 Para promover um usuário a SUPER_ADMIN, execute no Supabase:
 ```sql

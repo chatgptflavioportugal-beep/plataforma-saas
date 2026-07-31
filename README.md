@@ -35,14 +35,11 @@ O monólito Quarkus original (`backend-quarkus`) foi completamente removido do
 repositório — toda a responsabilidade de negócio já havia migrado para os
 microsserviços dedicados antes da remoção.
 
-**`frontend` (SPA original) está deprecado.** Não faz mais nenhuma chamada de
-dados própria de negócio. Continua de pé no `docker-compose.yml` apenas para
-não quebrar quem ainda aponta para ele; não recebe mais funcionalidades novas
-(só correções de segurança críticas) até que a remoção física do compose e
-do repositório seja decidida explicitamente. O caminho novo para toda
-feature é sempre: `frontend-host`/`frontend-admin` + `<módulo>-service` +
-`<módulo>-frontend` (Micro Frontend), cadastrados no Module Catalog Service e
-carregados sob demanda pelo Front Host.
+O antigo `frontend` (SPA monolítico original) foi removido do repositório —
+toda funcionalidade já havia migrado para `frontend-host`/`frontend-admin` +
+`<módulo>-service` + `<módulo>-frontend` (Micro Frontend). O caminho para
+toda feature nova é sempre esse: módulo cadastrado no Module Catalog Service
+e Micro Frontend carregado sob demanda pelo Front Host.
 
 ## Pré-requisitos
 
@@ -83,10 +80,9 @@ supabase db push
 docker-compose up --build
 ```
 
-- Front Host (novo, login/dashboard/navegação): http://localhost:5100
-- Frontend Admin (novo, independente): http://localhost:5200
+- Front Host (login/dashboard/navegação): http://localhost:5100
+- Frontend Admin (independente): http://localhost:5200
 - PDF Frontend / WhatsApp Frontend (Micro Frontends, carregados pelo Host): http://localhost:5101 / http://localhost:5102
-- Frontend legado (SPA original, ainda ativo em paralelo): http://localhost:3000
 - Auth Service: http://localhost:8082/q/swagger-ui
 - PDF Service: http://localhost:8001/docs · WhatsApp Service: http://localhost:8002/docs
 - Admin Service: http://localhost:8087/q/swagger-ui
@@ -102,7 +98,7 @@ Ver [docs/execucao-local.md](docs/execucao-local.md)
 ### Após alterar código do Frontend
 
 ```bash
-docker-compose up --build frontend
+docker-compose up --build frontend-host
 ```
 
 ### Após alterar código do Quarkus
@@ -120,7 +116,7 @@ docker-compose up --build pdf-service
 ### Reiniciar um serviço com rebuild
 
 ```bash
-docker-compose up --build --force-recreate frontend
+docker-compose up --build --force-recreate frontend-host
 docker-compose up --build --force-recreate pdf-service
 ```
 
@@ -131,7 +127,7 @@ docker-compose up --build --force-recreate pdf-service
 docker-compose logs -f
 
 # Serviço específico
-docker-compose logs -f frontend
+docker-compose logs -f frontend-host
 docker-compose logs -f pdf-service
 ```
 
@@ -161,7 +157,6 @@ saas-plataforma/
 ├── frontend-admin/         Frontend Admin — independente, só fala com admin-service
 ├── pdf-frontend/            Micro Frontend do módulo PDF (remote MF)
 ├── whatsapp-frontend/       Micro Frontend do módulo WhatsApp (remote MF)
-├── frontend/                 SPA original — ainda ativo em paralelo, não modificado
 ├── auth-service/              Emissão/validação de ProfileAccessToken e ModuleAccessToken
 ├── profile-service/            Tenants, membros, convites, níveis de acesso
 ├── subscription-service/       Planos, assinaturas de módulo, trials

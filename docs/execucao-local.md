@@ -1,27 +1,81 @@
 # Execução Local
 
-## Frontend
+Este guia cobre a execução manual (sem Docker) de cada projeto. Para subir
+tudo de uma vez, prefira `docker-compose up --build` (ver README).
+
+## Frontends
+
+Os Micro Frontends remotos (`pdf-frontend`, `whatsapp-frontend`) usam Module
+Federation e **não** servem `remoteEntry.js` via `vite dev` — por isso o
+script `dev` deles faz `vite build --watch` + `vite preview`, em vez de um
+dev server comum. `frontend-host` e `frontend-admin` são apps normais.
+
+### Front Host (login, dashboard, navegação)
 
 ```bash
-cd frontend
+cd frontend-host
 cp .env.example .env
-# Edite .env com VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_API_BASE_URL
+# Edite .env com VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY e as *_API_URL
 
 npm install
 npm run dev
-# Acesse: http://localhost:3000
+# Acesse: http://localhost:5100
 ```
 
-## PDF Service
+### Frontend Admin (independente, só fala com admin-service)
 
-O frontend chama o pdf-service diretamente (VITE_PDF_API_URL). A autorização é
+```bash
+cd frontend-admin
+cp .env.example .env
+npm install
+npm run dev
+# Acesse: http://localhost:5200
+```
+
+### PDF Frontend / WhatsApp Frontend (Micro Frontends)
+
+Precisam do Front Host rodando para serem carregados via Module Federation.
+Para iterar isoladamente, defina `VITE_DEV_MODULE_TOKEN` no `.env` local com
+um ModuleAccessToken válido.
+
+```bash
+cd pdf-frontend       # ou whatsapp-frontend
+cp .env.example .env
+npm install
+npm run dev
+# pdf-frontend:       http://localhost:5101
+# whatsapp-frontend:  http://localhost:5102
+```
+
+## Serviços Quarkus (Java)
+
+`auth-service`, `module-catalog-service`, `profile-service`,
+`subscription-service`, `usage-service` e `admin-service` seguem o mesmo
+padrão:
+
+```bash
+cd auth-service   # ou o serviço desejado
+cp .env.example .env
+# Edite .env com as credenciais do Supabase e os segredos compartilhados
+# (MODULE_ACCESS_TOKEN_SECRET, PROFILE_ACCESS_TOKEN_SECRET)
+
+./mvnw quarkus:dev
+```
+
+Portas em dev: auth-service `8082`, module-catalog-service `8083`,
+profile-service `8084`, subscription-service `8085`, usage-service `8086`,
+admin-service `8087`. Swagger UI disponível em `/q/swagger-ui` de cada um.
+
+## Serviços Python (FastAPI)
+
+`pdf-service` e `whatsapp-service` seguem o mesmo padrão. A autorização é
 feita só pelo ModuleAccessToken emitido pelo auth-service, validado pela
 biblioteca compartilhada `libs/platform-module-security` (instalada em modo
 editável via `requirements.txt` — não requer nenhum passo extra).
 
 ```bash
-cd pdf-service
-cp .env.example .env
+cd pdf-service   # ou whatsapp-service
+cp config/.env.example .env
 # Edite .env com MODULE_ACCESS_TOKEN_SECRET (mesmo valor usado pelo auth-service)
 
 python -m venv venv
@@ -31,9 +85,9 @@ venv\Scripts\activate
 source venv/bin/activate
 
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8001
-# Acesse: http://localhost:8001
-# Swagger: http://localhost:8001/docs
+uvicorn main:app --reload --port 8001   # pdf-service
+# uvicorn main:app --reload --port 8002 # whatsapp-service
+# Swagger: http://localhost:8001/docs (ou 8002)
 ```
 
 ## Supabase
@@ -43,24 +97,14 @@ uvicorn main:app --reload --port 8001
 2. Anote: `Project URL`, `anon key`, `JWT Secret`
 
 ### 2. Aplicar migrations
-No SQL Editor do Supabase, execute em ordem:
-```
-database/migrations/0001_base_functions.sql
-database/migrations/0002_plans.sql
-database/migrations/0003_tenants.sql
-database/migrations/0004_user_tenants.sql
-database/migrations/0005_tenant_subscriptions.sql
-database/migrations/0006_audit_logs.sql
-database/migrations/0007_usage_records.sql
-database/migrations/0008_user_profiles.sql
-database/migrations/0009_pdf_jobs.sql
-database/migrations/0010_expiration_alerts.sql
-```
+No SQL Editor do Supabase (ou via `supabase db push`), execute todos os
+arquivos em `database/migrations/`, em ordem numérica.
 
 ### 3. Seeds
-Execute:
+Execute, em ordem:
 ```
 database/seeds/0001_plans.sql
+database/seeds/0002_super_admin.sql
 ```
 
 ### 4. Variáveis de ambiente
@@ -73,12 +117,12 @@ database/seeds/0001_plans.sql
 
 ### Python
 ```bash
-cd pdf-service
+cd pdf-service        # ou whatsapp-service
 pytest tests/
 ```
 
 ### Quarkus
 ```bash
-cd auth-service
+cd auth-service        # ou o serviço desejado
 ./mvnw test
 ```

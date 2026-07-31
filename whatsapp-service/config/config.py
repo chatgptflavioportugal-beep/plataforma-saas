@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
-    CORS_ORIGINS: str = "http://localhost:3000"
+    CORS_ORIGINS: str = "http://localhost:5100,http://localhost:5102"
     DATABASE_URL: str
 
     class Config:
