@@ -13,7 +13,7 @@ from health import routes as health_routes
 from routes import pdf_routes
 from responses.envelopes import ErrorResponse
 
-configure_logging(settings.LOG_LEVEL)
+configure_logging(settings.LOG_LEVEL, settings.LOG_FORMAT)
 
 _ERROR_CODE_BY_STATUS = {
     400: "BAD_REQUEST",

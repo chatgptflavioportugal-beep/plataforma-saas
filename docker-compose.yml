@@ -131,8 +131,11 @@ services:
   # -------------------------------------------------------
   usage-service:
     build:
-      context: ./usage-service
-      dockerfile: Dockerfile.dev
+      # Contexto na raiz do repo: o Dockerfile.dev precisa instalar
+      # libs/platform-module-security-quarkus no repositório Maven local antes
+      # de compilar o serviço (ver libs/platform-module-security-quarkus/README.md).
+      context: .
+      dockerfile: usage-service/Dockerfile.dev
     ports:
       - "8086:8086"
     environment:
@@ -186,6 +189,12 @@ services:
       - QUARKUS_MAILER_PASSWORD=${QUARKUS_MAILER_PASSWORD:-}
       # CORS
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
+      # subscription-service — só para ações administrativas que escrevem em
+      # tabelas daquele serviço (ex.: cancelar/reativar assinatura). O
+      # frontend-admin nunca fala com subscription-service diretamente.
+      - SUBSCRIPTION_SERVICE_URL=${SUBSCRIPTION_SERVICE_URL:-http://subscription-service:8085}
+    depends_on:
+      - subscription-service
 
   # -------------------------------------------------------
   # PDF Service (FastAPI)
@@ -201,6 +210,8 @@ services:
     environment:
       - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # "json" (padrão, Google Cloud Logging) ou "text" (legível, debug local)
+      - LOG_FORMAT=${LOG_FORMAT:-json}
       - DATABASE_URL=${DATABASE_URL}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
       - PDF_STORAGE_PATH=/tmp/saas-pdf
@@ -221,6 +232,8 @@ services:
     environment:
       - MODULE_ACCESS_TOKEN_SECRET=${MODULE_ACCESS_TOKEN_SECRET}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # "json" (padrão, Google Cloud Logging) ou "text" (legível, debug local)
+      - LOG_FORMAT=${LOG_FORMAT:-json}
       - DATABASE_URL=${DATABASE_URL}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5100,http://localhost:5101,http://localhost:5102,http://localhost:5200}
 
@@ -298,8 +311,12 @@ services:
   # -------------------------------------------------------
   # Frontend Admin (projeto React independente)
   # Usado só por administradores da plataforma. Consome exclusivamente o
-  # Admin Service — nunca module-catalog-service/subscription-service/PDF/
-  # WhatsApp/Usage Service diretamente. Não é federado no Host.
+  # Admin Service (e o Auth do Supabase para login) — nunca Auth Service (fora
+  # de login)/Profile/Subscription/Module Catalog/Usage/PDF/WhatsApp Service
+  # diretamente. Ações que escrevem em tabelas de outro serviço (ex.:
+  # cancelar assinatura) passam pelo Admin Service, que repassa internamente
+  # (ver com.saas.admin.controller.AdminSubscriptionResource). Não é federado
+  # no Host.
   # -------------------------------------------------------
   frontend-admin:
     build:
@@ -314,12 +331,8 @@ services:
       - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
       - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
       - VITE_ADMIN_API_URL=${VITE_ADMIN_API_URL:-http://localhost:8087}
-      # Cancelar/reativar assinatura é ação do subscription-service — chamado
-      # diretamente, sem passar pelo admin-service.
-      - VITE_SUBSCRIPTION_API_URL=${VITE_SUBSCRIPTION_API_URL:-http://localhost:8085}
     depends_on:
       - admin-service
-      - subscription-service
 
 volumes:
   pdf-storage:

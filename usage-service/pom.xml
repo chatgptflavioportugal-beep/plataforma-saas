@@ -60,23 +60,19 @@
             <artifactId>quarkus-smallrye-health</artifactId>
         </dependency>
 
-        <!-- ModuleAccessToken (JJWT, HS256) — mesmo segredo compartilhado emitido pelo auth-service -->
+        <!-- Logs estruturados em JSON (console) — integração com Google Cloud
+             Logging; desabilitado em %dev para legibilidade local -->
         <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-api</artifactId>
-            <version>0.12.6</version>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-logging-json</artifactId>
         </dependency>
+
+        <!-- ModuleAccessToken (JWT HS256) — validação centralizada, nenhum parsing local
+             (ver com.saas.platformsecurity.ModuleAccessTokenService) -->
         <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-impl</artifactId>
-            <version>0.12.6</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-jackson</artifactId>
-            <version>0.12.6</version>
-            <scope>runtime</scope>
+            <groupId>com.saas</groupId>
+            <artifactId>platform-module-security-quarkus</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
         </dependency>
 
         <!-- Testes -->

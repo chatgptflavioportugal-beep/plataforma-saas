@@ -1,21 +1,28 @@
 package com.saas.usage.security;
 
+import com.saas.platformsecurity.CurrentModuleContext;
+import com.saas.platformsecurity.ModuleAccessTokenService;
+import com.saas.platformsecurity.ModuleContext;
+import com.saas.platformsecurity.exceptions.ModuleSecurityException;
+
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Priorities;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
+import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.Provider;
 
-import java.io.IOException;
 import java.util.Map;
 
 /**
  * Todas as rotas do Usage Service (/api/v1/usage/**) exigem um ModuleAccessToken válido,
- * emitido pelo auth-service para o módulo chamador (PDF, WhatsApp, etc.). Nenhuma consulta
- * a outro serviço é feita aqui — tudo vem das claims do próprio token.
+ * emitido pelo auth-service para o módulo chamador (PDF, WhatsApp, etc.). Aceita tokens de
+ * qualquer módulo (passa {@code null} como moduleSlug esperado) — usage-service é consumido
+ * por todos os módulos, não é exclusivo de um. Validação delegada a
+ * platform-module-security-quarkus; nenhuma consulta a outro serviço é feita aqui.
  */
 @Provider
 @ApplicationScoped
@@ -23,50 +30,37 @@ import java.util.Map;
 public class ModuleTokenFilter implements ContainerRequestFilter {
 
     @Inject
-    TokenService tokenService;
+    ModuleAccessTokenService tokenService;
 
     @Inject
-    ModuleTokenContextHolder contextHolder;
+    CurrentModuleContext currentModuleContext;
 
     private static final String USAGE_API_PREFIX = "/api/v1/usage/";
 
     @Override
-    public void filter(ContainerRequestContext requestContext) throws IOException {
+    public void filter(ContainerRequestContext requestContext) {
         String path = requestContext.getUriInfo().getPath();
-        if (!path.startsWith(USAGE_API_PREFIX) && !("api/v1/usage".equals(path))) {
+        if (!path.startsWith(USAGE_API_PREFIX) && !"api/v1/usage".equals(path)) {
             return;
         }
 
         String authHeader = requestContext.getHeaderString("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            requestContext.abortWith(
-                    Response.status(Response.Status.UNAUTHORIZED)
-                            .entity(Map.of("error", "ModuleAccessToken ausente"))
-                            .build()
-            );
-            return;
-        }
+        String token = authHeader != null && authHeader.startsWith("Bearer ")
+                ? authHeader.substring("Bearer ".length())
+                : null;
 
-        String token = authHeader.substring(7);
-        TokenService.ModuleTokenClaims claims;
+        ModuleContext context;
         try {
-            claims = tokenService.validateModuleToken(token);
-        } catch (TokenService.TokenException e) {
+            context = tokenService.validate(token, null);
+        } catch (ModuleSecurityException e) {
             requestContext.abortWith(
-                    Response.status(Response.Status.UNAUTHORIZED)
+                    Response.status(e.getStatus())
+                            .type(MediaType.APPLICATION_JSON)
                             .entity(Map.of("error", e.getMessage()))
-                            .build()
-            );
+                            .build());
             return;
         }
 
-        contextHolder.set(new ModuleTokenContext(
-                claims.userId(),
-                claims.tenantId(),
-                claims.moduleId(),
-                claims.moduleSlug(),
-                claims.permissions(),
-                claims.limits()
-        ));
+        currentModuleContext.set(context);
     }
 }

@@ -66,6 +66,18 @@ Portas em dev: auth-service `8082`, module-catalog-service `8083`,
 profile-service `8084`, subscription-service `8085`, usage-service `8086`,
 admin-service `8087`. Swagger UI disponível em `/q/swagger-ui` de cada um.
 
+**usage-service** depende de `libs/platform-module-security-quarkus`, que
+ainda não tem repositório Maven privado — antes do primeiro `quarkus:dev`,
+instale a lib no seu `~/.m2` local:
+
+```bash
+cd libs/platform-module-security-quarkus
+mvn install -DskipTests
+```
+
+(o build via Docker/docker-compose já faz isso automaticamente — ver
+`usage-service/Dockerfile.dev`.)
+
 ## Serviços Python (FastAPI)
 
 `pdf-service` e `whatsapp-service` seguem o mesmo padrão. A autorização é

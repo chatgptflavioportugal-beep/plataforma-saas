@@ -1,21 +1,24 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/core/auth/AuthContext'
 import { SuperAdminGuard } from '@/core/auth/SuperAdminGuard'
 import { AdminPermissionGuard } from '@/core/auth/AdminPermissionGuard'
-import { AdminLoginPage } from '@/app/public/AdminLoginPage'
+import { Spinner } from '@/shared/components/Spinner'
 
 import { AdminLayout } from '@/shared/layouts/AdminLayout'
-import { AdminDashboardPage } from '@/app/admin/AdminDashboardPage'
-import { AdminTenantsPage } from '@/app/admin/AdminTenantsPage'
-import { AdminCustomersPage } from '@/app/admin/AdminCustomersPage'
-import { AdminSystemAdminsPage } from '@/app/admin/AdminSystemAdminsPage'
-import { AdminPlansPage } from '@/app/admin/AdminPlansPage'
-import { AdminSubscriptionsPage } from '@/app/admin/AdminSubscriptionsPage'
-import { AdminTrialsPage } from '@/app/admin/AdminTrialsPage'
-import { AdminModulesPage } from '@/app/admin/AdminModulesPage'
-import { AdminUsersPage } from '@/app/admin/AdminUsersPage'
-import { AdminAccessLevelsPage } from '@/app/admin/AdminAccessLevelsPage'
-import { AdminPlatformSettingsPage } from '@/app/admin/AdminPlatformSettingsPage'
+
+const AdminLoginPage = lazy(() => import('@/app/public/AdminLoginPage').then(m => ({ default: m.AdminLoginPage })))
+const AdminDashboardPage = lazy(() => import('@/app/admin/AdminDashboardPage').then(m => ({ default: m.AdminDashboardPage })))
+const AdminTenantsPage = lazy(() => import('@/app/admin/AdminTenantsPage').then(m => ({ default: m.AdminTenantsPage })))
+const AdminCustomersPage = lazy(() => import('@/app/admin/AdminCustomersPage').then(m => ({ default: m.AdminCustomersPage })))
+const AdminSystemAdminsPage = lazy(() => import('@/app/admin/AdminSystemAdminsPage').then(m => ({ default: m.AdminSystemAdminsPage })))
+const AdminPlansPage = lazy(() => import('@/app/admin/AdminPlansPage').then(m => ({ default: m.AdminPlansPage })))
+const AdminSubscriptionsPage = lazy(() => import('@/app/admin/AdminSubscriptionsPage').then(m => ({ default: m.AdminSubscriptionsPage })))
+const AdminTrialsPage = lazy(() => import('@/app/admin/AdminTrialsPage').then(m => ({ default: m.AdminTrialsPage })))
+const AdminModulesPage = lazy(() => import('@/app/admin/AdminModulesPage').then(m => ({ default: m.AdminModulesPage })))
+const AdminUsersPage = lazy(() => import('@/app/admin/AdminUsersPage').then(m => ({ default: m.AdminUsersPage })))
+const AdminAccessLevelsPage = lazy(() => import('@/app/admin/AdminAccessLevelsPage').then(m => ({ default: m.AdminAccessLevelsPage })))
+const AdminPlatformSettingsPage = lazy(() => import('@/app/admin/AdminPlatformSettingsPage').then(m => ({ default: m.AdminPlatformSettingsPage })))
 
 const ADMIN_ROUTES_BY_PRIORITY = [
   { path: 'dashboard',           permission: 'admin.dashboard.view' },
@@ -56,6 +59,7 @@ export function AppRouter() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <Suspense fallback={<Spinner fullscreen />}>
         <Routes>
           <Route path="/login" element={<AdminLoginPage />} />
 
@@ -81,6 +85,7 @@ export function AppRouter() {
             <Route path="users" element={<Navigate to="/customers" replace />} />
           </Route>
         </Routes>
+        </Suspense>
       </AuthProvider>
     </BrowserRouter>
   )

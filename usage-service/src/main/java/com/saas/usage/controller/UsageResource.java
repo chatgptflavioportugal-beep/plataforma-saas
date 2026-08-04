@@ -1,10 +1,10 @@
 package com.saas.usage.controller;
 
+import com.saas.platformsecurity.CurrentModuleContext;
 import com.saas.usage.dto.PagedResponse;
 import com.saas.usage.dto.UsageAuditRequest;
 import com.saas.usage.dto.UsageIncrementRequest;
 import com.saas.usage.dto.UsageIncrementResponse;
-import com.saas.usage.security.ModuleTokenContextHolder;
 import com.saas.usage.service.UsageService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
@@ -24,7 +24,7 @@ import java.time.LocalDate;
 public class UsageResource {
 
     @Inject UsageService usageService;
-    @Inject ModuleTokenContextHolder contextHolder;
+    @Inject CurrentModuleContext contextHolder;
 
     @POST
     @Path("/increment")
@@ -36,7 +36,7 @@ public class UsageResource {
         Long limit = toLong(ctx.getLimit(body.metricCode()));
 
         UsageIncrementResponse result = usageService.increment(
-                ctx.getTenantId(), ctx.getUserId(), ctx.getModuleSlug(),
+                ctx.tenantId(), ctx.userId(), ctx.moduleSlug(),
                 body.metricCode(), body.amountOrDefault(), limit
         );
 
@@ -57,8 +57,8 @@ public class UsageResource {
         LocalDate fromDate = from != null ? LocalDate.parse(from) : LocalDate.now().minusDays(30);
         LocalDate toDate = to != null ? LocalDate.parse(to) : LocalDate.now();
 
-        var items = usageService.summary(ctx.getTenantId(), moduleSlug, metricCode, fromDate, toDate, page, pageSize);
-        long total = usageService.countSummary(ctx.getTenantId(), moduleSlug, metricCode, fromDate, toDate);
+        var items = usageService.summary(ctx.tenantId(), moduleSlug, metricCode, fromDate, toDate, page, pageSize);
+        long total = usageService.countSummary(ctx.tenantId(), moduleSlug, metricCode, fromDate, toDate);
         return Response.ok(PagedResponse.of(items, page, pageSize, total)).build();
     }
 
@@ -69,7 +69,7 @@ public class UsageResource {
             return Response.status(400).entity(java.util.Map.of("error", "action é obrigatório")).build();
         }
         var ctx = contextHolder.get();
-        usageService.audit(ctx.getTenantId(), ctx.getUserId(), ctx.getModuleSlug(),
+        usageService.audit(ctx.tenantId(), ctx.userId(), ctx.moduleSlug(),
                 body.metricCode(), body.action(), body.metadata());
         return Response.status(201).build();
     }

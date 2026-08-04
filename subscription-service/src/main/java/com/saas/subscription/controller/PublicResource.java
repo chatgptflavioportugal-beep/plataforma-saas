@@ -6,8 +6,6 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
-import java.util.Map;
-
 /**
  * Endpoints públicos do domínio de planos/assinaturas: catálogo de planos e
  * módulos disponíveis para contratação.
@@ -19,12 +17,6 @@ public class PublicResource {
 
     @Inject
     PlanService planService;
-
-    @GET
-    @Path("/health")
-    public Response health() {
-        return Response.ok(Map.of("status", "UP")).build();
-    }
 
     /**
      * Lista planos ativos. Filtro opcional: ?type=individual ou ?type=business.

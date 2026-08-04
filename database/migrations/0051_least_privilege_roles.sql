@@ -83,6 +83,11 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO role_admin_service;
 GRANT SELECT, INSERT, UPDATE, DELETE ON
     profile_module_subscriptions, module_trial_history, audit_logs
     TO role_subscription_service;
+-- trial_campaigns: definição/criação da campanha é do admin-service, mas o
+-- ciclo de vida em runtime (reserva de vaga em TrialCampaignService.
+-- claimSlotOrThrow e sync de status em TrialSchedulerJobs) é escrito pelo
+-- próprio subscription-service — por isso UPDATE aqui, sem INSERT/DELETE.
+GRANT UPDATE ON trial_campaigns TO role_subscription_service;
 GRANT SELECT ON
     plans, plan_version_modules, plan_version_module_limits,
     platform_modules, platform_module_services, platform_module_service_groups,

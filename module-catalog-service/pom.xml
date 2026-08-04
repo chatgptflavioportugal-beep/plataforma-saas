@@ -67,6 +67,13 @@
             <artifactId>quarkus-smallrye-health</artifactId>
         </dependency>
 
+        <!-- Logs estruturados em JSON (console) — integração com Google Cloud
+             Logging; desabilitado em %dev para legibilidade local -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-logging-json</artifactId>
+        </dependency>
+
         <!-- Testes -->
         <dependency>
             <groupId>io.quarkus</groupId>

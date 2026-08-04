@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/shared/services/adminApi'
-import { subscriptionApi } from '@/shared/services/subscriptionApi'
 import { useAuth } from '@/core/auth/AuthContext'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -470,12 +469,12 @@ export function AdminSubscriptionsPage() {
   }, [queryClient])
 
   const cancelMutation = useMutation({
-    mutationFn: (id: string) => subscriptionApi.post(`/api/v1/admin/subscriptions/${id}/cancel`),
+    mutationFn: (id: string) => adminApi.post(`/api/v1/admin/subscriptions/${id}/cancel`),
     onSuccess: invalidate,
   })
 
   const reactivateMutation = useMutation({
-    mutationFn: (id: string) => subscriptionApi.post(`/api/v1/admin/subscriptions/${id}/reactivate`),
+    mutationFn: (id: string) => adminApi.post(`/api/v1/admin/subscriptions/${id}/reactivate`),
     onSuccess: invalidate,
   })
 

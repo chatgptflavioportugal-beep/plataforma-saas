@@ -3,6 +3,8 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
+    # "json" (padrão — Google Cloud Logging) ou "text" (legível, uso local fora de container)
+    LOG_FORMAT: str = "json"
     CORS_ORIGINS: str = "http://localhost:5100,http://localhost:5101"
     DATABASE_URL: str
     PDF_STORAGE_PATH: str = "/tmp/saas-pdf"

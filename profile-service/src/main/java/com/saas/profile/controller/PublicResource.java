@@ -50,12 +50,6 @@ public class PublicResource {
         }
     }
 
-    @GET
-    @Path("/health")
-    public Response health() {
-        return Response.ok(Map.of("status", "UP")).build();
-    }
-
     /**
      * Onboarding: cria um tenant do tipo BUSINESS.
      * Requer usuário autenticado — não exige tenant ativo (sem X-Tenant-ID).

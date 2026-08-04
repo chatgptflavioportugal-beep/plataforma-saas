@@ -23,8 +23,11 @@ import java.util.UUID;
  *
  * Movido de admin-service, que escrevia diretamente em
  * profile_module_subscriptions — tabela pertencente a este serviço.
- * frontend-admin chama este endpoint diretamente (sem passar por admin-service);
- * a checagem de permissão administrativa é feita localmente por AdminAuthService.
+ * frontend-admin não pode consumir subscription-service diretamente — chama
+ * admin-service, que repassa para cá via SubscriptionServiceClient (ver
+ * com.saas.admin.controller.AdminSubscriptionResource); a checagem de
+ * permissão administrativa é feita localmente por AdminAuthService com o
+ * mesmo Authorization repassado pelo admin-service.
  */
 @Path("/api/v1/admin/subscriptions")
 @Authenticated
