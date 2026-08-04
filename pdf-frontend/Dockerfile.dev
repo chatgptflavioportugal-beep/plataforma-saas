@@ -6,4 +6,5 @@ COPY . .
 EXPOSE 5101
 # @originjs/vite-plugin-federation não serve remoteEntry.js no dev server (`vite dev`);
 # só existe no output de build. Por isso: build em modo watch + preview servindo o dist/.
-CMD ["sh", "-c", "npm run dev & npm run preview"]
+# O build inicial roda síncrono antes do preview, senão "preview" falha com dist/ inexistente.
+CMD ["sh", "-c", "npm run build && (npm run dev & npm run preview)"]
