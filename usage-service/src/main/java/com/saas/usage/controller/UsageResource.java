@@ -10,6 +10,9 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityScheme;
+import org.eclipse.microprofile.openapi.annotations.enums.SecuritySchemeType;
 
 import java.time.LocalDate;
 
@@ -19,6 +22,14 @@ import java.time.LocalDate;
  * limites vêm direto das claims do token, sem consultar nenhum outro serviço.
  */
 @Path("/api/v1/usage")
+@SecurityScheme(
+    securitySchemeName = "moduleToken",
+    type = SecuritySchemeType.HTTP,
+    scheme = "bearer",
+    bearerFormat = "JWT",
+    description = "ModuleAccessToken emitido pelo auth-service (POST /api/v1/module-token/{moduleSlug}). Enviar como 'Authorization: Bearer <token>'."
+)
+@SecurityRequirement(name = "moduleToken")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class UsageResource {

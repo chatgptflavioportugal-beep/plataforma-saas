@@ -4,6 +4,7 @@ import com.saas.subscription.repository.UserTenantRepository;
 import com.saas.subscription.security.TenantContext;
 import com.saas.subscription.service.TrialCampaignService;
 import io.quarkus.security.Authenticated;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
@@ -25,6 +26,7 @@ import java.util.stream.Collectors;
 
 @Path("/api/v1/subscriptions")
 @Authenticated
+@SecurityRequirement(name = "bearerAuth")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class ProfileModuleSubscriptionResource {

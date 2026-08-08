@@ -3,6 +3,9 @@ package com.saas.subscription.controller;
 import com.saas.subscription.security.TenantContext;
 import com.saas.subscription.service.TrialCampaignService;
 import io.quarkus.security.Authenticated;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityScheme;
+import org.eclipse.microprofile.openapi.annotations.enums.SecuritySchemeType;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.ws.rs.*;
@@ -15,6 +18,14 @@ import java.util.*;
 
 @Path("/api/v1/dashboard")
 @Authenticated
+@SecurityScheme(
+    securitySchemeName = "bearerAuth",
+    type = SecuritySchemeType.HTTP,
+    scheme = "bearer",
+    bearerFormat = "JWT",
+    description = "JWT emitido pelo Supabase Auth (login do usuário). Enviar como 'Authorization: Bearer <token>'."
+)
+@SecurityRequirement(name = "bearerAuth")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class DashboardResource {

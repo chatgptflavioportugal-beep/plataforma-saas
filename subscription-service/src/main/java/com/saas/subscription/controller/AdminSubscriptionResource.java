@@ -4,6 +4,7 @@ import com.saas.subscription.repository.UserTenantRepository;
 import com.saas.subscription.security.AdminAuthService;
 import com.saas.subscription.service.AuditService;
 import io.quarkus.security.Authenticated;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
@@ -31,6 +32,7 @@ import java.util.UUID;
  */
 @Path("/api/v1/admin/subscriptions")
 @Authenticated
+@SecurityRequirement(name = "bearerAuth")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class AdminSubscriptionResource {

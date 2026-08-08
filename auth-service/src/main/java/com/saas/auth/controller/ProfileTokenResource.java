@@ -4,6 +4,7 @@ import com.saas.auth.repository.UserTenantRepository;
 import com.saas.auth.security.TenantContext;
 import com.saas.auth.security.TokenService;
 import io.quarkus.security.Authenticated;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.ws.rs.*;
@@ -25,6 +26,7 @@ import java.util.UUID;
  */
 @Path("/api/v1/profile")
 @Authenticated
+@SecurityRequirement(name = "bearerAuth")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class ProfileTokenResource {

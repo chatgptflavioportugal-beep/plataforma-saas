@@ -4,6 +4,7 @@ import com.saas.admin.security.AdminAuthService;
 import com.saas.admin.service.AdminAuditService;
 import com.saas.admin.service.EmailService;
 import io.quarkus.security.Authenticated;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
@@ -28,6 +29,7 @@ import java.util.*;
  */
 @Path("/api/v1/admin/admin-users")
 @Authenticated
+@SecurityRequirement(name = "bearerAuth")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class AdminUsersResource {

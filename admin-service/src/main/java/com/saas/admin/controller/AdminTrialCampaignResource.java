@@ -4,6 +4,7 @@ import com.saas.admin.security.AdminAuthService;
 import com.saas.admin.service.AdminAuditService;
 import com.saas.admin.service.TrialCampaignAdminService;
 import io.quarkus.security.Authenticated;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
@@ -30,6 +31,7 @@ import java.util.stream.Collectors;
  */
 @Path("/api/v1/admin/trial-campaigns")
 @Authenticated
+@SecurityRequirement(name = "bearerAuth")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class AdminTrialCampaignResource {

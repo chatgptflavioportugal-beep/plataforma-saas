@@ -18,9 +18,9 @@ def module_security(module_slug: str, permission: str | None = None) -> Callable
     """
 
     async def dependency(
-        authorization: str = Header(..., alias="Authorization"),
+        authorization: str | None = Header(None, alias="Authorization"),
     ) -> ModuleContext:
-        if not authorization.startswith("Bearer "):
+        if not authorization or not authorization.startswith("Bearer "):
             raise AuthenticationError("Token de acesso do módulo não informado.")
         token = authorization[len("Bearer "):]
         context = decode_module_token(token, module_slug)

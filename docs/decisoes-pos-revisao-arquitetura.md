@@ -109,7 +109,7 @@ continuam na credencial única atual, e o isolamento de dados entre domínios
 permanece apenas por convenção de código, não reforçado pelo Postgres.
 **Recomendação: fechar isso antes do go-live no Google Cloud.**
 
-## 5. Achado novo, não relacionado às recomendações originais: build de produção quebrado em `auth-service` e `module-catalog-service`
+## 5. Build de produção quebrado em `auth-service` e `module-catalog-service` — corrigido
 
 Ao validar as mudanças acima construindo as imagens Docker de produção
 (`docker build -f <serviço>/Dockerfile .`, que roda `mvn package` de
@@ -133,10 +133,85 @@ usa `Dockerfile.dev` (que nunca roda `mvn package`), isso nunca falhou em
 dev, mas **vai falhar em qualquer deploy real para Cloud Run** desses dois
 serviços com o `Dockerfile` de produção atual.
 
-**Não corrigido nesta sessão** (fora do escopo das recomendações pedidas).
-Encaminhamentos possíveis: configurar
-`quarkus.hibernate-orm.packages=com.saas.auth` (e equivalente no
-module-catalog-service) para forçar a criação do persistence unit mesmo sem
-entidades, ou avaliar se os dois serviços deveriam ter pelo menos uma
-`@Entity` mapeada. Recomendo tratar como bloqueador de go-live — validar com
-`docker build -f auth-service/Dockerfile .` depois de qualquer fix.
+**Atualização (sessão de infraestrutura de execução independente):** o
+problema é mais grave do que o registrado acima — **não é exclusivo da build
+de produção**. Subindo `auth-service` isolado via
+`docker compose up --build auth-service` (`Dockerfile.dev`, `mvn
+quarkus:dev`), o boot falha com o mesmo
+`UnsatisfiedResolutionException` para `EntityManager` em
+`ProfileTokenResource`/`ModuleTokenResource`. Ou seja, hoje **nenhum dos dois
+serviços consegue ser testado isoladamente**, nem em dev nem em produção —
+só "funcionam" quando o Docker Compose completo já populou algum estado que
+mascara o problema, ou porque ninguém tinha rodado `docker compose up
+--build auth-service` sozinho antes.
+
+Também foi testado, e **descartado**, o encaminhamento antes sugerido:
+`quarkus.hibernate-orm.packages=com.saas.auth` (e `com.saas.catalog`) **não
+resolve** — mesmo erro, idêntico stack trace, com a propriedade configurada.
+Essa propriedade só afeta o scan de `package-info.java` para anotações tipo
+`@FilterDef`; não força a criação do persistence unit quando não há nenhuma
+classe `@Entity` no classpath. No Quarkus 3.11.1 (versão usada por todos os
+6 serviços), a extensão Hibernate ORM simplesmente não ativa nenhum
+persistence unit sem pelo menos uma entidade — isso só passou a ser
+configurável em versões mais recentes do Quarkus (ver
+[quarkusio/quarkus#48732](https://github.com/quarkusio/quarkus/pull/48732),
+"Keep the Hibernate ORM and Reactive extensions enabled even when no entity
+is defined").
+
+**Corrigido.** Criada `UserTenant` (`entity/UserTenant.java`) em `auth-service`
+e `module-catalog-service`, mapeando a tabela `user_tenants` — a mesma
+tabela já lida via SQL nativo em `UserTenantRepository`/
+`TenantSubscriptionRepository` nesses dois serviços. Nenhum repositório ou
+resource foi alterado: toda leitura continua exatamente igual, via
+`EntityManager.createNativeQuery`; a classe existe só para dar ao Hibernate
+ORM pelo menos uma entidade mapeada, o suficiente para ele registrar o
+persistence unit e o `EntityManager` injetável. Como
+`quarkus.hibernate-orm.database.generation=none`, a entidade nunca é usada
+para gerar ou validar schema — não há risco de o boot falhar por
+divergência entre a entidade e a tabela real.
+
+Validado com `docker compose up --build auth-service module-catalog-service`
+isolado: ambos sobem, `/q/health` responde 200, Swagger/OpenAPI com o
+`bearerAuth` correto, e os endpoints protegidos voltam a rejeitar requisição
+sem token e com token inválido (401) como esperado.
+
+## 6. `Dockerfile.dev` dos 6 serviços Quarkus baixava as dependências Maven de novo a cada `docker compose up` — corrigido
+
+Achado e corrigido na sessão de infraestrutura de execução independente.
+Os 6 `Dockerfile.dev` usavam:
+
+```dockerfile
+RUN --mount=type=cache,target=/root/.m2 mvn dependency:go-offline -q
+```
+
+`--mount=type=cache` é um cache **exclusivo do processo de build** do
+BuildKit — nunca é copiado para nenhuma camada da imagem final. Como
+`Dockerfile.dev` não tem estágio de build separado (o próprio `CMD` roda
+`mvn quarkus:dev` dentro do mesmo container), o `~/.m2` populado durante o
+`docker build` some assim que o build termina — o container, ao iniciar,
+começa com um `~/.m2` vazio e o Maven baixa **toda a árvore de dependências
+do Quarkus de novo**, do zero, sempre que o container inicia (mesmo
+reiniciando uma imagem já construída). Isso explica os vários minutos de
+boot observados ao testar cada serviço isoladamente nesta sessão — o
+oposto do objetivo de "iniciar rápido, sozinho".
+
+Para o `usage-service` isso não era só lentidão — era **quebra total**: a
+dependência local `com.saas:platform-module-security-quarkus` (sem
+repositório Maven privado) era instalada nesse mesmo `~/.m2` efêmero durante
+o build, e desaparecia antes do container sequer iniciar. Resultado
+confirmado ao testar: `docker compose up --build usage-service` sozinho
+falhava sempre com `Could not find artifact
+com.saas:platform-module-security-quarkus:jar:1.0.0-SNAPSHOT` — ou seja,
+**o único serviço com dependência local nunca conseguia iniciar isolado**,
+justamente o cenário que esta sessão existe para viabilizar.
+
+**Correção aplicada**: removido `--mount=type=cache,target=/root/.m2` das
+`RUN mvn dependency:go-offline` (e do `RUN mvn install -N -DskipTests` do
+`usage-service` para a lib local) nos 6 `Dockerfile.dev`. Sem o mount, o
+Maven resolve as dependências direto no `~/.m2` da própria camada da
+imagem — persiste normalmente, como qualquer outro `RUN`. O cache de
+camada padrão do Docker (baseado no hash do `pom.xml` copiado antes) ainda
+evita rebaixar tudo quando só o código-fonte muda; só se perde o
+compartilhamento de cache *entre* builds de serviços diferentes, o que não
+era o objetivo desta etapa (execução independente, não build compartilhado).
+Validado com `docker compose up --build usage-service` isolado.

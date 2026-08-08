@@ -4,6 +4,7 @@ import com.saas.profile.security.TenantContext;
 import com.saas.profile.service.InvitationService;
 import com.saas.profile.service.TenantService;
 import io.quarkus.security.Authenticated;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.ws.rs.*;
@@ -18,6 +19,7 @@ import java.util.UUID;
 
 @Path("/api/v1/tenants/{tenantId}")
 @Authenticated
+@SecurityRequirement(name = "bearerAuth")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class InvitationResource {

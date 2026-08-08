@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 
 from app_logging.logger import configure_logging
@@ -47,6 +48,45 @@ app.add_middleware(
 )
 
 app.include_router(whatsapp_routes.router)
+
+
+def custom_openapi():
+    """Declara o esquema Bearer (ModuleAccessToken) no schema OpenAPI, para que
+    o botão "Authorize" do Swagger UI permita informar o token e repassá-lo
+    como header Authorization nas chamadas de teste. Não altera a validação
+    em si (feita por platform_security.module_security), só a documentação.
+    """
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    schema.setdefault("components", {}).setdefault("securitySchemes", {})["moduleToken"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": (
+            "ModuleAccessToken emitido pelo auth-service "
+            "(POST /api/v1/module-token/whatsapp). Enviar como "
+            "'Authorization: Bearer <token>'."
+        ),
+    }
+    for path, methods in schema.get("paths", {}).items():
+        if path == "/health":
+            continue
+        for method, operation in methods.items():
+            if method.lower() in ("get", "post", "put", "delete", "patch"):
+                operation["security"] = [{"moduleToken": []}]
+
+    app.openapi_schema = schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
 
 
 @app.exception_handler(HTTPException)

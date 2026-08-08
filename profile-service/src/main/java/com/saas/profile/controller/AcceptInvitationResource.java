@@ -2,6 +2,7 @@ package com.saas.profile.controller;
 
 import com.saas.profile.service.InvitationService;
 import io.quarkus.security.Authenticated;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
@@ -20,6 +21,7 @@ import java.util.UUID;
  */
 @Path("/api/v1/invitations/{token}/accept")
 @Authenticated
+@SecurityRequirement(name = "bearerAuth")
 @Produces(MediaType.APPLICATION_JSON)
 public class AcceptInvitationResource {
 

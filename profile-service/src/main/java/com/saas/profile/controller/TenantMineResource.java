@@ -2,6 +2,7 @@ package com.saas.profile.controller;
 
 import com.saas.profile.repository.UserTenantRepository;
 import io.quarkus.security.Authenticated;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
@@ -14,6 +15,7 @@ import java.util.UUID;
 
 @Path("/api/v1/tenants/mine")
 @Authenticated
+@SecurityRequirement(name = "bearerAuth")
 @Produces(MediaType.APPLICATION_JSON)
 public class TenantMineResource {
 

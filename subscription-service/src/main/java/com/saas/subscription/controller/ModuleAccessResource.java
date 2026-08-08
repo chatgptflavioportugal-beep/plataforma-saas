@@ -2,6 +2,7 @@ package com.saas.subscription.controller;
 
 import com.saas.subscription.security.TenantContext;
 import io.quarkus.security.Authenticated;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.ws.rs.GET;
@@ -37,6 +38,7 @@ import java.util.UUID;
  */
 @Path("/api/v1/internal/module-access")
 @Authenticated
+@SecurityRequirement(name = "bearerAuth")
 @Produces(MediaType.APPLICATION_JSON)
 public class ModuleAccessResource {
 

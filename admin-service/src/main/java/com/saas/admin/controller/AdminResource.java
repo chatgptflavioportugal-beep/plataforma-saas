@@ -4,6 +4,9 @@ import com.saas.admin.security.AdminAuthService;
 import com.saas.admin.service.AdminAuditService;
 import com.saas.admin.service.TenantService;
 import io.quarkus.security.Authenticated;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityScheme;
+import org.eclipse.microprofile.openapi.annotations.enums.SecuritySchemeType;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
@@ -20,6 +23,14 @@ import java.util.Map;
  */
 @Path("/api/v1/admin")
 @Authenticated
+@SecurityScheme(
+    securitySchemeName = "bearerAuth",
+    type = SecuritySchemeType.HTTP,
+    scheme = "bearer",
+    bearerFormat = "JWT",
+    description = "JWT emitido pelo Supabase Auth (login do usuário administrativo). Enviar como 'Authorization: Bearer <token>'."
+)
+@SecurityRequirement(name = "bearerAuth")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class AdminResource {

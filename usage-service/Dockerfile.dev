@@ -8,11 +8,11 @@ FROM maven:3.9-eclipse-temurin-21
 WORKDIR /libs/platform-module-security-quarkus
 COPY libs/platform-module-security-quarkus/pom.xml .
 COPY libs/platform-module-security-quarkus/src ./src
-RUN --mount=type=cache,target=/root/.m2 mvn install -N -DskipTests -q
+RUN mvn install -N -DskipTests -q
 
 WORKDIR /app
 COPY usage-service/pom.xml .
-RUN --mount=type=cache,target=/root/.m2 mvn dependency:go-offline -q
+RUN mvn dependency:go-offline -q
 COPY usage-service/src ./src
 EXPOSE 8086
 CMD ["mvn", "quarkus:dev", "-Dquarkus.http.host=0.0.0.0"]

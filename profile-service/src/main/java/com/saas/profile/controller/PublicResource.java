@@ -11,6 +11,7 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.jwt.JsonWebToken;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 
 import java.util.Map;
 import java.util.UUID;
@@ -57,6 +58,7 @@ public class PublicResource {
     @POST
     @Path("/onboarding")
     @Authenticated
+    @SecurityRequirement(name = "bearerAuth")
     public Response onboarding(Map<String, String> body) {
         UUID userId = UUID.fromString(jwt.getSubject());
         if (isAdminUser(userId.toString()))
@@ -85,6 +87,7 @@ public class PublicResource {
     @POST
     @Path("/individual-tenant")
     @Authenticated
+    @SecurityRequirement(name = "bearerAuth")
     public Response createIndividualTenant() {
         UUID userId = UUID.fromString(jwt.getSubject());
         if (isAdminUser(userId.toString()))

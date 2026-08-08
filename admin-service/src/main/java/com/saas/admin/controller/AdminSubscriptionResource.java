@@ -2,6 +2,7 @@ package com.saas.admin.controller;
 
 import com.saas.admin.client.SubscriptionServiceClient;
 import io.quarkus.security.Authenticated;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
@@ -22,6 +23,7 @@ import org.eclipse.microprofile.rest.client.inject.RestClient;
  */
 @Path("/api/v1/admin/subscriptions")
 @Authenticated
+@SecurityRequirement(name = "bearerAuth")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class AdminSubscriptionResource {

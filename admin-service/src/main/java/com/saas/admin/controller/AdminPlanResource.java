@@ -3,6 +3,7 @@ package com.saas.admin.controller;
 import com.saas.admin.security.AdminAuthService;
 import com.saas.admin.service.AdminPlanService;
 import io.quarkus.security.Authenticated;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
@@ -20,6 +21,7 @@ import java.util.Map;
  */
 @Path("/api/v1/admin/plans")
 @Authenticated
+@SecurityRequirement(name = "bearerAuth")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class AdminPlanResource {
