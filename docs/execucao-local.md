@@ -97,6 +97,10 @@ venv\Scripts\activate
 source venv/bin/activate
 
 pip install -r requirements.txt
+# Para rodar os testes (pytest/httpx/PyJWT — não vão para a imagem de
+# produção), instale requirements-dev.txt em vez de requirements.txt:
+# pip install -r requirements-dev.txt
+
 uvicorn main:app --reload --port 8001   # pdf-service
 # uvicorn main:app --reload --port 8002 # whatsapp-service
 # Swagger: http://localhost:8001/docs (ou 8002)

@@ -1,0 +1,54 @@
+# .dockerignore da raiz — usado pelos builds cujo contexto é a raiz do repo
+# (pdf-service, whatsapp-service, usage-service — ver docker-compose.yml).
+# Objetivo: reduzir o build context enviado ao daemon e evitar que arquivos
+# de cache/segredos/outros serviços acabem copiados para dentro da imagem
+# por um `COPY <dir>/ .` amplo.
+#
+# NÃO excluir: pdf-service/, whatsapp-service/, usage-service/,
+# libs/platform-module-security/, libs/platform-module-security-quarkus/
+# — são usados por pelo menos um destes três Dockerfiles.
+
+.git/
+.claude/
+.claude-base/
+database/
+docs/
+
+# Demais microsserviços/frontends — nenhum dos 3 builds com contexto raiz
+# (pdf-service, whatsapp-service, usage-service) precisa deles.
+auth-service/
+profile-service/
+module-catalog-service/
+subscription-service/
+admin-service/
+frontend-host/
+frontend-admin/
+pdf-frontend/
+whatsapp-frontend/
+
+# Build artifacts / caches — nunca copiados via COPY explícito, apenas
+# arrastados por engano se existirem localmente.
+**/target/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.venv/
+**/venv/
+**/*.egg-info/
+node_modules/
+
+# Segredos e config local
+.env
+.env.local
+*.env.local
+pdf-service/config/.env.*
+whatsapp-service/config/.env.*
+!pdf-service/config/.env.example
+!whatsapp-service/config/.env.example
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
