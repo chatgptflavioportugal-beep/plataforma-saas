@@ -100,6 +100,12 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(status_code=exc.status_code, content=body.model_dump(mode="json"))
 
 
-@app.get("/health", tags=["Health"])
+@app.get(
+    "/health",
+    tags=["Health"],
+    summary="Verifica a disponibilidade do serviço",
+    description="Endpoint público de health check, usado por orquestradores/monitoramento para confirmar que o whatsapp-service está no ar. Não exige autenticação.",
+    response_description="Status simples do serviço.",
+)
 async def health():
     return {"status": "UP", "service": "whatsapp-service"}

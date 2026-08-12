@@ -5,9 +5,12 @@ import com.saas.auth.repository.UserTenantRepository;
 import com.saas.auth.security.TenantContext;
 import com.saas.auth.security.TokenService;
 import io.quarkus.security.Authenticated;
+import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityScheme;
 import org.eclipse.microprofile.openapi.annotations.enums.SecuritySchemeType;
+import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.ws.rs.*;
@@ -38,6 +41,7 @@ import java.util.UUID;
  * acesso, não de assinatura) e assina o token com os claims já resolvidos.
  */
 @Path("/api/v1/module-token/{moduleSlug}")
+@Tag(name = "Tokens", description = "Emissão de tokens internos com escopo de módulo (ModuleAccessToken).")
 @Authenticated
 @SecurityScheme(
     securitySchemeName = "bearerAuth",
@@ -65,6 +69,23 @@ public class ModuleTokenResource {
     SubscriptionServiceClient subscriptionServiceClient;
 
     @POST
+    @Operation(
+        summary = "Emite o ModuleAccessToken (MAT) de um módulo para o tenant ativo",
+        description = "Emite o token usado para autorizar chamadas ao serviço do módulo " +
+            "`moduleSlug` (ex.: pdf, whatsapp). Primeiro consulta o subscription-service " +
+            "para resolver o acesso do tenant ao módulo (assinatura ativa, plano gratuito " +
+            "ativado, limites do plano); se concedido, carrega as permissões de serviço do " +
+            "usuário dentro do módulo (owner/admin recebem todos os serviços ativos; membros " +
+            "recebem apenas os do seu nível de acesso) e assina o token com esses claims já " +
+            "resolvidos. Validade curta (30 minutos), renovável pelo frontend chamando este " +
+            "endpoint novamente. Este serviço não decide sozinho se o tenant tem direito ao " +
+            "módulo — essa regra pertence ao subscription-service."
+    )
+    @APIResponse(responseCode = "200", description = "Token emitido com sucesso, junto com permissões, limites do plano e data de expiração.")
+    @APIResponse(responseCode = "401", description = "JWT do Supabase ausente, inválido ou expirado.")
+    @APIResponse(responseCode = "403", description = "Assinatura do módulo expirada (`MODULE_EXPIRED`) ou tenant sem qualquer acesso ao módulo (`NO_ACCESS`).")
+    @APIResponse(responseCode = "404", description = "`moduleSlug` não corresponde a nenhum módulo existente no catálogo.")
+    @APIResponse(responseCode = "409", description = "Módulo possui plano gratuito disponível, mas o tenant ainda não o ativou (`FREE_PLAN_NOT_ACTIVATED`).")
     @SuppressWarnings("unchecked")
     public Response generate(
             @PathParam("moduleSlug") String moduleSlug,

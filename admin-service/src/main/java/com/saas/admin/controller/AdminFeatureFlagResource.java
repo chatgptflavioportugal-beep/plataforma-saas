@@ -3,7 +3,11 @@ package com.saas.admin.controller;
 import com.saas.admin.security.AdminAuthService;
 import com.saas.admin.service.AdminAuditService;
 import io.quarkus.security.Authenticated;
+import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
+import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
+import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
@@ -22,6 +26,9 @@ import java.util.stream.Collectors;
  * (tabela feature_flags); nenhum outro serviço escreve aqui.
  */
 @Path("/api/v1/admin/feature-flags")
+@Tag(name = "Configuration", description = "Cadastro de Feature Flags da plataforma. O admin-service é o único dono da " +
+    "tabela feature_flags — nenhum outro serviço escreve nela. Todas as rotas deste controller pertencem " +
+    "exclusivamente ao contexto administrativo e não devem ser utilizadas pelo ambiente cliente.")
 @Authenticated
 @SecurityRequirement(name = "bearerAuth")
 @Produces(MediaType.APPLICATION_JSON)
@@ -36,6 +43,15 @@ public class AdminFeatureFlagResource {
 
     @GET
     @SuppressWarnings("unchecked")
+    @Operation(
+        summary = "Lista todas as feature flags cadastradas",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Lista todos os registros da tabela feature_flags, ordenados por 'key', sem nenhum " +
+            "filtro. Requer a permissão granular 'admin.feature_flags.view'."
+    )
+    @APIResponse(responseCode = "200", description = "Lista de feature flags cadastradas.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.feature_flags.view'.")
     public Response list() {
         adminAuth.requireAdminPermission("admin.feature_flags.view");
 
@@ -59,6 +75,18 @@ public class AdminFeatureFlagResource {
 
     @POST
     @Transactional
+    @Operation(
+        summary = "Cria uma nova feature flag",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Cria um registro em feature_flags a partir de 'key' e 'name' (ambos obrigatórios), " +
+            "'description' opcional e 'isEnabled' (padrão false quando ausente). A 'key' deve ser única — a " +
+            "criação é recusada se já existir uma flag com a mesma chave. O usuário autenticado é gravado " +
+            "como updated_by_user_id. Requer a permissão granular 'admin.feature_flags.create'."
+    )
+    @APIResponse(responseCode = "201", description = "Feature flag criada com sucesso; retorna o id gerado.")
+    @APIResponse(responseCode = "400", description = "'key' ou 'name' ausentes/em branco, ou já existe uma feature flag com a mesma 'key'.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.feature_flags.create'.")
     public Response create(FeatureFlagRequest req) {
         adminAuth.requireAdminPermission("admin.feature_flags.create");
 
@@ -95,7 +123,23 @@ public class AdminFeatureFlagResource {
     @PATCH
     @Path("/{id}")
     @Transactional
-    public Response update(@PathParam("id") String id, FeatureFlagRequest req) {
+    @Operation(
+        summary = "Edita nome e descrição de uma feature flag",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Atualiza 'name' (obrigatório) e 'description' da feature flag identificada por 'id'. " +
+            "Não altera 'key' nem 'isEnabled' (o toggle de ativação é feito pela rota separada " +
+            "PATCH /{id}/status). O usuário autenticado é gravado como updated_by_user_id. Requer a permissão " +
+            "granular 'admin.feature_flags.edit'."
+    )
+    @APIResponse(responseCode = "200", description = "Feature flag atualizada com sucesso.")
+    @APIResponse(responseCode = "400", description = "'name' ausente ou em branco.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.feature_flags.edit'.")
+    @APIResponse(responseCode = "404", description = "Nenhuma feature flag encontrada para o 'id' informado.")
+    public Response update(
+            @Parameter(description = "Identificador (UUID) da feature flag.", required = true)
+            @PathParam("id") String id,
+            FeatureFlagRequest req) {
         adminAuth.requireAdminPermission("admin.feature_flags.edit");
 
         if (req == null || req.name() == null || req.name().isBlank())
@@ -121,7 +165,20 @@ public class AdminFeatureFlagResource {
     @Path("/{id}/status")
     @Consumes(MediaType.WILDCARD)
     @Transactional
-    public Response toggleStatus(@PathParam("id") String id) {
+    @Operation(
+        summary = "Alterna (toggle) o estado ativo/inativo de uma feature flag",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Inverte o valor atual de is_enabled (não recebe corpo — aceita qualquer Content-Type via " +
+            "@Consumes(WILDCARD)) da feature flag identificada por 'id'. O usuário autenticado é gravado como " +
+            "updated_by_user_id. Requer a permissão granular 'admin.feature_flags.activate'."
+    )
+    @APIResponse(responseCode = "200", description = "Feature flag alternada com sucesso.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.feature_flags.activate'.")
+    @APIResponse(responseCode = "404", description = "Nenhuma feature flag encontrada para o 'id' informado.")
+    public Response toggleStatus(
+            @Parameter(description = "Identificador (UUID) da feature flag.", required = true)
+            @PathParam("id") String id) {
         adminAuth.requireAdminPermission("admin.feature_flags.activate");
 
         int updated = em.createNativeQuery(

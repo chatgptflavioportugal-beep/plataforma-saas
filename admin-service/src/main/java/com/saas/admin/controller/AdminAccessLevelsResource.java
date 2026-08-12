@@ -3,7 +3,11 @@ package com.saas.admin.controller;
 import com.saas.admin.security.AdminAuthService;
 import com.saas.admin.service.AdminAuditService;
 import io.quarkus.security.Authenticated;
+import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
+import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
+import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
@@ -20,6 +24,10 @@ import java.util.stream.Collectors;
  * (com.saas.resource.AdminAccessLevelsResource).
  */
 @Path("/api/v1/admin/access-levels")
+@Tag(name = "Access Levels", description = "CRUD de níveis de acesso administrativo (perfis de permissões granulares " +
+    "atribuídos a usuários administrativos) e consulta da árvore fixa de permissões disponíveis. Todas as " +
+    "rotas deste controller pertencem exclusivamente ao contexto administrativo e não devem ser utilizadas " +
+    "pelo ambiente cliente.")
 @Authenticated
 @SecurityRequirement(name = "bearerAuth")
 @Produces(MediaType.APPLICATION_JSON)
@@ -142,6 +150,18 @@ public class AdminAccessLevelsResource {
     @GET
     @Path("/my-permissions")
     @SuppressWarnings("unchecked")
+    @Operation(
+        summary = "Retorna as permissões granulares do próprio usuário administrativo autenticado",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Não exige nenhuma permissão granular específica — apenas que o chamador seja " +
+            "SUPER_ADMIN ou ADMIN_USER ativo (adminAuth.requireAdminPermission(null)) — para evitar o ciclo em " +
+            "que carregar as permissões no login exigiria uma permissão ainda não carregada. Retorna a lista " +
+            "de permissionKeys do nível de acesso vinculado ao usuário; se o usuário não tiver nível de acesso " +
+            "atribuído, retorna lista vazia."
+    )
+    @APIResponse(responseCode = "200", description = "Lista de chaves de permissão do usuário autenticado (pode ser vazia).")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo.")
     public Response getMyPermissions() {
         adminAuth.requireAdminPermission(null);
         String userId = jwt.getSubject();
@@ -165,6 +185,18 @@ public class AdminAccessLevelsResource {
 
     @GET
     @Path("/permission-tree")
+    @Operation(
+        summary = "Retorna a árvore fixa de grupos e permissões administrativas disponíveis",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Retorna a estrutura estática (definida em código, não em banco de dados) de grupos " +
+            "(dashboard, clients, companies, plans, subscriptions, modules, users, access_levels, trials, " +
+            "settings, feature_flags) e suas respectivas permissionKeys, usada para montar a UI de seleção de " +
+            "permissões ao criar/editar um nível de acesso. Requer a permissão granular " +
+            "'admin.access_levels.view'."
+    )
+    @APIResponse(responseCode = "200", description = "Árvore de grupos e permissões administrativas disponíveis.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.access_levels.view'.")
     public Response getPermissionTree() {
         adminAuth.requireAdminPermission("admin.access_levels.view");
         return Response.ok(Map.of("groups", PERMISSION_GROUPS)).build();
@@ -172,7 +204,19 @@ public class AdminAccessLevelsResource {
 
     @GET
     @SuppressWarnings("unchecked")
-    public Response listAccessLevels(@QueryParam("status") String status) {
+    @Operation(
+        summary = "Lista os níveis de acesso administrativo cadastrados",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Lista os registros de admin_access_levels, com a contagem de permissões e de usuários " +
+            "ADMIN_USER vinculados a cada nível, opcionalmente filtrados por status. Requer a permissão " +
+            "granular 'admin.access_levels.view'."
+    )
+    @APIResponse(responseCode = "200", description = "Lista de níveis de acesso administrativo.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.access_levels.view'.")
+    public Response listAccessLevels(
+            @Parameter(description = "Filtra pelo status do nível de acesso (ex.: ACTIVE, INACTIVE). Opcional.")
+            @QueryParam("status") String status) {
         adminAuth.requireAdminPermission("admin.access_levels.view");
 
         StringBuilder sql = new StringBuilder(
@@ -206,7 +250,19 @@ public class AdminAccessLevelsResource {
     @GET
     @Path("/{id}")
     @SuppressWarnings("unchecked")
-    public Response getAccessLevel(@PathParam("id") String id) {
+    @Operation(
+        summary = "Retorna o detalhe de um nível de acesso administrativo, com suas permissões",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Retorna os dados do nível de acesso identificado por 'id' e a lista de permissionKeys " +
+            "atribuídas a ele. Requer a permissão granular 'admin.access_levels.view'."
+    )
+    @APIResponse(responseCode = "200", description = "Detalhe do nível de acesso, incluindo suas chaves de permissão.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.access_levels.view'.")
+    @APIResponse(responseCode = "404", description = "Nenhum nível de acesso encontrado para o 'id' informado.")
+    public Response getAccessLevel(
+            @Parameter(description = "Identificador (UUID) do nível de acesso administrativo.", required = true)
+            @PathParam("id") String id) {
         adminAuth.requireAdminPermission("admin.access_levels.view");
 
         List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
@@ -235,6 +291,19 @@ public class AdminAccessLevelsResource {
     @POST
     @Transactional
     @SuppressWarnings("unchecked")
+    @Operation(
+        summary = "Cria um novo nível de acesso administrativo",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Cria um registro em admin_access_levels a partir de 'name' (obrigatório) e " +
+            "'description' (opcional), sempre com status inicial ACTIVE. A lista 'permissionKeys' informada " +
+            "no corpo é filtrada contra a árvore fixa de permissões válidas (chaves desconhecidas são " +
+            "descartadas silenciosamente) e persistida em admin_access_level_permissions. Requer a permissão " +
+            "granular 'admin.access_levels.create'."
+    )
+    @APIResponse(responseCode = "201", description = "Nível de acesso criado com sucesso, incluindo as chaves de permissão efetivamente salvas.")
+    @APIResponse(responseCode = "400", description = "'name' ausente ou em branco.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.access_levels.create'.")
     public Response createAccessLevel(Map<String, Object> body) {
         adminAuth.requireAdminPermission("admin.access_levels.create");
 
@@ -276,7 +345,24 @@ public class AdminAccessLevelsResource {
     @Path("/{id}")
     @Transactional
     @SuppressWarnings("unchecked")
-    public Response updateAccessLevel(@PathParam("id") String id, Map<String, Object> body) {
+    @Operation(
+        summary = "Edita nome, descrição e permissões de um nível de acesso administrativo",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Atualiza 'name' (obrigatório) e 'description' do nível de acesso identificado por 'id', " +
+            "e substitui integralmente o conjunto de permissões: todas as permissões atuais em " +
+            "admin_access_level_permissions são removidas e recriadas a partir de 'permissionKeys' " +
+            "(filtradas contra a árvore fixa de permissões válidas). Requer a permissão granular " +
+            "'admin.access_levels.edit'."
+    )
+    @APIResponse(responseCode = "200", description = "Nível de acesso atualizado com sucesso, incluindo as chaves de permissão efetivamente salvas.")
+    @APIResponse(responseCode = "400", description = "'name' ausente ou em branco.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.access_levels.edit'.")
+    @APIResponse(responseCode = "404", description = "Nenhum nível de acesso encontrado para o 'id' informado.")
+    public Response updateAccessLevel(
+            @Parameter(description = "Identificador (UUID) do nível de acesso administrativo.", required = true)
+            @PathParam("id") String id,
+            Map<String, Object> body) {
         adminAuth.requireAdminPermission("admin.access_levels.edit");
 
         String name = (String) body.get("name");
@@ -306,7 +392,24 @@ public class AdminAccessLevelsResource {
     @PATCH
     @Path("/{id}/status")
     @Transactional
-    public Response updateStatus(@PathParam("id") String id, Map<String, Object> body) {
+    @Operation(
+        summary = "Ativa ou inativa um nível de acesso administrativo",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Atualiza o status do nível de acesso identificado por 'id' para ACTIVE ou INACTIVE. Ao " +
+            "tentar inativar (INACTIVE), a operação é bloqueada se ainda houver usuários ADMIN_USER ativos " +
+            "vinculados a esse nível — eles precisam ser reatribuídos antes. Requer a permissão granular " +
+            "'admin.access_levels.activate'."
+    )
+    @APIResponse(responseCode = "200", description = "Status do nível de acesso atualizado com sucesso.")
+    @APIResponse(responseCode = "400", description = "'status' ausente ou diferente de ACTIVE/INACTIVE.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.access_levels.activate'.")
+    @APIResponse(responseCode = "404", description = "Nenhum nível de acesso encontrado para o 'id' informado.")
+    @APIResponse(responseCode = "409", description = "Existem usuários administrativos ativos vinculados a este nível — é necessário reatribuí-los antes de inativar.")
+    public Response updateStatus(
+            @Parameter(description = "Identificador (UUID) do nível de acesso administrativo.", required = true)
+            @PathParam("id") String id,
+            Map<String, Object> body) {
         adminAuth.requireAdminPermission("admin.access_levels.activate");
 
         String newStatus = body instanceof Map<?,?> ? (String) body.get("status") : null;

@@ -4,9 +4,13 @@ import com.saas.admin.security.AdminAuthService;
 import com.saas.admin.service.AdminAuditService;
 import com.saas.admin.service.TenantService;
 import io.quarkus.security.Authenticated;
+import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
+import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityScheme;
 import org.eclipse.microprofile.openapi.annotations.enums.SecuritySchemeType;
+import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
@@ -22,6 +26,10 @@ import java.util.Map;
  * do dashboard admin. Migrado 1:1 do backend-quarkus (com.saas.resource.AdminResource).
  */
 @Path("/api/v1/admin")
+@Tag(name = "Administration", description = "Operações administrativas gerais da plataforma: dashboard, tenants (empresas), " +
+    "clientes finais, administradores do sistema e visão consolidada de assinaturas. " +
+    "Todas as rotas deste controller pertencem exclusivamente ao contexto administrativo e não devem ser " +
+    "utilizadas pelo ambiente cliente.")
 @Authenticated
 @SecurityScheme(
     securitySchemeName = "bearerAuth",
@@ -46,6 +54,20 @@ public class AdminResource {
 
     @GET
     @Path("/stats")
+    @Operation(
+        summary = "Retorna estatísticas consolidadas do dashboard administrativo",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Executa uma série de contagens agregadas sobre tenants, usuários, jobs de PDF e vínculos " +
+            "de membros para alimentar o dashboard inicial da área Admin: total de tenants do tipo 'business' " +
+            "e sua distribuição por status (ativos, em trial, suspensos), total de usuários (excluindo perfis " +
+            "administrativos), total de jobs de PDF, quantos usuários possuem perfil individual, total de " +
+            "vínculos de membros em empresas, usuários que participam de mais de uma empresa, empresas sem " +
+            "membros extras e empresas com membros convidados aceitos. Requer a permissão granular " +
+            "'admin.dashboard.view'."
+    )
+    @APIResponse(responseCode = "200", description = "Objeto com os contadores consolidados do dashboard.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.dashboard.view'.")
     public Response stats() {
         adminAuth.requireAdminPermission("admin.dashboard.view");
         long totalBusinessTenants = n("SELECT COUNT(*) FROM tenants WHERE type = 'business'");
@@ -101,9 +123,22 @@ public class AdminResource {
 
     @GET
     @Path("/tenants")
+    @Operation(
+        summary = "Lista empresas (tenants) da plataforma para a visão administrativa",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Lista os tenants do tipo 'business' cadastrados na plataforma, com filtros opcionais de " +
+            "busca textual, status do tenant e presença de membros além do owner. Delegado a " +
+            "TenantService.listAdminTenants. Requer a permissão granular 'admin.companies.view'."
+    )
+    @APIResponse(responseCode = "200", description = "Lista de empresas (tenants) que atendem aos filtros informados.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.companies.view'.")
     public Response listTenants(
+            @Parameter(description = "Filtro de busca textual por nome/slug da empresa (opcional).")
             @QueryParam("search") String search,
+            @Parameter(description = "Filtra pelo status do tenant (ex.: trial, active, suspended, cancelled). Opcional.")
             @QueryParam("status") String status,
+            @Parameter(description = "Quando informado, filtra empresas que possuem (true) ou não possuem (false) membros além do owner.")
             @QueryParam("has_extra_members") Boolean hasExtraMembers) {
         adminAuth.requireAdminPermission("admin.companies.view");
         return Response.ok(tenantService.listAdminTenants(search, status, hasExtraMembers)).build();
@@ -111,7 +146,19 @@ public class AdminResource {
 
     @GET
     @Path("/tenants/{id}")
-    public Response getTenantDetail(@PathParam("id") String id) {
+    @Operation(
+        summary = "Retorna o detalhe completo de uma empresa (tenant) para a visão administrativa",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Retorna os dados detalhados do tenant identificado por 'id', conforme montado por " +
+            "TenantService.getAdminTenantDetail. Requer a permissão granular 'admin.companies.detail'."
+    )
+    @APIResponse(responseCode = "200", description = "Detalhe completo da empresa (tenant).")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.companies.detail'.")
+    @APIResponse(responseCode = "404", description = "Nenhuma empresa encontrada para o 'id' informado.")
+    public Response getTenantDetail(
+            @Parameter(description = "Identificador (UUID) do tenant/empresa.", required = true)
+            @PathParam("id") String id) {
         adminAuth.requireAdminPermission("admin.companies.detail");
         var detail = tenantService.getAdminTenantDetail(id);
         if (detail == null)
@@ -126,12 +173,30 @@ public class AdminResource {
     @GET
     @Path("/customers")
     @SuppressWarnings("unchecked")
+    @Operation(
+        summary = "Lista clientes finais da plataforma com estrutura completa de perfis",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Lista os usuários com perfil de cliente (exclui SUPER_ADMIN/ADMIN/SUPPORT/FINANCE_ADMIN), " +
+            "informando se possuem perfil individual, quantas empresas próprias (owner) e quantas empresas " +
+            "como membro (não-owner) cada cliente possui. Suporta filtros combináveis de busca textual " +
+            "(nome/e-mail), presença de perfil individual, posse de empresa própria, participação como membro, " +
+            "status ativo/inativo e tipo de perfil predominante. Requer a permissão granular 'admin.clients.view'."
+    )
+    @APIResponse(responseCode = "200", description = "Lista de clientes que atendem aos filtros informados, com contagem de perfis.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.clients.view'.")
     public Response listCustomers(
+            @Parameter(description = "Filtro de busca textual por nome completo ou e-mail do cliente (opcional).")
             @QueryParam("search") String search,
+            @Parameter(description = "Quando informado, filtra clientes que possuem (true) ou não possuem (false) perfil individual.")
             @QueryParam("has_individual") Boolean hasIndividual,
+            @Parameter(description = "Quando informado, filtra clientes que possuem (true) ou não possuem (false) ao menos uma empresa própria (owner).")
             @QueryParam("has_owned_company") Boolean hasOwnedCompany,
+            @Parameter(description = "Quando informado, filtra clientes que são (true) ou não são (false) membro (não-owner) de alguma empresa.")
             @QueryParam("is_member") Boolean isMember,
+            @Parameter(description = "Quando informado, filtra clientes ativos (true) ou inativos (false).")
             @QueryParam("is_active") Boolean isActive,
+            @Parameter(description = "Filtra pelo tipo de perfil predominante: 'individual', 'owned_company' ou 'member_company' (opcional).")
             @QueryParam("profile_type") String profileType) {
         adminAuth.requireAdminPermission("admin.clients.view");
 
@@ -220,7 +285,21 @@ public class AdminResource {
     @GET
     @Path("/customers/{id}")
     @SuppressWarnings("unchecked")
-    public Response getCustomerDetail(@PathParam("id") String id) {
+    @Operation(
+        summary = "Retorna o detalhe completo de um cliente final",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Retorna os dados do cliente (excluindo perfis administrativos), seu perfil individual " +
+            "(quando existir), a lista de empresas que possui como owner (com plano e quantidade de membros) e " +
+            "a lista de empresas das quais participa como membro (com o papel e quem o convidou, quando " +
+            "aplicável). Requer a permissão granular 'admin.clients.detail'."
+    )
+    @APIResponse(responseCode = "200", description = "Detalhe completo do cliente, incluindo perfil individual e empresas relacionadas.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.clients.detail'.")
+    @APIResponse(responseCode = "404", description = "Nenhum cliente (não administrativo) encontrado para o 'id' informado.")
+    public Response getCustomerDetail(
+            @Parameter(description = "Identificador (UUID) do usuário cliente.", required = true)
+            @PathParam("id") String id) {
         adminAuth.requireAdminPermission("admin.clients.detail");
 
         List<Object[]> userRows = (List<Object[]>) em.createNativeQuery(
@@ -324,6 +403,18 @@ public class AdminResource {
 
     @GET
     @Path("/company-users")
+    @Operation(
+        summary = "[Legado] Alias de compatibilidade para a listagem de clientes",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Mantido apenas por compatibilidade com chamadas legadas que ainda usam o caminho " +
+            "'/company-users'; delega integralmente para listCustomers (GET /customers) sem nenhum filtro " +
+            "aplicado, e portanto exige a mesma permissão granular 'admin.clients.view'. Novas integrações " +
+            "devem usar diretamente GET /api/v1/admin/customers.",
+        deprecated = true
+    )
+    @APIResponse(responseCode = "200", description = "Lista completa de clientes (equivalente a GET /customers sem filtros).")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.clients.view'.")
     public Response listCompanyUsersLegacy() {
         return listCustomers(null, null, null, null, null, null);
     }
@@ -335,6 +426,17 @@ public class AdminResource {
     @GET
     @Path("/system-admins")
     @SuppressWarnings("unchecked")
+    @Operation(
+        summary = "Lista administradores do sistema com papéis legados (SUPER_ADMIN/ADMIN/SUPPORT/FINANCE_ADMIN)",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Lista os usuários cujo system_role é SUPER_ADMIN, ADMIN, SUPPORT ou FINANCE_ADMIN — " +
+            "papéis administrativos legados, distintos do modelo mais recente de ADMIN_USER com nível de " +
+            "acesso configurável (gerido por AdminUsersResource). Não recebe filtros. Requer a permissão " +
+            "granular 'admin.users.view'."
+    )
+    @APIResponse(responseCode = "200", description = "Lista dos administradores do sistema com papéis legados, ordenada por papel e data de criação.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.users.view'.")
     public Response listSystemAdmins() {
         adminAuth.requireAdminPermission("admin.users.view");
         List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
@@ -364,6 +466,17 @@ public class AdminResource {
 
     @GET
     @Path("/subscriptions/summary")
+    @Operation(
+        summary = "Retorna contadores agregados de assinaturas de módulos por perfil",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Agrega, sobre profile_module_subscriptions, o total de assinaturas e a contagem por " +
+            "status (ACTIVE, CANCELED, EXPIRED, PENDING_PAYMENT, TRIAL, TRIAL_CANCELLED) e por ciclo de " +
+            "cobrança (MONTHLY, ANNUAL). Não aplica filtros. Requer a permissão granular " +
+            "'admin.subscriptions.view'."
+    )
+    @APIResponse(responseCode = "200", description = "Objeto com os contadores agregados de assinaturas.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.subscriptions.view'.")
     public Response getSubscriptionsSummary() {
         adminAuth.requireAdminPermission("admin.subscriptions.view");
         Object[] row = (Object[]) em.createNativeQuery(
@@ -394,21 +507,51 @@ public class AdminResource {
     @GET
     @Path("/subscriptions")
     @SuppressWarnings("unchecked")
+    @Operation(
+        summary = "Lista, com paginação, as assinaturas de módulos sob a visão administrativa",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Lista registros de profile_module_subscriptions com dados agregados do perfil " +
+            "(individual ou empresa), do módulo, do plano/versão contratada e do status da assinatura. " +
+            "Suporta um amplo conjunto de filtros combináveis (busca textual, tipo/ID de perfil, empresa, " +
+            "usuário, módulo, plano, ciclo de cobrança, status, intervalo de data de início, janela de " +
+            "expiração pré-definida e status de renovação) e paginação via 'page'/'size' (size limitado a " +
+            "1..100). O cancelamento/reativação de assinaturas não é feito por este serviço — é responsabilidade " +
+            "do subscription-service, chamado diretamente pelo frontend-admin. Requer a permissão granular " +
+            "'admin.subscriptions.view'."
+    )
+    @APIResponse(responseCode = "200", description = "Página de assinaturas que atendem aos filtros informados, com total de itens.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.subscriptions.view'.")
     public Response listSubscriptions(
+            @Parameter(description = "Busca textual por nome da empresa, do módulo, do plano, do owner ou e-mail do owner (opcional).")
             @QueryParam("search")        String search,
+            @Parameter(description = "Filtra pelo tipo de perfil: 'INDIVIDUAL' ou qualquer outro valor é tratado como empresa (opcional).")
             @QueryParam("profileType")   String profileType,
+            @Parameter(description = "Filtra por ID (UUID) do tenant/perfil (individual ou empresa). Opcional.")
             @QueryParam("profileId")     String profileId,
+            @Parameter(description = "Filtra por ID (UUID) da empresa (tenant do tipo 'business'). Opcional.")
             @QueryParam("companyId")     String companyId,
+            @Parameter(description = "Filtra por ID do usuário owner ou por trecho do e-mail do owner. Opcional.")
             @QueryParam("userId")        String userId,
+            @Parameter(description = "Filtra por ID (UUID) do módulo da plataforma. Opcional.")
             @QueryParam("moduleId")      String moduleId,
+            @Parameter(description = "Filtra por ID (UUID) do plano. Opcional.")
             @QueryParam("planId")        String planId,
+            @Parameter(description = "Filtra pelo ciclo de cobrança: MONTHLY ou ANNUAL. Opcional.")
             @QueryParam("billingCycle")  String billingCycle,
+            @Parameter(description = "Filtra pelo status da assinatura (ex.: ACTIVE, CANCELED, EXPIRED, TRIAL). Opcional.")
             @QueryParam("status")        String status,
+            @Parameter(description = "Data/hora mínima de início da assinatura (filtro >=). Opcional.")
             @QueryParam("startDateFrom") String startDateFrom,
+            @Parameter(description = "Data/hora máxima de início da assinatura (filtro <=). Opcional.")
             @QueryParam("startDateTo")   String startDateTo,
+            @Parameter(description = "Janela de expiração pré-definida: '7', '15', '30' (dias a partir de agora), 'overdue' (já expiradas) ou 'none' (sem data de expiração). Opcional.")
             @QueryParam("expiresIn")     String expiresIn,
+            @Parameter(description = "Filtra por status de renovação: 'active' (assinatura ACTIVE) ou 'canceled' (CANCELED/EXPIRED). Opcional.")
             @QueryParam("renewalStatus") String renewalStatus,
+            @Parameter(description = "Número da página, começando em 0. Padrão: 0.")
             @QueryParam("page")          @DefaultValue("0") int page,
+            @Parameter(description = "Quantidade de itens por página (limitado a 1..100). Padrão: 20.")
             @QueryParam("size")          @DefaultValue("20") int size
     ) {
         adminAuth.requireAdminPermission("admin.subscriptions.view");
@@ -574,7 +717,23 @@ public class AdminResource {
     @PATCH
     @Path("/tenants/{id}/status")
     @Transactional
-    public Response updateTenantStatus(@PathParam("id") String id, UpdateStatusRequest req) {
+    @Operation(
+        summary = "Atualiza o status de uma empresa (tenant)",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Altera o status do tenant informado para um dos valores válidos: trial, active, " +
+            "suspended, cancelled. A permissão exigida varia conforme o status de destino: " +
+            "'admin.companies.activate' quando o novo status é 'active', ou 'admin.companies.deactivate' " +
+            "para os demais valores. A alteração é registrada em log de auditoria (AdminAuditService)."
+    )
+    @APIResponse(responseCode = "200", description = "Status da empresa atualizado com sucesso; retorna o id e o novo status.")
+    @APIResponse(responseCode = "400", description = "Corpo ausente ou 'status' inválido (deve ser um de: trial, active, suspended, cancelled).")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.companies.activate'/'admin.companies.deactivate' correspondente ao status solicitado.")
+    @APIResponse(responseCode = "404", description = "Nenhuma empresa encontrada para o 'id' informado.")
+    public Response updateTenantStatus(
+            @Parameter(description = "Identificador (UUID) do tenant/empresa.", required = true)
+            @PathParam("id") String id,
+            UpdateStatusRequest req) {
         String status = req != null ? req.status() : null;
         if (status == null || !VALID_TENANT_STATUSES.contains(status))
             return Response.status(400).entity(Map.of("error", "status inválido: deve ser um de " + VALID_TENANT_STATUSES)).build();
@@ -595,7 +754,23 @@ public class AdminResource {
     @PATCH
     @Path("/customers/{id}/status")
     @Transactional
-    public Response updateCustomerStatus(@PathParam("id") String id, UpdateStatusRequest req) {
+    @Operation(
+        summary = "Ativa ou inativa um cliente final",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Altera o campo is_active do cliente informado. O único valor de 'status' aceito é " +
+            "'active' ou 'inactive'. A permissão exigida varia conforme o status de destino: " +
+            "'admin.clients.activate' quando o novo status é 'active', ou 'admin.clients.deactivate' quando é " +
+            "'inactive'. A alteração é registrada em log de auditoria (AdminAuditService)."
+    )
+    @APIResponse(responseCode = "200", description = "Status do cliente atualizado com sucesso; retorna o id e o novo status.")
+    @APIResponse(responseCode = "400", description = "'status' ausente ou diferente de 'active'/'inactive'.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.clients.activate'/'admin.clients.deactivate' correspondente ao status solicitado.")
+    @APIResponse(responseCode = "404", description = "Nenhum cliente encontrado para o 'id' informado.")
+    public Response updateCustomerStatus(
+            @Parameter(description = "Identificador (UUID) do usuário cliente.", required = true)
+            @PathParam("id") String id,
+            UpdateStatusRequest req) {
         String status = req != null ? req.status() : null;
         if (!List.of("active", "inactive").contains(status))
             return Response.status(400).entity(Map.of("error", "status inválido: deve ser 'active' ou 'inactive'")).build();
