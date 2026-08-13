@@ -10,6 +10,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -53,7 +54,10 @@ public class TokenService {
 
     // ─── Geração ────────────────────────────────────────────────────────────────
 
-    public String generateProfileToken(
+    /** Token assinado e sua expiração real — evita recalcular/duplicar a expiração fora deste serviço. */
+    public record IssuedToken(String token, Instant expiresAt) {}
+
+    public IssuedToken generateProfileToken(
             UUID userId,
             UUID tenantId,
             String profileType,
@@ -65,7 +69,7 @@ public class TokenService {
         long now = System.currentTimeMillis();
         long exp = now + (long) profileExpiryHours * 3600 * 1000;
 
-        return Jwts.builder()
+        String token = Jwts.builder()
                 .subject(userId.toString())
                 .issuedAt(new Date(now))
                 .expiration(new Date(exp))
@@ -78,9 +82,11 @@ public class TokenService {
                 .claim(PERM_VERSION_CLAIM,  permissionsVersion)
                 .signWith(profileKey(), Jwts.SIG.HS256)
                 .compact();
+
+        return new IssuedToken(token, Instant.ofEpochMilli(exp));
     }
 
-    public String generateModuleToken(
+    public IssuedToken generateModuleToken(
             UUID userId,
             UUID tenantId,
             String moduleId,
@@ -94,7 +100,7 @@ public class TokenService {
         long now = System.currentTimeMillis();
         long exp = now + (long) moduleExpiryMinutes * 60 * 1000;
 
-        return Jwts.builder()
+        String token = Jwts.builder()
                 .subject(userId.toString())
                 .issuedAt(new Date(now))
                 .expiration(new Date(exp))
@@ -109,6 +115,8 @@ public class TokenService {
                 .claim(PERM_VERSION_CLAIM, permissionsVersion)
                 .signWith(moduleKey(), Jwts.SIG.HS256)
                 .compact();
+
+        return new IssuedToken(token, Instant.ofEpochMilli(exp));
     }
 
     // ─── Validação ───────────────────────────────────────────────────────────────

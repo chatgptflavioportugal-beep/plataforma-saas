@@ -117,6 +117,14 @@
             <artifactId>quarkus-test-security-jwt</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Mockito puro (sem extensão CDI) — usado para testar as camadas Service
+             isoladamente, mockando repositórios/clients por atribuição direta de
+             campo (package-private), sem subir contexto Quarkus nem banco. -->
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
