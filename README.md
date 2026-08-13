@@ -141,6 +141,10 @@ porta exposta. Elas são instaladas dentro da imagem de cada consumidor
 versão Quarkus) no momento do build, então não precisam ser "subidas" à
 parte.
 
+### Subir apenas a infra
+
+docker-compose up --build auth-service module-catalog-service profile-service subscription-service frontend-host
+
 ### Comandos do dia a dia
 
 ```bash

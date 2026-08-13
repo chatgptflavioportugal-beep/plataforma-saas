@@ -123,7 +123,7 @@ public class ModuleAccessResource {
             planName      = (String) subRows.get(0)[1];
             accessSource  = "SUBSCRIPTION";
         } else {
-            List<Object[]> freeRows = em.createNativeQuery(
+            List<String> freeRows = em.createNativeQuery(
                 "SELECT pvm.id::text FROM plan_version_modules pvm " +
                 "JOIN plans p ON p.id = pvm.plan_id " +
                 "WHERE pvm.module_id = :moduleId AND pvm.status = 'active' AND pvm.monthly_price = 0 " +
@@ -135,7 +135,7 @@ public class ModuleAccessResource {
                     "resolution", "FREE_PLAN_NOT_ACTIVATED",
                     "moduleId", moduleId,
                     "moduleName", moduleName,
-                    "planVersionId", freeRows.get(0)[0]
+                    "planVersionId", freeRows.get(0)
                 )).build();
             } else if (ctx.hasFeature(moduleSlug)) {
                 planName     = ctx.getPlanCode();
