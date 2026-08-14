@@ -1,57 +1,36 @@
 package com.saas.subscription.repository;
 
+import com.saas.subscription.entity.UserTenant;
+import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.persistence.EntityManager;
-import jakarta.inject.Inject;
 
 import java.util.Optional;
 import java.util.UUID;
 
 @ApplicationScoped
-public class UserTenantRepository {
-
-    @Inject
-    EntityManager em;
+public class UserTenantRepository implements PanacheRepositoryBase<UserTenant, UUID> {
 
     public record UserTenantResult(UUID tenantId, String role) {}
 
-    @SuppressWarnings("unchecked")
     public Optional<UserTenantResult> findByUserAndTenant(UUID userId, UUID tenantId) {
-        var result = (java.util.List<Object[]>) em.createNativeQuery(
-                "SELECT ut.tenant_id::text, ut.role FROM user_tenants ut " +
-                "WHERE ut.user_id = :userId AND ut.tenant_id = :tenantId AND ut.is_active = TRUE"
-        )
-        .setParameter("userId", userId)
-        .setParameter("tenantId", tenantId)
-        .getResultList();
-
-        if (result.isEmpty()) return Optional.empty();
-        Object[] row = result.get(0);
-        return Optional.of(new UserTenantResult(UUID.fromString((String) row[0]), (String) row[1]));
+        return find("userId = ?1 and tenantId = ?2 and isActive = true", userId, tenantId)
+            .firstResultOptional()
+            .map(ut -> new UserTenantResult(ut.tenantId, ut.role));
     }
 
-    @SuppressWarnings("unchecked")
     public Optional<UserTenantResult> findDefaultTenant(UUID userId) {
-        var result = (java.util.List<Object[]>) em.createNativeQuery(
-                "SELECT ut.tenant_id::text, ut.role FROM user_tenants ut " +
-                "WHERE ut.user_id = :userId AND ut.is_active = TRUE " +
-                "ORDER BY ut.created_at ASC LIMIT 1"
-        )
-        .setParameter("userId", userId)
-        .getResultList();
-
-        if (result.isEmpty()) return Optional.empty();
-        Object[] row = result.get(0);
-        return Optional.of(new UserTenantResult(UUID.fromString((String) row[0]), (String) row[1]));
+        return find("userId = ?1 and isActive = true order by createdAt asc", userId)
+            .firstResultOptional()
+            .map(ut -> new UserTenantResult(ut.tenantId, ut.role));
     }
 
     /** Incrementa a versão de todos os membros ativos de um tenant (mudança de assinatura/plano). */
     public void bumpVersionForTenant(UUID tenantId) {
-        em.createNativeQuery(
-                "UPDATE user_tenants SET permissions_version = permissions_version + 1 " +
-                "WHERE tenant_id = :tenantId AND is_active = TRUE"
-        )
-        .setParameter("tenantId", tenantId)
-        .executeUpdate();
+        update("permissionsVersion = permissionsVersion + 1 where tenantId = ?1 and isActive = true", tenantId);
+    }
+
+    /** Mesma operação em lote, para múltiplos tenants (usado pelo scheduler de expiração). */
+    public void bumpVersionForTenants(java.util.List<UUID> tenantIds) {
+        update("permissionsVersion = permissionsVersion + 1 where tenantId in ?1 and isActive = true", tenantIds);
     }
 }

@@ -1,11 +1,14 @@
 package com.saas.subscription.security;
 
+import com.saas.subscription.entity.UserProfile;
+import com.saas.subscription.repository.AdminAccessLevelPermissionRepository;
+import com.saas.subscription.repository.UserProfileRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.NoResultException;
 import jakarta.ws.rs.ForbiddenException;
 import org.eclipse.microprofile.jwt.JsonWebToken;
+
+import java.util.UUID;
 
 /**
  * Checagem de autorização administrativa (SUPER_ADMIN / ADMIN_USER + permissão
@@ -18,7 +21,10 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 public class AdminAuthService {
 
     @Inject
-    EntityManager em;
+    UserProfileRepository userProfileRepository;
+
+    @Inject
+    AdminAccessLevelPermissionRepository adminAccessLevelPermissionRepository;
 
     @Inject
     JsonWebToken jwt;
@@ -34,41 +40,27 @@ public class AdminAuthService {
      * Passar null em permissionKey verifica apenas que é um admin válido (para listagens gerais).
      */
     public void requireAdminPermission(String permissionKey) {
-        String userId = currentUserId();
-        try {
-            Object[] row = (Object[]) em.createNativeQuery(
-                "SELECT system_role, is_active, admin_access_level_id::text " +
-                "FROM user_profiles WHERE id::text = :id"
-            ).setParameter("id", userId).getSingleResult();
+        UUID userId = UUID.fromString(currentUserId());
+        UserProfile profile = userProfileRepository.findByIdOptional(userId)
+            .orElseThrow(() -> new ForbiddenException("Perfil de usuário não encontrado"));
 
-            String role = (String) row[0];
-            boolean isActive = Boolean.TRUE.equals(row[1]);
+        if ("SUPER_ADMIN".equals(profile.systemRole)) return;
 
-            if ("SUPER_ADMIN".equals(role)) return;
+        if (!"ADMIN_USER".equals(profile.systemRole))
+            throw new ForbiddenException("Acesso restrito à área administrativa");
 
-            if (!"ADMIN_USER".equals(role))
-                throw new ForbiddenException("Acesso restrito à área administrativa");
+        if (!profile.isActive)
+            throw new ForbiddenException("Usuário administrativo inativo");
 
-            if (!isActive)
-                throw new ForbiddenException("Usuário administrativo inativo");
+        if (permissionKey == null) return;
 
-            if (permissionKey == null) return;
+        if (profile.adminAccessLevelId == null)
+            throw new ForbiddenException("Você não possui permissão para executar esta ação");
 
-            String accessLevelId = (String) row[2];
-            if (accessLevelId == null)
-                throw new ForbiddenException("Você não possui permissão para executar esta ação");
+        boolean hasPermission = adminAccessLevelPermissionRepository
+            .hasPermission(profile.adminAccessLevelId, permissionKey);
 
-            long has = ((Number) em.createNativeQuery(
-                "SELECT COUNT(*) FROM admin_access_level_permissions " +
-                "WHERE access_level_id::text = :lvl AND permission_key = :key"
-            ).setParameter("lvl", accessLevelId).setParameter("key", permissionKey)
-             .getSingleResult()).longValue();
-
-            if (has == 0)
-                throw new ForbiddenException("Você não possui permissão para executar esta ação");
-
-        } catch (NoResultException e) {
-            throw new ForbiddenException("Perfil de usuário não encontrado");
-        }
+        if (!hasPermission)
+            throw new ForbiddenException("Você não possui permissão para executar esta ação");
     }
 }

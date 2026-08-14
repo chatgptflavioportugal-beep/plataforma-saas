@@ -1,8 +1,8 @@
 package com.saas.subscription.controller;
 
-import com.saas.subscription.repository.UserTenantRepository;
+import com.saas.subscription.dto.response.SubscriptionActionResponse;
 import com.saas.subscription.security.AdminAuthService;
-import com.saas.subscription.service.AuditService;
+import com.saas.subscription.service.AdminSubscriptionService;
 import io.quarkus.security.Authenticated;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
@@ -10,14 +10,10 @@ import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.NoResultException;
-import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -42,14 +38,14 @@ import java.util.UUID;
 @Consumes(MediaType.APPLICATION_JSON)
 public class AdminSubscriptionResource {
 
-    @Inject EntityManager em;
-    @Inject AdminAuthService adminAuth;
-    @Inject AuditService auditService;
-    @Inject UserTenantRepository userTenantRepository;
+    @Inject
+    AdminAuthService adminAuth;
+
+    @Inject
+    AdminSubscriptionService adminSubscriptionService;
 
     @POST
     @Path("/{id}/cancel")
-    @Transactional
     @Operation(
         summary = "Cancela (como administrador) a assinatura de um módulo de qualquer tenant",
         description = "Exige a permissão administrativa `admin.subscriptions.cancel` (SUPER_ADMIN " +
@@ -67,40 +63,12 @@ public class AdminSubscriptionResource {
         @Parameter(description = "ID (UUID) da assinatura de módulo (profile_module_subscriptions.id) a cancelar.", required = true)
         @PathParam("id") String id) {
         adminAuth.requireAdminPermission("admin.subscriptions.cancel");
-
-        Object[] row;
-        try {
-            row = (Object[]) em.createNativeQuery(
-                "SELECT tenant_id::text, status FROM profile_module_subscriptions WHERE id::text = :id"
-            ).setParameter("id", id).getSingleResult();
-        } catch (NoResultException e) {
-            return Response.status(404).entity(Map.of("error", "Assinatura não encontrada ou já cancelada")).build();
-        }
-
-        String tenantId = (String) row[0];
-        String status = (String) row[1];
-        if (!"ACTIVE".equals(status) && !"TRIAL".equals(status))
-            return Response.status(404).entity(Map.of("error", "Assinatura não encontrada ou já cancelada")).build();
-
-        // TRIAL cancela para TRIAL_CANCELLED (acesso segue até expirar, só a renovação
-        // é interrompida) — mesma semântica de ProfileModuleSubscriptionResource.cancel.
-        String newStatus = "TRIAL".equals(status) ? "TRIAL_CANCELLED" : "CANCELED";
-        em.createNativeQuery(
-            "UPDATE profile_module_subscriptions SET status = :newStatus, canceled_at = NOW(), updated_at = NOW() " +
-            "WHERE id::text = :id"
-        ).setParameter("newStatus", newStatus).setParameter("id", id).executeUpdate();
-
-        userTenantRepository.bumpVersionForTenant(UUID.fromString(tenantId));
-
-        auditService.log(UUID.fromString(tenantId), UUID.fromString(adminAuth.currentUserId()),
-            "subscription.admin_cancel", "profile_module_subscriptions", id, (String) null);
-
-        return Response.ok(Map.of("success", true, "id", id, "status", newStatus)).build();
+        var result = adminSubscriptionService.cancel(id, UUID.fromString(adminAuth.currentUserId()));
+        return Response.ok(new SubscriptionActionResponse(true, id, result.status())).build();
     }
 
     @POST
     @Path("/{id}/reactivate")
-    @Transactional
     @Operation(
         summary = "Reativa (como administrador) uma assinatura de módulo cancelada de qualquer tenant",
         description = "Exige a permissão administrativa `admin.subscriptions.reactivate` (SUPER_ADMIN " +
@@ -118,33 +86,7 @@ public class AdminSubscriptionResource {
         @Parameter(description = "ID (UUID) da assinatura de módulo (profile_module_subscriptions.id) a reativar.", required = true)
         @PathParam("id") String id) {
         adminAuth.requireAdminPermission("admin.subscriptions.reactivate");
-
-        Object[] row;
-        try {
-            row = (Object[]) em.createNativeQuery(
-                "SELECT tenant_id::text, status FROM profile_module_subscriptions " +
-                "WHERE id::text = :id AND (expires_at IS NULL OR expires_at > NOW())"
-            ).setParameter("id", id).getSingleResult();
-        } catch (NoResultException e) {
-            return Response.status(404).entity(Map.of("error", "Assinatura não encontrada, não está cancelada ou já expirou")).build();
-        }
-
-        String tenantId = (String) row[0];
-        String status = (String) row[1];
-        if (!"CANCELED".equals(status) && !"TRIAL_CANCELLED".equals(status))
-            return Response.status(404).entity(Map.of("error", "Assinatura não encontrada, não está cancelada ou já expirou")).build();
-
-        String newStatus = "TRIAL_CANCELLED".equals(status) ? "TRIAL" : "ACTIVE";
-        em.createNativeQuery(
-            "UPDATE profile_module_subscriptions SET status = :newStatus, canceled_at = NULL, updated_at = NOW() " +
-            "WHERE id::text = :id"
-        ).setParameter("newStatus", newStatus).setParameter("id", id).executeUpdate();
-
-        userTenantRepository.bumpVersionForTenant(UUID.fromString(tenantId));
-
-        auditService.log(UUID.fromString(tenantId), UUID.fromString(adminAuth.currentUserId()),
-            "subscription.admin_reactivate", "profile_module_subscriptions", id, (String) null);
-
-        return Response.ok(Map.of("success", true, "id", id, "status", newStatus)).build();
+        var result = adminSubscriptionService.reactivate(id, UUID.fromString(adminAuth.currentUserId()));
+        return Response.ok(new SubscriptionActionResponse(true, id, result.status())).build();
     }
 }

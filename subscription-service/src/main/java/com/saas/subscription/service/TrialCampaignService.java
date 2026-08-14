@@ -1,11 +1,15 @@
 package com.saas.subscription.service;
 
+import com.saas.subscription.entity.TrialCampaign;
+import com.saas.subscription.repository.ModuleTrialHistoryRepository;
+import com.saas.subscription.repository.PlatformSettingRepository;
+import com.saas.subscription.repository.TrialCampaignRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.BadRequestException;
 
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
@@ -27,8 +31,16 @@ public class TrialCampaignService {
 
     private static final String NO_VACANCY_MESSAGE = "Não há vagas disponíveis para Trial deste módulo no momento.";
 
+    private static final int DEFAULT_COOLDOWN_DAYS = 365;
+
     @Inject
-    EntityManager em;
+    TrialCampaignRepository trialCampaignRepository;
+
+    @Inject
+    ModuleTrialHistoryRepository moduleTrialHistoryRepository;
+
+    @Inject
+    PlatformSettingRepository platformSettingRepository;
 
     public record CatalogOffer(
         boolean available,
@@ -57,87 +69,31 @@ public class TrialCampaignService {
 
     // ─── Seleção da campanha vigente (sem considerar tenant) ─────────────────────
 
-    /**
-     * Campanha elegível para um plan_version_module: ACTIVE, com vagas, dentro da
-     * janela de datas, maior prioridade (desempate pela mais antiga).
-     */
-    @SuppressWarnings("unchecked")
     public CatalogOffer resolveCatalogOffer(UUID planVersionModuleId) {
-        var rows = em.createNativeQuery(
-            "SELECT id, name, days FROM trial_campaigns " +
-            "WHERE plan_version_module_id = :pvmId AND status = 'ACTIVE' " +
-            "  AND used_slots < max_slots " +
-            "  AND (start_date IS NULL OR start_date <= CURRENT_DATE) " +
-            "  AND (end_date IS NULL OR end_date >= CURRENT_DATE) " +
-            "ORDER BY priority DESC, created_at ASC LIMIT 1"
-        ).setParameter("pvmId", planVersionModuleId).getResultList();
-
-        if (rows.isEmpty()) return CatalogOffer.NONE;
-
-        Object[] row = (Object[]) rows.get(0);
-        return new CatalogOffer(
-            true,
-            (UUID) row[0],
-            (String) row[1],
-            ((Number) row[2]).intValue()
-        );
+        return trialCampaignRepository.findSelectableForPlanVersionModule(planVersionModuleId)
+            .map(tc -> new CatalogOffer(true, tc.id, tc.name, tc.days))
+            .orElse(CatalogOffer.NONE);
     }
 
     // ─── Elegibilidade por tenant (cooldown + seleção de campanha) ───────────────
 
     public TrialEligibility checkEligibility(UUID tenantId, UUID moduleId, UUID planVersionModuleId) {
-        String cooldownEndsAt = cooldownEndsAtIfBlocked(tenantId, moduleId);
+        OffsetDateTime cooldownEndsAt = cooldownEndsAtIfBlocked(tenantId, moduleId);
         if (cooldownEndsAt != null) {
-            return new TrialEligibility(false, null, null, null, "COOLDOWN", cooldownEndsAt);
+            return new TrialEligibility(false, null, null, null, "COOLDOWN", cooldownEndsAt.toString());
         }
 
         CatalogOffer offer = resolveCatalogOffer(planVersionModuleId);
         if (!offer.available()) {
-            String reasonCode = hasCancelledCampaign(planVersionModuleId) ? "CANCELLED" : "NO_CAMPAIGN";
+            String reasonCode = trialCampaignRepository.hasCancelledCampaign(planVersionModuleId) ? "CANCELLED" : "NO_CAMPAIGN";
             return new TrialEligibility(false, null, null, null, reasonCode, null);
         }
 
         return new TrialEligibility(true, offer.campaignId(), offer.campaignName(), offer.days(), "NONE", null);
     }
 
-    /**
-     * Existe uma campanha CANCELLED (mais recente) para este plan_version_module?
-     * Usado só para dar uma mensagem mais específica ("período encerrado") em vez
-     * do genérico "sem vagas" quando o motivo real é cancelamento administrativo.
-     */
-    private boolean hasCancelledCampaign(UUID planVersionModuleId) {
-        long count = ((Number) em.createNativeQuery(
-            "SELECT COUNT(*) FROM trial_campaigns " +
-            "WHERE plan_version_module_id = :pvmId AND status = 'CANCELLED'"
-        ).setParameter("pvmId", planVersionModuleId).getSingleResult()).longValue();
-        return count > 0;
-    }
-
-    /**
-     * Se o tenant ainda está dentro do período de cooldown de reutilização deste
-     * módulo (com base no último Trial concluído, module_trial_history.trial_finished_at),
-     * retorna a data (texto ISO) em que o cooldown termina. Retorna null se o tenant
-     * nunca usou Trial deste módulo, se o Trial mais recente ainda não terminou
-     * (trial_finished_at nulo — em andamento) ou se o cooldown já passou.
-     * Toda a aritmética de datas é feita em SQL para evitar ambiguidade de tipo do
-     * driver JDBC com TIMESTAMPTZ.
-     */
-    @SuppressWarnings("unchecked")
-    private String cooldownEndsAtIfBlocked(UUID tenantId, UUID moduleId) {
-        var rows = em.createNativeQuery(
-            "SELECT (trial_finished_at + (:cooldownDays || ' days')::interval)::text " +
-            "FROM module_trial_history " +
-            "WHERE tenant_id = :tenantId AND module_id = :moduleId " +
-            "  AND trial_finished_at IS NOT NULL " +
-            "  AND trial_finished_at + (:cooldownDays || ' days')::interval > NOW() " +
-            "ORDER BY trial_started_at DESC LIMIT 1"
-        )
-            .setParameter("tenantId", tenantId)
-            .setParameter("moduleId", moduleId)
-            .setParameter("cooldownDays", cooldownDays())
-            .getResultList();
-
-        return rows.isEmpty() ? null : (String) rows.get(0);
+    private OffsetDateTime cooldownEndsAtIfBlocked(UUID tenantId, UUID moduleId) {
+        return moduleTrialHistoryRepository.findCooldownEndsAt(tenantId, moduleId, cooldownDays()).orElse(null);
     }
 
     /**
@@ -145,36 +101,19 @@ public class TrialCampaignService {
      * usado pelo Dashboard para módulos LOCKED (sem assinatura nenhuma ainda) —
      * não há um plan_version_module fixo para consultar.
      */
-    @SuppressWarnings("unchecked")
     public ModuleTrialStatus resolveModuleTrialStatus(UUID tenantId, UUID moduleId) {
         if (cooldownEndsAtIfBlocked(tenantId, moduleId) != null) {
             return new ModuleTrialStatus(false, null, null, true);
         }
 
-        var rows = em.createNativeQuery(
-            "SELECT tc.id, tc.name, tc.days FROM trial_campaigns tc " +
-            "JOIN plan_version_modules pvm ON pvm.id = tc.plan_version_module_id " +
-            "JOIN plans p ON p.id = pvm.plan_id " +
-            "WHERE pvm.module_id = :moduleId AND pvm.status = 'active' " +
-            "  AND p.is_active = TRUE AND p.is_current_version = TRUE " +
-            "  AND tc.status = 'ACTIVE' AND tc.used_slots < tc.max_slots " +
-            "  AND (tc.start_date IS NULL OR tc.start_date <= CURRENT_DATE) " +
-            "  AND (tc.end_date IS NULL OR tc.end_date >= CURRENT_DATE) " +
-            "ORDER BY tc.priority DESC, tc.created_at ASC LIMIT 1"
-        ).setParameter("moduleId", moduleId).getResultList();
-
-        if (!rows.isEmpty()) {
-            Object[] row = (Object[]) rows.get(0);
-            return new ModuleTrialStatus(true, (String) row[1], ((Number) row[2]).intValue(), true);
+        var campaigns = trialCampaignRepository.listSelectableForModule(moduleId);
+        if (!campaigns.isEmpty()) {
+            TrialCampaign tc = campaigns.get(0);
+            return new ModuleTrialStatus(true, tc.name, tc.days, true);
         }
 
-        long everHadCampaign = ((Number) em.createNativeQuery(
-            "SELECT COUNT(*) FROM trial_campaigns tc " +
-            "JOIN plan_version_modules pvm ON pvm.id = tc.plan_version_module_id " +
-            "WHERE pvm.module_id = :moduleId"
-        ).setParameter("moduleId", moduleId).getSingleResult()).longValue();
-
-        return new ModuleTrialStatus(false, null, null, everHadCampaign > 0);
+        boolean everHadCampaign = trialCampaignRepository.everHadCampaignForModule(moduleId);
+        return new ModuleTrialStatus(false, null, null, everHadCampaign);
     }
 
     // ─── Reserva de vaga (transacional, segura contra corrida) ───────────────────
@@ -195,15 +134,12 @@ public class TrialCampaignService {
             CatalogOffer offer = resolveCatalogOffer(planVersionModuleId);
             if (!offer.available()) {
                 throw new BadRequestException(
-                    hasCancelledCampaign(planVersionModuleId) ? CANCELLED_MESSAGE : NO_VACANCY_MESSAGE);
+                    trialCampaignRepository.hasCancelledCampaign(planVersionModuleId) ? CANCELLED_MESSAGE : NO_VACANCY_MESSAGE);
             }
 
-            int updated = em.createNativeQuery(
-                "UPDATE trial_campaigns SET used_slots = used_slots + 1, updated_at = NOW() " +
-                "WHERE id = :id AND used_slots < max_slots"
-            ).setParameter("id", offer.campaignId()).executeUpdate();
-
-            if (updated == 1) return offer.campaignId();
+            if (trialCampaignRepository.tryClaimSlot(offer.campaignId())) {
+                return offer.campaignId();
+            }
             // outra requisição venceu a corrida nesta campanha — tenta de novo
         }
 
@@ -217,14 +153,20 @@ public class TrialCampaignService {
 
     // ─── Configuração global ──────────────────────────────────────────────────────
 
+    /**
+     * Dias mínimos de cooldown entre Trials do mesmo módulo. Se a configuração
+     * platform_settings.trial_reuse_cooldown_days estiver ausente ou em formato
+     * inválido, cai no default — mas só nesses dois casos específicos, não para
+     * qualquer falha (ex.: erro de conexão com o banco não deve ser mascarado
+     * silenciosamente).
+     */
     public int cooldownDays() {
+        var value = platformSettingRepository.findValue("trial_reuse_cooldown_days");
+        if (value.isEmpty()) return DEFAULT_COOLDOWN_DAYS;
         try {
-            String value = (String) em.createNativeQuery(
-                "SELECT value FROM platform_settings WHERE key = 'trial_reuse_cooldown_days'"
-            ).getSingleResult();
-            return Integer.parseInt(value);
-        } catch (Exception e) {
-            return 365;
+            return Integer.parseInt(value.get());
+        } catch (NumberFormatException e) {
+            return DEFAULT_COOLDOWN_DAYS;
         }
     }
 }

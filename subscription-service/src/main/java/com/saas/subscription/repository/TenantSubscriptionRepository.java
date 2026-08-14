@@ -1,17 +1,18 @@
 package com.saas.subscription.repository;
 
+import com.saas.subscription.entity.TenantSubscription;
+import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 
 import java.util.HashSet;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 @ApplicationScoped
-public class TenantSubscriptionRepository {
+public class TenantSubscriptionRepository implements PanacheRepositoryBase<TenantSubscription, UUID> {
 
     @Inject
     EntityManager em;
@@ -24,36 +25,32 @@ public class TenantSubscriptionRepository {
     ) {}
 
     public Optional<SubscriptionResult> findActiveByTenant(UUID tenantId) {
-        var accountRows = em.createNativeQuery(
-                "SELECT ts.id, ts.status, p.code " +
-                "FROM tenant_subscriptions ts " +
-                "JOIN plans p ON p.id = ts.plan_id " +
-                "WHERE ts.tenant_id = :tenantId " +
-                "AND ts.status NOT IN ('cancelled') " +
-                "ORDER BY ts.created_at DESC LIMIT 1",
-                Object[].class
-        )
-        .setParameter("tenantId", tenantId)
-        .getResultList();
+        var accountRows = em.createQuery("""
+                select ts.id, ts.status, p.code from TenantSubscription ts
+                join Plan p on p.id = ts.planId
+                where ts.tenantId = :tenantId and ts.status != 'cancelled'
+                order by ts.createdAt desc
+            """, Object[].class)
+                .setParameter("tenantId", tenantId)
+                .setMaxResults(1)
+                .getResultList();
 
         if (accountRows.isEmpty()) return Optional.empty();
-        Object[] row = (Object[]) accountRows.get(0);
+        Object[] row = accountRows.get(0);
 
-        @SuppressWarnings("unchecked")
-        List<String> slugRows = em.createNativeQuery(
-                "SELECT DISTINCT pm.slug " +
-                "FROM platform_modules pm " +
-                "WHERE pm.is_active = TRUE " +
-                "  AND EXISTS (" +
-                "    SELECT 1 FROM profile_module_subscriptions pms " +
-                "    WHERE pms.tenant_id = :tenantId " +
-                "      AND pms.module_id = pm.id " +
-                "      AND pms.status = 'ACTIVE'" +
-                "      AND (pms.expires_at IS NULL OR pms.expires_at > NOW())" +
-                "  )"
-        )
-        .setParameter("tenantId", tenantId)
-        .getResultList();
+        var slugRows = em.createQuery("""
+                select distinct pm.slug from PlatformModule pm
+                where pm.isActive = true
+                  and exists (
+                    select 1 from ProfileModuleSubscription pms
+                    where pms.tenantId = :tenantId
+                      and pms.moduleId = pm.id
+                      and pms.status = 'ACTIVE'
+                      and (pms.expiresAt is null or pms.expiresAt > current_timestamp)
+                  )
+            """, String.class)
+                .setParameter("tenantId", tenantId)
+                .getResultList();
 
         Set<String> moduleSlugSet = new HashSet<>(slugRows);
 

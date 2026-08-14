@@ -1,21 +1,27 @@
 package com.saas.subscription.scheduler;
 
+import com.saas.subscription.entity.ProfileModuleSubscription;
+import com.saas.subscription.repository.ModuleTrialHistoryRepository;
+import com.saas.subscription.repository.ProfileModuleSubscriptionRepository;
+import com.saas.subscription.repository.TrialCampaignRepository;
+import com.saas.subscription.repository.UserTenantRepository;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import org.jboss.logging.Logger;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Jobs de housekeeping do sistema de Trial: mantém profile_module_subscriptions.status
  * coerente com expires_at e mantém trial_campaigns.status coerente com sua janela de
  * datas (start_date/end_date).
  *
- * As checagens de acesso em tempo real (module-catalog-service, auth-service,
+ * As checagens de acesso em tempo real (ModuleAccessService, DashboardService,
  * TenantSubscriptionRepository) já tratam uma assinatura ACTIVE, TRIAL ou
  * TRIAL_CANCELLED vencida como expirada independente deste job — este scheduler só
  * mantém a coluna status correta para telas que exibem o valor persistido (ex.:
@@ -30,7 +36,16 @@ public class TrialSchedulerJobs {
     private static final Logger LOG = Logger.getLogger(TrialSchedulerJobs.class);
 
     @Inject
-    EntityManager em;
+    ProfileModuleSubscriptionRepository subscriptionRepository;
+
+    @Inject
+    ModuleTrialHistoryRepository moduleTrialHistoryRepository;
+
+    @Inject
+    UserTenantRepository userTenantRepository;
+
+    @Inject
+    TrialCampaignRepository trialCampaignRepository;
 
     /**
      * Dois caminhos distintos ao vencer trial_end_at (expires_at):
@@ -41,49 +56,41 @@ public class TrialSchedulerJobs {
      */
     @Scheduled(cron = "0 0 * * * ?")
     @Transactional
-    @SuppressWarnings("unchecked")
     public void expireOverdueModuleSubscriptions() {
-        List<UUID> affectedTenantIds = em.createNativeQuery(
-                "SELECT DISTINCT tenant_id FROM profile_module_subscriptions " +
-                "WHERE status IN ('ACTIVE', 'TRIAL', 'TRIAL_CANCELLED') " +
-                "  AND expires_at IS NOT NULL AND expires_at < NOW()"
-        ).getResultList();
+        List<ProfileModuleSubscription> overdue = subscriptionRepository.list(
+            "status in ?1 and expiresAt is not null and expiresAt < ?2",
+            List.of("ACTIVE", "TRIAL", "TRIAL_CANCELLED"), OffsetDateTime.now());
 
-        if (affectedTenantIds.isEmpty()) return;
+        if (overdue.isEmpty()) return;
 
-        // Fecha o histórico de Trial (trial_finished_at) para os módulos cujo Trial —
-        // cancelado ou não — está efetivamente terminando agora. Usa trial_history_id
-        // (não tenant_id+module_id) para não ambiguar com histórico antigo do mesmo
-        // tenant+módulo, já que module_trial_history agora é um ledger append-only.
-        em.createNativeQuery(
-                "UPDATE module_trial_history h SET trial_finished_at = NOW() " +
-                "FROM profile_module_subscriptions pms " +
-                "WHERE h.id = pms.trial_history_id " +
-                "  AND h.trial_finished_at IS NULL " +
-                "  AND pms.status IN ('TRIAL', 'TRIAL_CANCELLED') " +
-                "  AND pms.expires_at IS NOT NULL AND pms.expires_at < NOW()"
-        ).executeUpdate();
+        List<UUID> affectedTenantIds = overdue.stream().map(s -> s.tenantId).distinct().toList();
 
-        // TRIAL_CANCELLED: o usuário já tinha optado por não renovar — nunca cobra,
-        // vai direto para EXPIRED e bloqueia o módulo.
-        int expiredCancelled = em.createNativeQuery(
-                "UPDATE profile_module_subscriptions SET status = 'EXPIRED', updated_at = NOW() " +
-                "WHERE status IN ('ACTIVE', 'TRIAL_CANCELLED') AND expires_at IS NOT NULL AND expires_at < NOW()"
-        ).executeUpdate();
+        int expiredCancelled = 0;
+        int pendingPayment = 0;
+        for (ProfileModuleSubscription subscription : overdue) {
+            // Fecha o histórico de Trial (trial_finished_at) para os módulos cujo Trial —
+            // cancelado ou não — está efetivamente terminando agora.
+            if (subscription.trialHistoryId != null
+                    && ("TRIAL".equals(subscription.status) || "TRIAL_CANCELLED".equals(subscription.status))) {
+                moduleTrialHistoryRepository.markFinished(subscription.trialHistoryId, false);
+            }
 
-        // TRIAL (não cancelado): o usuário não desistiu — simula a tentativa de
-        // cobrança automática (PENDING_PAYMENT), preparado para a cobrança real futura.
-        int pendingPayment = em.createNativeQuery(
-                "UPDATE profile_module_subscriptions SET status = 'PENDING_PAYMENT', updated_at = NOW() " +
-                "WHERE status = 'TRIAL' AND expires_at IS NOT NULL AND expires_at < NOW()"
-        ).executeUpdate();
+            if ("TRIAL_CANCELLED".equals(subscription.status) || "ACTIVE".equals(subscription.status)) {
+                // O usuário já tinha optado por não renovar (ou nunca teve Trial) — nunca
+                // cobra, vai direto para EXPIRED e bloqueia o módulo.
+                subscription.status = "EXPIRED";
+                expiredCancelled++;
+            } else if ("TRIAL".equals(subscription.status)) {
+                // TRIAL (não cancelado): o usuário não desistiu — simula a tentativa de
+                // cobrança automática (PENDING_PAYMENT), preparado para a cobrança real futura.
+                subscription.status = "PENDING_PAYMENT";
+                pendingPayment++;
+            }
+        }
 
         // Assinatura de módulo expirou — invalida PAT/MAT em cache dos membros do tenant
         // para que o front reavalie o acesso na próxima requisição, sem esperar o MAT expirar.
-        em.createNativeQuery(
-                "UPDATE user_tenants SET permissions_version = permissions_version + 1 " +
-                "WHERE tenant_id IN (:ids) AND is_active = TRUE"
-        ).setParameter("ids", affectedTenantIds).executeUpdate();
+        userTenantRepository.bumpVersionForTenants(affectedTenantIds);
 
         LOG.infof("Expiradas %d assinaturas de módulo vencidas (%d aguardando pagamento)", expiredCancelled, pendingPayment);
     }
@@ -97,15 +104,11 @@ public class TrialSchedulerJobs {
     @Scheduled(cron = "0 15 * * * ?")
     @Transactional
     public void syncTrialCampaignStatuses() {
-        int scheduledToActive = em.createNativeQuery(
-                "UPDATE trial_campaigns SET status = 'ACTIVE', updated_at = NOW() " +
-                "WHERE status = 'SCHEDULED' AND (start_date IS NULL OR start_date <= CURRENT_DATE)"
-        ).executeUpdate();
+        long scheduledToActive = trialCampaignRepository.update(
+            "status = 'ACTIVE' where status = 'SCHEDULED' and (startDate is null or startDate <= current_date)");
 
-        int activeToClosed = em.createNativeQuery(
-                "UPDATE trial_campaigns SET status = 'CLOSED', updated_at = NOW() " +
-                "WHERE status = 'ACTIVE' AND end_date IS NOT NULL AND end_date < CURRENT_DATE"
-        ).executeUpdate();
+        long activeToClosed = trialCampaignRepository.update(
+            "status = 'CLOSED' where status = 'ACTIVE' and endDate is not null and endDate < current_date");
 
         if (scheduledToActive > 0 || activeToClosed > 0) {
             LOG.infof("Trial campaigns: %d SCHEDULED→ACTIVE, %d ACTIVE→CLOSED", scheduledToActive, activeToClosed);
