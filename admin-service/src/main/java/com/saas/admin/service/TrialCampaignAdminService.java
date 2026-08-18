@@ -1,8 +1,8 @@
 package com.saas.admin.service;
 
+import com.saas.admin.dao.TrialCampaignDAO;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 import java.util.List;
@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 public class TrialCampaignAdminService {
 
     @Inject
-    EntityManager em;
+    TrialCampaignDAO dao;
 
     /**
      * O plano Free já é gratuito permanentemente, então não faz sentido oferecer
@@ -31,12 +31,7 @@ public class TrialCampaignAdminService {
      * sem que o plano em si seja o Free.
      */
     public boolean isFreePlanVersionModule(String planVersionModuleId) {
-        Number count = (Number) em.createNativeQuery(
-            "SELECT COUNT(*) FROM plan_version_modules pvm " +
-            "JOIN plans p ON p.id = pvm.plan_id " +
-            "WHERE pvm.id::text = :id AND p.code = 'free'"
-        ).setParameter("id", planVersionModuleId).getSingleResult();
-        return count.longValue() > 0;
+        return dao.isFreePlanVersionModule(planVersionModuleId);
     }
 
     /**
@@ -48,26 +43,12 @@ public class TrialCampaignAdminService {
      * deixam de ser possíveis. Retorna os ids cancelados para o chamador
      * registrar auditoria.
      */
-    @SuppressWarnings("unchecked")
     @Transactional
     public List<UUID> cancelCampaignsForPlanVersion(String oldPlanId, String reason, UUID actorUserId) {
-        List<String> ids = em.createNativeQuery(
-            "SELECT tc.id::text FROM trial_campaigns tc " +
-            "JOIN plan_version_modules pvm ON pvm.id = tc.plan_version_module_id " +
-            "WHERE pvm.plan_id::text = :oldPlanId AND tc.status IN ('ACTIVE', 'SCHEDULED')"
-        ).setParameter("oldPlanId", oldPlanId).getResultList();
-
+        List<String> ids = dao.findActiveOrScheduledCampaignIds(oldPlanId);
         if (ids.isEmpty()) return List.of();
 
-        em.createNativeQuery(
-            "UPDATE trial_campaigns SET status = 'CANCELLED', cancelled_at = NOW(), cancel_reason = :reason, " +
-            "updated_at = NOW(), updated_by_user_id = :actorUserId " +
-            "WHERE id::text IN (:ids)"
-        )
-            .setParameter("reason", reason)
-            .setParameter("actorUserId", actorUserId)
-            .setParameter("ids", ids)
-            .executeUpdate();
+        dao.bulkCancel(ids, reason, actorUserId);
 
         return ids.stream().map(UUID::fromString).collect(Collectors.toList());
     }

@@ -1,5 +1,9 @@
 package com.saas.admin.controller;
 
+import com.saas.admin.dto.PlanModuleWithLimitsRequest;
+import com.saas.admin.dto.PlanRequest;
+import com.saas.admin.dto.PlanVersionModuleLimitRequest;
+import com.saas.admin.dto.PlanVersionModuleRequest;
 import com.saas.admin.security.AdminAuthService;
 import com.saas.admin.service.AdminPlanService;
 import io.quarkus.security.Authenticated;
@@ -427,8 +431,8 @@ public class AdminPlanResource {
     // Helpers
     // ----------------------------------------------------------------
 
-    private AdminPlanService.PlanRequest mapToRequest(Map<String, Object> body) {
-        return new AdminPlanService.PlanRequest(
+    private PlanRequest mapToRequest(Map<String, Object> body) {
+        return new PlanRequest(
             (String) body.get("name"),
             (String) body.get("code"),
             (String) body.get("description"),
@@ -443,8 +447,8 @@ public class AdminPlanResource {
         );
     }
 
-    private AdminPlanService.PlanVersionModuleRequest mapToPlanVersionModuleRequest(Map<String, Object> body) {
-        return new AdminPlanService.PlanVersionModuleRequest(
+    private PlanVersionModuleRequest mapToPlanVersionModuleRequest(Map<String, Object> body) {
+        return new PlanVersionModuleRequest(
             (String) body.get("module_id"),
             body.get("monthly_price")         != null ? new BigDecimal(body.get("monthly_price").toString())         : null,
             body.get("annual_monthly_price")  != null ? new BigDecimal(body.get("annual_monthly_price").toString())  : null,
@@ -453,8 +457,8 @@ public class AdminPlanResource {
         );
     }
 
-    private AdminPlanService.PlanVersionModuleLimitRequest mapToPlanVersionModuleLimitRequest(Map<String, Object> body) {
-        return new AdminPlanService.PlanVersionModuleLimitRequest(
+    private PlanVersionModuleLimitRequest mapToPlanVersionModuleLimitRequest(Map<String, Object> body) {
+        return new PlanVersionModuleLimitRequest(
             (String) body.get("title"),
             (String) body.get("description"),
             (String) body.get("code"),
@@ -465,16 +469,16 @@ public class AdminPlanResource {
     }
 
     @SuppressWarnings("unchecked")
-    private List<AdminPlanService.PlanModuleWithLimitsRequest> mapToPlanModuleWithLimitsRequests(Map<String, Object> body) {
+    private List<PlanModuleWithLimitsRequest> mapToPlanModuleWithLimitsRequests(Map<String, Object> body) {
         Object raw = body.get("modules");
         if (!(raw instanceof List<?> list)) return null;
         return list.stream().map(item -> {
             Map<String, Object> m = (Map<String, Object>) item;
-            List<AdminPlanService.PlanVersionModuleLimitRequest> limits = null;
+            List<PlanVersionModuleLimitRequest> limits = null;
             if (m.get("limits") instanceof List<?> ll) {
                 limits = ll.stream().map(li -> {
                     Map<String, Object> l = (Map<String, Object>) li;
-                    return new AdminPlanService.PlanVersionModuleLimitRequest(
+                    return new PlanVersionModuleLimitRequest(
                         (String) l.get("title"),
                         (String) l.get("description"),
                         (String) l.get("code"),
@@ -484,7 +488,7 @@ public class AdminPlanResource {
                     );
                 }).collect(java.util.stream.Collectors.toList());
             }
-            return new AdminPlanService.PlanModuleWithLimitsRequest(
+            return new PlanModuleWithLimitsRequest(
                 (String) m.get("module_id"),
                 m.get("monthly_price")        != null ? new BigDecimal(m.get("monthly_price").toString())        : null,
                 m.get("annual_monthly_price") != null ? new BigDecimal(m.get("annual_monthly_price").toString()) : null,
