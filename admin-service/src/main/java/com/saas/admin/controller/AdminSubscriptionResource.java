@@ -1,6 +1,10 @@
 package com.saas.admin.controller;
 
 import com.saas.admin.client.SubscriptionServiceClient;
+import com.saas.admin.dto.SubscriptionPageDTO;
+import com.saas.admin.dto.SubscriptionsSummaryDTO;
+import com.saas.admin.security.AdminAuthService;
+import com.saas.admin.service.AdminGeneralService;
 import io.quarkus.security.Authenticated;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
@@ -16,17 +20,23 @@ import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 /**
- * Ações administrativas sobre o ciclo de vida de assinaturas — cancelar/
- * reativar em nome de um administrador da plataforma.
+ * Visão administrativa (listagem/resumo) e ciclo de vida (cancelar/reativar)
+ * de assinaturas de módulo, em nome de um administrador da plataforma.
  *
- * frontend-admin só pode consumir admin-service; profile_module_subscriptions
- * é tabela de propriedade de subscription-service (regra de table ownership),
- * então este recurso apenas repassa a requisição — autenticação e checagem
- * de permissão administrativa continuam sendo feitas por lá, em
- * AdminAuthService, usando o mesmo Authorization repassado aqui.
+ * Listagem/resumo (GET) consultam profile_module_subscriptions diretamente
+ * via AdminGeneralService. Cancelamento/reativação (POST) são um proxy puro
+ * para subscription-service, único dono de escrita naquela tabela (regra de
+ * table ownership) — autenticação e checagem de permissão administrativa
+ * para essas duas ações são feitas por lá, em AdminAuthService, usando o
+ * mesmo Authorization repassado aqui.
+ *
+ * Todos os métodos deste recurso precisam ficar nesta única classe: duas
+ * classes JAX-RS mapeando o mesmo path literal "/api/v1/admin/subscriptions"
+ * faz o RESTEasy Reactive rotear tudo para uma delas e 404 nos métodos da
+ * outra.
  */
 @Path("/api/v1/admin/subscriptions")
-@Tag(name = "Subscriptions", description = "Ações administrativas sobre o ciclo de vida de assinaturas de módulo de qualquer tenant (cancelar/reativar em nome de um administrador da plataforma). Contexto exclusivamente administrativo — não deve ser utilizado pelo ambiente cliente. Este recurso é um proxy transparente para o admin-endpoint equivalente do subscription-service, único dono da tabela profile_module_subscriptions.")
+@Tag(name = "Subscriptions", description = "Visão administrativa e ações sobre o ciclo de vida de assinaturas de módulo de qualquer tenant (listar, resumir, cancelar/reativar em nome de um administrador da plataforma). Contexto exclusivamente administrativo — não deve ser utilizado pelo ambiente cliente. Listagem/resumo leem profile_module_subscriptions diretamente; cancelar/reativar são um proxy transparente para o admin-endpoint equivalente do subscription-service, único dono de escrita naquela tabela.")
 @Authenticated
 @SecurityRequirement(name = "bearerAuth")
 @Produces(MediaType.APPLICATION_JSON)
@@ -36,6 +46,89 @@ public class AdminSubscriptionResource {
     @Inject
     @RestClient
     SubscriptionServiceClient subscriptionServiceClient;
+
+    @Inject
+    AdminGeneralService adminGeneralService;
+
+    @Inject
+    AdminAuthService adminAuth;
+
+    @GET
+    @Path("/summary")
+    @Operation(
+        summary = "Retorna contadores agregados de assinaturas de módulos por perfil",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Agrega, sobre profile_module_subscriptions, o total de assinaturas e a contagem por " +
+            "status (ACTIVE, CANCELED, EXPIRED, PENDING_PAYMENT, TRIAL, TRIAL_CANCELLED) e por ciclo de " +
+            "cobrança (MONTHLY, ANNUAL). Não aplica filtros. Requer a permissão granular " +
+            "'admin.subscriptions.view'."
+    )
+    @APIResponse(responseCode = "200", description = "Objeto com os contadores agregados de assinaturas.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.subscriptions.view'.")
+    public Response getSubscriptionsSummary() {
+        adminAuth.requireAdminPermission("admin.subscriptions.view");
+
+        SubscriptionsSummaryDTO summary = adminGeneralService.getSubscriptionsSummary();
+        return Response.ok(summary).build();
+    }
+
+    @GET
+    @Operation(
+        summary = "Lista, com paginação, as assinaturas de módulos sob a visão administrativa",
+        description = "Endpoint exclusivo do contexto administrativo — não deve ser utilizado pelo ambiente " +
+            "cliente. Lista registros de profile_module_subscriptions com dados agregados do perfil " +
+            "(individual ou empresa), do módulo, do plano/versão contratada e do status da assinatura. " +
+            "Suporta um amplo conjunto de filtros combináveis (busca textual, tipo/ID de perfil, empresa, " +
+            "usuário, módulo, plano, ciclo de cobrança, status, intervalo de data de início, janela de " +
+            "expiração pré-definida e status de renovação) e paginação via 'page'/'size' (size limitado a " +
+            "1..100). O cancelamento/reativação de assinaturas não é feito por este serviço — é responsabilidade " +
+            "do subscription-service, chamado diretamente pelo frontend-admin. Requer a permissão granular " +
+            "'admin.subscriptions.view'."
+    )
+    @APIResponse(responseCode = "200", description = "Página de assinaturas que atendem aos filtros informados, com total de itens.")
+    @APIResponse(responseCode = "401", description = "Requisição sem JWT válido do Supabase Auth.")
+    @APIResponse(responseCode = "403", description = "Usuário autenticado não é SUPER_ADMIN/ADMIN_USER ativo, ou não possui a permissão 'admin.subscriptions.view'.")
+    public Response listSubscriptions(
+            @Parameter(description = "Busca textual por nome da empresa, do módulo, do plano, do owner ou e-mail do owner (opcional).")
+            @QueryParam("search")        String search,
+            @Parameter(description = "Filtra pelo tipo de perfil: 'INDIVIDUAL' ou qualquer outro valor é tratado como empresa (opcional).")
+            @QueryParam("profileType")   String profileType,
+            @Parameter(description = "Filtra por ID (UUID) do tenant/perfil (individual ou empresa). Opcional.")
+            @QueryParam("profileId")     String profileId,
+            @Parameter(description = "Filtra por ID (UUID) da empresa (tenant do tipo 'business'). Opcional.")
+            @QueryParam("companyId")     String companyId,
+            @Parameter(description = "Filtra por ID do usuário owner ou por trecho do e-mail do owner. Opcional.")
+            @QueryParam("userId")        String userId,
+            @Parameter(description = "Filtra por ID (UUID) do módulo da plataforma. Opcional.")
+            @QueryParam("moduleId")      String moduleId,
+            @Parameter(description = "Filtra por ID (UUID) do plano. Opcional.")
+            @QueryParam("planId")        String planId,
+            @Parameter(description = "Filtra pelo ciclo de cobrança: MONTHLY ou ANNUAL. Opcional.")
+            @QueryParam("billingCycle")  String billingCycle,
+            @Parameter(description = "Filtra pelo status da assinatura (ex.: ACTIVE, CANCELED, EXPIRED, TRIAL). Opcional.")
+            @QueryParam("status")        String status,
+            @Parameter(description = "Data/hora mínima de início da assinatura (filtro >=). Opcional.")
+            @QueryParam("startDateFrom") String startDateFrom,
+            @Parameter(description = "Data/hora máxima de início da assinatura (filtro <=). Opcional.")
+            @QueryParam("startDateTo")   String startDateTo,
+            @Parameter(description = "Janela de expiração pré-definida: '7', '15', '30' (dias a partir de agora), 'overdue' (já expiradas) ou 'none' (sem data de expiração). Opcional.")
+            @QueryParam("expiresIn")     String expiresIn,
+            @Parameter(description = "Filtra por status de renovação: 'active' (assinatura ACTIVE) ou 'canceled' (CANCELED/EXPIRED). Opcional.")
+            @QueryParam("renewalStatus") String renewalStatus,
+            @Parameter(description = "Número da página, começando em 0. Padrão: 0.")
+            @QueryParam("page")          @DefaultValue("0") int page,
+            @Parameter(description = "Quantidade de itens por página (limitado a 1..100). Padrão: 20.")
+            @QueryParam("size")          @DefaultValue("20") int size
+    ) {
+        adminAuth.requireAdminPermission("admin.subscriptions.view");
+
+        SubscriptionPageDTO result = adminGeneralService.listSubscriptions(
+            search, profileType, profileId, companyId, userId, moduleId, planId, billingCycle, status,
+            startDateFrom, startDateTo, expiresIn, renewalStatus, page, size);
+
+        return Response.ok(result).build();
+    }
 
     @POST
     @Path("/{id}/cancel")

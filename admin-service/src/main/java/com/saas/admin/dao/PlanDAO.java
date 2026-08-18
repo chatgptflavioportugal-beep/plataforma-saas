@@ -135,7 +135,7 @@ public class PlanDAO {
             long trialSubs = ((Number) row[19]).longValue();
             return new PlanSummaryDTO(
                 (String) row[0], (String) row[1], (String) row[2], (String) row[3],
-                (BigDecimal) row[4], (BigDecimal) row[5], (Integer) row[6],
+                (BigDecimal) row[4], (BigDecimal) row[5], ((Number) row[6]).intValue(),
                 (Integer) row[7], (Integer) row[8], (Boolean) row[9], (Integer) row[10],
                 (Integer) row[11], (Boolean) row[12], (String) row[13], (String) row[14],
                 (String) row[15], (Boolean) row[16], (String) row[17],
@@ -173,7 +173,7 @@ public class PlanDAO {
             long trialSubs = ((Number) row[17]).longValue();
             return new PlanVersionHistoryDTO(
                 (String) row[0], (String) row[1], (String) row[2], (String) row[3],
-                (BigDecimal) row[4], (BigDecimal) row[5], (Integer) row[6],
+                (BigDecimal) row[4], (BigDecimal) row[5], ((Number) row[6]).intValue(),
                 (Integer) row[7], (Integer) row[8], (Boolean) row[9], (Integer) row[10],
                 (Integer) row[11], (Boolean) row[12], (Boolean) row[13], (String) row[14],
                 (String) row[15], paidSubs, trialSubs, paidSubs + trialSubs,
