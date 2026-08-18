@@ -1,12 +1,13 @@
 package com.saas.profile.controller;
 
+import com.saas.profile.dto.request.OnboardingRequest;
+import com.saas.profile.dto.tenant.OnboardingResponse;
 import com.saas.profile.entity.Tenant;
+import com.saas.profile.service.AdminAccessService;
 import com.saas.profile.service.InvitationService;
 import com.saas.profile.service.TenantService;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.NoResultException;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -40,21 +41,10 @@ public class PublicResource {
     InvitationService invitationService;
 
     @Inject
-    JsonWebToken jwt;
+    AdminAccessService adminAccessService;
 
     @Inject
-    EntityManager em;
-
-    private boolean isAdminUser(String userId) {
-        try {
-            String role = (String) em.createNativeQuery(
-                "SELECT system_role FROM user_profiles WHERE id::text = :id"
-            ).setParameter("id", userId).getSingleResult();
-            return "SUPER_ADMIN".equals(role) || "ADMIN_USER".equals(role);
-        } catch (NoResultException e) {
-            return false;
-        }
-    }
+    JsonWebToken jwt;
 
     /**
      * Onboarding: cria um tenant do tipo BUSINESS.
@@ -79,13 +69,13 @@ public class PublicResource {
     @APIResponse(responseCode = "401", description = "JWT do Supabase ausente, inválido ou expirado.")
     @APIResponse(responseCode = "403", description = "O usuário autenticado é administrativo (SUPER_ADMIN/ADMIN_USER) e não pode criar perfis de cliente.")
     @APIResponse(responseCode = "409", description = "O `slug` informado já está em uso por outro tenant.")
-    public Response onboarding(Map<String, String> body) {
+    public Response onboarding(OnboardingRequest body) {
         UUID userId = UUID.fromString(jwt.getSubject());
-        if (isAdminUser(userId.toString()))
+        if (adminAccessService.isPlatformAdmin(userId))
             return Response.status(403).entity(Map.of("error", "Usuários administrativos não podem criar perfis cliente")).build();
 
-        String name = body.get("name");
-        String slug = body.get("slug");
+        String name = body != null ? body.name() : null;
+        String slug = body != null ? body.slug() : null;
 
         if (name == null || slug == null) {
             return Response.status(400).entity(Map.of("error", "name e slug obrigatórios")).build();
@@ -93,7 +83,7 @@ public class PublicResource {
 
         try {
             Tenant tenant = tenantService.createTenant(name, slug, userId, "business");
-            return Response.ok(Map.of("id", tenant.id, "slug", tenant.slug, "type", "business")).build();
+            return Response.ok(new OnboardingResponse(tenant.id, tenant.slug, "business")).build();
         } catch (IllegalArgumentException e) {
             return Response.status(409).entity(Map.of("error", e.getMessage())).build();
         }
@@ -125,11 +115,11 @@ public class PublicResource {
     @APIResponse(responseCode = "500", description = "Falha inesperada ao criar o tenant individual; a mensagem da exceção é incluída na resposta.")
     public Response createIndividualTenant() {
         UUID userId = UUID.fromString(jwt.getSubject());
-        if (isAdminUser(userId.toString()))
+        if (adminAccessService.isPlatformAdmin(userId))
             return Response.status(403).entity(Map.of("error", "Usuários administrativos não podem criar perfis cliente")).build();
 
         try {
-            Map<String, Object> result = tenantService.ensureIndividualTenant(userId);
+            var result = tenantService.ensureIndividualTenant(userId);
             return Response.ok(result).build();
         } catch (Exception e) {
             return Response.status(500).entity(Map.of("error", e.getMessage())).build();

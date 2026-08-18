@@ -1,6 +1,10 @@
 package com.saas.profile.controller;
 
+import com.saas.profile.dto.request.ChangeAccessLevelRequest;
+import com.saas.profile.dto.request.SendInvitationRequest;
+import com.saas.profile.dto.response.SuccessResponse;
 import com.saas.profile.security.TenantContext;
+import com.saas.profile.service.AdminAccessService;
 import com.saas.profile.service.InvitationService;
 import com.saas.profile.service.TenantService;
 import io.quarkus.security.Authenticated;
@@ -10,14 +14,12 @@ import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -45,7 +47,7 @@ public class InvitationResource {
     TenantService tenantService;
 
     @Inject
-    EntityManager em;
+    AdminAccessService adminAccessService;
 
     // ─── Perfil do tenant ────────────────────────────────────────────────────
 
@@ -69,10 +71,7 @@ public class InvitationResource {
             @Parameter(description = "Identificador do tenant (deve coincidir com o tenant resolvido via X-Tenant-ID).", required = true)
             @PathParam("tenantId") UUID tenantId,
             @Context SecurityContext ctx) {
-        TenantContext tenantCtx = TenantContext.from(ctx);
-        if (!tenantCtx.getTenantId().equals(tenantId)) {
-            return Response.status(403).build();
-        }
+        TenantContext.resolveAndCheck(ctx, tenantId);
         return Response.ok(tenantService.getTenantProfile(tenantId)).build();
     }
 
@@ -94,8 +93,8 @@ public class InvitationResource {
             @Parameter(description = "Identificador do tenant (deve coincidir com o tenant resolvido via X-Tenant-ID).", required = true)
             @PathParam("tenantId") UUID tenantId,
             @Context SecurityContext ctx) {
-        TenantContext tc = resolveAndCheckAccess(ctx, tenantId);
-        requireAdminPerm(tc, tenantId, "members.view");
+        TenantContext tc = TenantContext.resolveAndCheck(ctx, tenantId);
+        adminAccessService.requireAdminPerm(tc, tenantId, "members.view");
         return Response.ok(invitationService.listMembers(tenantId)).build();
     }
 
@@ -123,8 +122,8 @@ public class InvitationResource {
             @Parameter(description = "Identificador do usuário a ser removido do tenant.", required = true)
             @PathParam("userId") UUID targetUserId,
             @Context SecurityContext ctx) {
-        TenantContext tc = resolveAndCheckAccess(ctx, tenantId);
-        requireAdminPerm(tc, tenantId, "members.remove");
+        TenantContext tc = TenantContext.resolveAndCheck(ctx, tenantId);
+        adminAccessService.requireAdminPerm(tc, tenantId, "members.remove");
         invitationService.removeMember(tenantId, targetUserId, tc.getUserId(), tc.getUserRole());
         return Response.noContent().build();
     }
@@ -151,18 +150,18 @@ public class InvitationResource {
             @PathParam("tenantId") UUID tenantId,
             @Parameter(description = "Identificador do membro cujo nível de acesso será alterado.", required = true)
             @PathParam("userId") UUID targetUserId,
-            Map<String, String> body,
+            ChangeAccessLevelRequest body,
             @Context SecurityContext ctx) {
-        TenantContext tc = resolveAndCheckAccess(ctx, tenantId);
-        requireAdminPerm(tc, tenantId, "members.change_access_level");
+        TenantContext tc = TenantContext.resolveAndCheck(ctx, tenantId);
+        adminAccessService.requireAdminPerm(tc, tenantId, "members.change_access_level");
 
-        String accessLevelId = body != null ? body.get("accessLevelId") : null;
+        String accessLevelId = body != null ? body.accessLevelId() : null;
         if (accessLevelId == null || accessLevelId.isBlank()) {
             return Response.status(400).entity(Map.of("error", "Nível de acesso é obrigatório")).build();
         }
 
         invitationService.changeMemberAccessLevel(tenantId, targetUserId, accessLevelId);
-        return Response.ok(Map.of("success", true)).build();
+        return Response.ok(SuccessResponse.OK).build();
     }
 
     // ─── Convites ─────────────────────────────────────────────────────────────
@@ -183,8 +182,8 @@ public class InvitationResource {
             @Parameter(description = "Identificador do tenant (deve coincidir com o tenant resolvido via X-Tenant-ID).", required = true)
             @PathParam("tenantId") UUID tenantId,
             @Context SecurityContext ctx) {
-        TenantContext tc = resolveAndCheckAccess(ctx, tenantId);
-        requireAdminPerm(tc, tenantId, "invites.view");
+        TenantContext tc = TenantContext.resolveAndCheck(ctx, tenantId);
+        adminAccessService.requireAdminPerm(tc, tenantId, "invites.view");
         return Response.ok(invitationService.listInvitations(tenantId)).build();
     }
 
@@ -209,13 +208,13 @@ public class InvitationResource {
     public Response sendInvitation(
             @Parameter(description = "Identificador do tenant (deve coincidir com o tenant resolvido via X-Tenant-ID).", required = true)
             @PathParam("tenantId") UUID tenantId,
-            Map<String, String> body,
+            SendInvitationRequest body,
             @Context SecurityContext ctx) {
-        TenantContext tc = resolveAndCheckAccess(ctx, tenantId);
-        requireAdminPerm(tc, tenantId, "members.invite");
+        TenantContext tc = TenantContext.resolveAndCheck(ctx, tenantId);
+        adminAccessService.requireAdminPerm(tc, tenantId, "members.invite");
 
-        String email = body.get("email");
-        String accessLevelId = body.get("accessLevelId");
+        String email = body != null ? body.email() : null;
+        String accessLevelId = body != null ? body.accessLevelId() : null;
 
         if (email == null || email.isBlank()) {
             return Response.status(400).entity(Map.of("error", "E-mail é obrigatório")).build();
@@ -247,40 +246,9 @@ public class InvitationResource {
             @Parameter(description = "Identificador do convite a ser cancelado.", required = true)
             @PathParam("invId") UUID invId,
             @Context SecurityContext ctx) {
-        TenantContext tc = resolveAndCheckAccess(ctx, tenantId);
-        requireAdminPerm(tc, tenantId, "invites.cancel");
+        TenantContext tc = TenantContext.resolveAndCheck(ctx, tenantId);
+        adminAccessService.requireAdminPerm(tc, tenantId, "invites.cancel");
         invitationService.cancelInvitation(tenantId, invId);
         return Response.noContent().build();
-    }
-
-    // ─── Helpers ──────────────────────────────────────────────────────────────
-
-    private boolean hasAdminPerm(TenantContext tc, UUID tenantId, String permKey) {
-        if (List.of("owner", "admin").contains(tc.getUserRole())) return true;
-        long count = ((Number) em.createNativeQuery(
-            "SELECT COUNT(*) FROM profile_access_level_admin_permissions ap " +
-            "JOIN user_tenants ut ON ut.access_level_id = ap.access_level_id " +
-            "WHERE ut.user_id = :userId AND ut.tenant_id = :tenantId " +
-            "  AND ut.is_active = TRUE AND ap.permission_key = :permKey"
-        )
-        .setParameter("userId", tc.getUserId())
-        .setParameter("tenantId", tenantId)
-        .setParameter("permKey", permKey)
-        .getSingleResult()).longValue();
-        return count > 0;
-    }
-
-    private void requireAdminPerm(TenantContext tc, UUID tenantId, String permKey) {
-        if (!hasAdminPerm(tc, tenantId, permKey)) {
-            throw new ForbiddenException("Permissão necessária: " + permKey);
-        }
-    }
-
-    private TenantContext resolveAndCheckAccess(SecurityContext ctx, UUID tenantId) {
-        TenantContext tc = TenantContext.from(ctx);
-        if (!tc.getTenantId().equals(tenantId)) {
-            throw new ForbiddenException("Acesso negado ao tenant");
-        }
-        return tc;
     }
 }

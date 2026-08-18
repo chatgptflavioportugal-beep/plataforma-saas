@@ -40,4 +40,13 @@ public class TenantContext {
         }
         throw new IllegalStateException("TenantContext not available in SecurityContext");
     }
+
+    /** Resolve o TenantContext da requisição e garante que o {tenantId} do path bate com o tenant resolvido. */
+    public static TenantContext resolveAndCheck(jakarta.ws.rs.core.SecurityContext ctx, UUID tenantId) {
+        TenantContext tc = from(ctx);
+        if (!tc.getTenantId().equals(tenantId)) {
+            throw new jakarta.ws.rs.ForbiddenException("Acesso negado ao tenant");
+        }
+        return tc;
+    }
 }

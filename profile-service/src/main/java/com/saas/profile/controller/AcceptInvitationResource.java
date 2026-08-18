@@ -1,5 +1,6 @@
 package com.saas.profile.controller;
 
+import com.saas.profile.service.AdminAccessService;
 import com.saas.profile.service.InvitationService;
 import io.quarkus.security.Authenticated;
 import org.eclipse.microprofile.openapi.annotations.Operation;
@@ -8,8 +9,6 @@ import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.NoResultException;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -34,10 +33,10 @@ public class AcceptInvitationResource {
     InvitationService invitationService;
 
     @Inject
-    JsonWebToken jwt;
+    AdminAccessService adminAccessService;
 
     @Inject
-    EntityManager em;
+    JsonWebToken jwt;
 
     @POST
     @Operation(
@@ -64,16 +63,11 @@ public class AcceptInvitationResource {
             @PathParam("token") String token) {
         UUID userId = UUID.fromString(jwt.getSubject());
 
-        try {
-            String role = (String) em.createNativeQuery(
-                "SELECT system_role FROM user_profiles WHERE id::text = :id"
-            ).setParameter("id", userId.toString()).getSingleResult();
-            if ("SUPER_ADMIN".equals(role) || "ADMIN_USER".equals(role)) {
-                return Response.status(403)
+        if (adminAccessService.isPlatformAdmin(userId)) {
+            return Response.status(403)
                     .entity(Map.of("error", "Usuários administrativos não podem ser membros de empresas clientes"))
                     .build();
-            }
-        } catch (NoResultException ignored) {}
+        }
 
         String userEmail = jwt.getClaim("email");
         var result = invitationService.acceptInvitation(token, userId, userEmail);

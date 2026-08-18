@@ -1,6 +1,6 @@
 package com.saas.profile.controller;
 
-import com.saas.profile.repository.UserTenantRepository;
+import com.saas.profile.service.TenantService;
 import io.quarkus.security.Authenticated;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
@@ -29,7 +29,7 @@ import java.util.UUID;
 public class TenantMineResource {
 
     @Inject
-    UserTenantRepository userTenantRepository;
+    TenantService tenantService;
 
     @Inject
     JsonWebToken jwt;
@@ -48,28 +48,6 @@ public class TenantMineResource {
     @APIResponse(responseCode = "401", description = "JWT do Supabase ausente, inválido ou expirado.")
     public Response myTenants() {
         UUID userId = UUID.fromString(jwt.getSubject());
-        var rows = userTenantRepository.findAllByUser(userId);
-        var result = rows.stream().map(r -> {
-            var tenant = new java.util.LinkedHashMap<String, Object>();
-            tenant.put("id", r.tenantId());
-            tenant.put("name", r.tenantName());
-            tenant.put("slug", r.tenantSlug());
-            tenant.put("status", r.tenantStatus());
-            tenant.put("type", r.tenantType());
-            tenant.put("plan_id", r.planId());
-            tenant.put("trial_ends_at", r.trialEndsAt());
-            tenant.put("created_at", r.createdAt());
-            tenant.put("updated_at", r.updatedAt());
-
-            var ut = new java.util.LinkedHashMap<String, Object>();
-            ut.put("id", r.id());
-            ut.put("user_id", r.userId());
-            ut.put("tenant_id", r.tenantId());
-            ut.put("role", r.role());
-            ut.put("is_active", r.isActive());
-            ut.put("tenant", tenant);
-            return ut;
-        }).toList();
-        return Response.ok(result).build();
+        return Response.ok(tenantService.listMyTenants(userId)).build();
     }
 }

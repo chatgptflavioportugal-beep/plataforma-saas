@@ -23,4 +23,7 @@ EXPOSE 8084
 HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
   CMD wget -qO- "http://127.0.0.1:${PORT}/q/health/ready" || exit 1
 
-CMD ["sh", "-c", "java -Dquarkus.http.host=0.0.0.0 -Dquarkus.http.port=${PORT} -jar quarkus-run.jar"]
+# AMBIENTE=dev|hml|prod escolhe o profile do Quarkus sem recompilar (default: prod).
+# hml usa as mesmas propriedades de prod — nada diverge além de variáveis de ambiente
+# já externalizadas em application.properties.
+CMD ["sh", "-c", "java -Dquarkus.http.host=0.0.0.0 -Dquarkus.http.port=${PORT} -Dquarkus.profile=${AMBIENTE:-prod} -jar quarkus-run.jar"]

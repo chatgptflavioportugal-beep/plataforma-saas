@@ -35,6 +35,9 @@ public class Tenant extends PanacheEntityBase {
     @Column(nullable = false)
     public String status = "active";
 
+    @Column(nullable = false)
+    public String type;
+
     @Column(name = "plan_id")
     public UUID planId;
 
