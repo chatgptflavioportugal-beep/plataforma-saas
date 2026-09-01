@@ -1,10 +1,10 @@
 package com.saas.subscription.scheduler;
 
 import com.saas.subscription.entity.ProfileModuleSubscription;
-import com.saas.subscription.repository.ModuleTrialHistoryRepository;
-import com.saas.subscription.repository.ProfileModuleSubscriptionRepository;
-import com.saas.subscription.repository.TrialCampaignRepository;
-import com.saas.subscription.repository.UserTenantRepository;
+import com.saas.subscription.dao.ModuleTrialHistoryDAO;
+import com.saas.subscription.dao.ProfileModuleSubscriptionDAO;
+import com.saas.subscription.dao.TrialCampaignDAO;
+import com.saas.subscription.dao.UserTenantDAO;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -21,8 +21,8 @@ import java.util.stream.Collectors;
  * coerente com expires_at e mantém trial_campaigns.status coerente com sua janela de
  * datas (start_date/end_date).
  *
- * As checagens de acesso em tempo real (ModuleAccessService, DashboardService,
- * TenantSubscriptionRepository) já tratam uma assinatura ACTIVE, TRIAL ou
+ * As checagens de acesso em tempo real (ModuleAccessNegocio, DashboardNegocio,
+ * TenantSubscriptionDAO) já tratam uma assinatura ACTIVE, TRIAL ou
  * TRIAL_CANCELLED vencida como expirada independente deste job — este scheduler só
  * mantém a coluna status correta para telas que exibem o valor persistido (ex.:
  * badge de status em SubscriptionsPage). Da mesma forma, a disponibilidade de vagas
@@ -36,16 +36,16 @@ public class TrialSchedulerJobs {
     private static final Logger LOG = Logger.getLogger(TrialSchedulerJobs.class);
 
     @Inject
-    ProfileModuleSubscriptionRepository subscriptionRepository;
+    ProfileModuleSubscriptionDAO subscriptionDAO;
 
     @Inject
-    ModuleTrialHistoryRepository moduleTrialHistoryRepository;
+    ModuleTrialHistoryDAO moduleTrialHistoryDAO;
 
     @Inject
-    UserTenantRepository userTenantRepository;
+    UserTenantDAO userTenantDAO;
 
     @Inject
-    TrialCampaignRepository trialCampaignRepository;
+    TrialCampaignDAO trialCampaignDAO;
 
     /**
      * Dois caminhos distintos ao vencer trial_end_at (expires_at):
@@ -57,7 +57,7 @@ public class TrialSchedulerJobs {
     @Scheduled(cron = "0 0 * * * ?")
     @Transactional
     public void expireOverdueModuleSubscriptions() {
-        List<ProfileModuleSubscription> overdue = subscriptionRepository.list(
+        List<ProfileModuleSubscription> overdue = subscriptionDAO.list(
             "status in ?1 and expiresAt is not null and expiresAt < ?2",
             List.of("ACTIVE", "TRIAL", "TRIAL_CANCELLED"), OffsetDateTime.now());
 
@@ -72,7 +72,7 @@ public class TrialSchedulerJobs {
             // cancelado ou não — está efetivamente terminando agora.
             if (subscription.trialHistoryId != null
                     && ("TRIAL".equals(subscription.status) || "TRIAL_CANCELLED".equals(subscription.status))) {
-                moduleTrialHistoryRepository.markFinished(subscription.trialHistoryId, false);
+                moduleTrialHistoryDAO.markFinished(subscription.trialHistoryId, false);
             }
 
             if ("TRIAL_CANCELLED".equals(subscription.status) || "ACTIVE".equals(subscription.status)) {
@@ -90,7 +90,7 @@ public class TrialSchedulerJobs {
 
         // Assinatura de módulo expirou — invalida PAT/MAT em cache dos membros do tenant
         // para que o front reavalie o acesso na próxima requisição, sem esperar o MAT expirar.
-        userTenantRepository.bumpVersionForTenants(affectedTenantIds);
+        userTenantDAO.bumpVersionForTenants(affectedTenantIds);
 
         LOG.infof("Expiradas %d assinaturas de módulo vencidas (%d aguardando pagamento)", expiredCancelled, pendingPayment);
     }
@@ -104,10 +104,10 @@ public class TrialSchedulerJobs {
     @Scheduled(cron = "0 15 * * * ?")
     @Transactional
     public void syncTrialCampaignStatuses() {
-        long scheduledToActive = trialCampaignRepository.update(
+        long scheduledToActive = trialCampaignDAO.update(
             "status = 'ACTIVE' where status = 'SCHEDULED' and (startDate is null or startDate <= current_date)");
 
-        long activeToClosed = trialCampaignRepository.update(
+        long activeToClosed = trialCampaignDAO.update(
             "status = 'CLOSED' where status = 'ACTIVE' and endDate is not null and endDate < current_date");
 
         if (scheduledToActive > 0 || activeToClosed > 0) {

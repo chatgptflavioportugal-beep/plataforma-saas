@@ -11,10 +11,10 @@ import java.util.UUID;
 
 /**
  * Mapeia user_tenants (mesma tabela já consultada via SQL nativo em
- * UserTenantRepository/TenantSubscriptionRepository). Este serviço não usa
+ * UserTenantDAO/TenantSubscriptionDAO). Este serviço não usa
  * JPQL nem Panache — toda leitura continua via EntityManager.createNativeQuery.
  * Sem nenhuma @Entity, o Hibernate ORM não registra o persistence unit e o
- * EntityManager injetado nos repositórios/resources falha ao subir (ver
+ * EntityManager injetado nos DAOs/resources falha ao subir (ver
  * docs/decisoes-pos-revisao-arquitetura.md, item 5). Esta classe existe só
  * para ativar o persistence unit — quarkus.hibernate-orm.database.generation
  * =none, então nunca é usada para gerar/validar schema.

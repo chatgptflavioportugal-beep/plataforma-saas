@@ -11,7 +11,7 @@ from app_logging.logger import configure_logging
 from config.config import settings
 from db.database import close_pool, init_pool
 from health import routes as health_routes
-from routes import pdf_routes
+from resource import pdf_resource
 from responses.envelopes import ErrorResponse
 
 configure_logging(settings.LOG_LEVEL, settings.LOG_FORMAT)
@@ -48,7 +48,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-app.include_router(pdf_routes.router)
+app.include_router(pdf_resource.router)
 app.include_router(health_routes.router)
 
 

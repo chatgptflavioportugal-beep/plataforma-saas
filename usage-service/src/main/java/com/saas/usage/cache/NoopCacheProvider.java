@@ -6,7 +6,7 @@ import java.util.Optional;
 
 /**
  * Implementação padrão enquanto o Redis não é ativado (ver contexto/fluxo-multi-tenant do
- * projeto): não guarda nada, delega toda a leitura/escrita ao Postgres via UsageCounterRepository.
+ * projeto): não guarda nada, delega toda a leitura/escrita ao Postgres via UsageCounterDAO.
  * Trocar por um RedisCacheProvider real é a única mudança necessária para ativar o cache.
  */
 @ApplicationScoped

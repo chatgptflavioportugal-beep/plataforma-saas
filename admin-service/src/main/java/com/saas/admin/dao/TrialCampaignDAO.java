@@ -360,7 +360,7 @@ public class TrialCampaignDAO {
         ).setParameter("reason", reason).setParameter("userId", userId).setParameter("id", id).executeUpdate();
     }
 
-    // ─── Usado por AdminPlanService ao gerar uma nova versão de plano ─────────
+    // ─── Usado por AdminPlanNegocioImpl ao gerar uma nova versão de plano ─────
 
     public boolean isFreePlanVersionModule(String planVersionModuleId) {
         Number count = (Number) em.createNativeQuery(

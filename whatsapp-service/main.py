@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from app_logging.logger import configure_logging
 from config.config import settings
 from db.database import close_pool, init_pool
-from modules.whatsapp.api import routes as whatsapp_routes
+from modules.whatsapp.resource import whatsapp_resource as whatsapp_routes
 from responses.envelopes import ErrorResponse
 
 configure_logging(settings.LOG_LEVEL, settings.LOG_FORMAT)

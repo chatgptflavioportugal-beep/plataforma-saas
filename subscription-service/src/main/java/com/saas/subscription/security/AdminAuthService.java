@@ -1,8 +1,8 @@
 package com.saas.subscription.security;
 
 import com.saas.subscription.entity.UserProfile;
-import com.saas.subscription.repository.AdminAccessLevelPermissionRepository;
-import com.saas.subscription.repository.UserProfileRepository;
+import com.saas.subscription.dao.AdminAccessLevelPermissionDAO;
+import com.saas.subscription.dao.UserProfileDAO;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.ForbiddenException;
@@ -21,10 +21,10 @@ import java.util.UUID;
 public class AdminAuthService {
 
     @Inject
-    UserProfileRepository userProfileRepository;
+    UserProfileDAO userProfileDAO;
 
     @Inject
-    AdminAccessLevelPermissionRepository adminAccessLevelPermissionRepository;
+    AdminAccessLevelPermissionDAO adminAccessLevelPermissionDAO;
 
     @Inject
     JsonWebToken jwt;
@@ -41,7 +41,7 @@ public class AdminAuthService {
      */
     public void requireAdminPermission(String permissionKey) {
         UUID userId = UUID.fromString(currentUserId());
-        UserProfile profile = userProfileRepository.findByIdOptional(userId)
+        UserProfile profile = userProfileDAO.findByIdOptional(userId)
             .orElseThrow(() -> new ForbiddenException("Perfil de usuário não encontrado"));
 
         if ("SUPER_ADMIN".equals(profile.systemRole)) return;
@@ -57,7 +57,7 @@ public class AdminAuthService {
         if (profile.adminAccessLevelId == null)
             throw new ForbiddenException("Você não possui permissão para executar esta ação");
 
-        boolean hasPermission = adminAccessLevelPermissionRepository
+        boolean hasPermission = adminAccessLevelPermissionDAO
             .hasPermission(profile.adminAccessLevelId, permissionKey);
 
         if (!hasPermission)

@@ -1,7 +1,7 @@
 package com.saas.auth.security;
 
-import com.saas.auth.repository.TenantSubscriptionRepository;
-import com.saas.auth.repository.UserTenantRepository;
+import com.saas.auth.dao.TenantSubscriptionDAO;
+import com.saas.auth.dao.UserTenantDAO;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -32,10 +32,10 @@ public class TenantResolutionFilter implements ContainerRequestFilter {
     SecurityIdentity identity;
 
     @Inject
-    UserTenantRepository userTenantRepository;
+    UserTenantDAO userTenantDAO;
 
     @Inject
-    TenantSubscriptionRepository subscriptionRepository;
+    TenantSubscriptionDAO subscriptionDAO;
 
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
@@ -52,15 +52,15 @@ public class TenantResolutionFilter implements ContainerRequestFilter {
         // apenas do vínculo ativo em user_tenants (já validado acima). A assinatura é
         // resolvida de forma tolerante: se não houver nenhuma, segue com defaults vazios
         // em vez de bloquear a requisição.
-        var subscription = subscriptionRepository.findActiveByTenant(userTenant.tenantId());
+        var subscription = subscriptionDAO.findActiveByTenant(userTenant.tenantId());
 
         var tenantCtx = new TenantContext(
                 userId,
                 userTenant.tenantId(),
                 userTenant.role(),
-                subscription.map(TenantSubscriptionRepository.SubscriptionResult::planCode).orElse(null),
-                subscription.map(TenantSubscriptionRepository.SubscriptionResult::moduleSlugSet).orElse(java.util.Set.of()),
-                subscription.map(TenantSubscriptionRepository.SubscriptionResult::status).orElse(null)
+                subscription.map(TenantSubscriptionDAO.SubscriptionResult::planCode).orElse(null),
+                subscription.map(TenantSubscriptionDAO.SubscriptionResult::moduleSlugSet).orElse(java.util.Set.of()),
+                subscription.map(TenantSubscriptionDAO.SubscriptionResult::status).orElse(null)
         );
 
         var principal = new TenantContextPrincipal(tenantCtx);
@@ -72,13 +72,13 @@ public class TenantResolutionFilter implements ContainerRequestFilter {
         });
     }
 
-    private UserTenantRepository.UserTenantResult resolveUserTenant(UUID userId, String tenantIdHeader) {
+    private UserTenantDAO.UserTenantResult resolveUserTenant(UUID userId, String tenantIdHeader) {
         if (tenantIdHeader != null && !tenantIdHeader.isBlank()) {
             UUID tenantId = UUID.fromString(tenantIdHeader);
-            return userTenantRepository.findByUserAndTenant(userId, tenantId)
+            return userTenantDAO.findByUserAndTenant(userId, tenantId)
                     .orElseThrow(() -> new jakarta.ws.rs.NotAuthorizedException("Acesso negado ao tenant"));
         }
-        return userTenantRepository.findDefaultTenant(userId)
+        return userTenantDAO.findDefaultTenant(userId)
                 .orElseThrow(() -> new jakarta.ws.rs.NotAuthorizedException("Usuário sem tenant"));
     }
 }

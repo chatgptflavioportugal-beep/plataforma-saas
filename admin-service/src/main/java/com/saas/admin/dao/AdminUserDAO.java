@@ -108,7 +108,7 @@ public class AdminUserDAO {
 
         if (result.isEmpty()) return Optional.empty();
         Object[] r = result.get(0);
-        // tempPassword/emailSent são preenchidos pelo Service, não fazem parte da consulta
+        // tempPassword/emailSent são preenchidos pela camada de negócio, não fazem parte da consulta
         return Optional.of(new AdminUserCreatedDTO(
             (String) r[0], (String) r[1], (String) r[2], (String) r[3], (Boolean) r[4],
             (String) r[5], (String) r[6], (String) r[7], null, null));

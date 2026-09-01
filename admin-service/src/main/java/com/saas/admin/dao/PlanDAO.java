@@ -19,7 +19,7 @@ import java.util.UUID;
 /**
  * Acesso a dados de plans / plan_version_modules / plan_version_module_limits.
  * Toda regra de negócio (validações, checagem de assinantes, cópia de versão)
- * fica em {@link com.saas.admin.service.AdminPlanService} — esta classe só
+ * fica em {@link com.saas.admin.negocio.AdminPlanNegocioImpl} — esta classe só
  * executa SQL.
  */
 @ApplicationScoped
@@ -94,7 +94,7 @@ public class PlanDAO {
         " WHERE pvm3.plan_id = p.id AND tc.status = 'CANCELLED'), 0)";
 
     // ----------------------------------------------------------------
-    // Snapshot interno da versão atual de um plano (DAO -> Service apenas)
+    // Snapshot interno da versão atual de um plano (DAO -> Negocio apenas)
     // ----------------------------------------------------------------
 
     public record CurrentPlanRow(
