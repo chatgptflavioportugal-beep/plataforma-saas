@@ -1,6 +1,5 @@
 package com.saas.admin.resource;
 
-import com.saas.admin.dao.AdminUserDAO;
 import com.saas.admin.dto.AdminUserCreatedDTO;
 import com.saas.admin.dto.AdminUserDTO;
 import com.saas.admin.dto.AdminUserStatusRequest;
@@ -10,6 +9,8 @@ import com.saas.admin.dto.SendPasswordEmailRequest;
 import com.saas.admin.dto.UpdateAdminUserRequest;
 import com.saas.admin.security.AdminAuthService;
 import com.saas.admin.negocio.impl.AdminUsersNegocio;
+import com.saas.admin.to.EmailRoleTO;
+import com.saas.admin.to.ExistingUserTO;
 import io.quarkus.security.Authenticated;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
@@ -114,7 +115,7 @@ public class AdminUsersResource {
             return Response.status(400).entity(Map.of("error", "Nível de acesso não encontrado ou inativo")).build();
 
         String normalizedEmail = email.trim().toLowerCase();
-        Optional<AdminUserDAO.ExistingUserRow> existing = usersNegocio.findExistingByEmail(normalizedEmail);
+        Optional<ExistingUserTO> existing = usersNegocio.findExistingByEmail(normalizedEmail);
 
         if (existing.isPresent()) {
             String existingRole = existing.get().systemRole();
@@ -274,7 +275,7 @@ public class AdminUsersResource {
 
         boolean sendPasswordEmail = !Boolean.FALSE.equals(req.sendPasswordEmail());
 
-        Optional<AdminUserDAO.EmailRoleRow> found = usersNegocio.findEmailAndRole(id);
+        Optional<EmailRoleTO> found = usersNegocio.findEmailAndRole(id);
         if (found.isEmpty())
             return Response.status(404).entity(Map.of("error", "Usuário não encontrado")).build();
 

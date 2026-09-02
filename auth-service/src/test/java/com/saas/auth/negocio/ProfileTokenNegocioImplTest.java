@@ -1,10 +1,10 @@
 package com.saas.auth.negocio;
 
 import com.saas.auth.dao.AccessLevelPermissionDAO;
-import com.saas.auth.dao.AccessLevelPermissionDAO.AccessLevelPermission;
 import com.saas.auth.dao.TenantDAO;
 import com.saas.auth.dao.UserTenantDAO;
 import com.saas.auth.security.TokenService;
+import com.saas.auth.to.AccessLevelPermissionTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -72,8 +72,8 @@ class ProfileTokenNegocioImplTest {
     void memberReceivesOnlyAccessLevelPermissionsPlusDashboard() {
         String accessLevelId = UUID.randomUUID().toString();
         when(accessLevelPermissionDAO.findAdminPermissions(userId, tenantId)).thenReturn(List.of(
-                new AccessLevelPermission(accessLevelId, "members.view"),
-                new AccessLevelPermission(accessLevelId, "billing.view")
+                new AccessLevelPermissionTO(accessLevelId, "members.view"),
+                new AccessLevelPermissionTO(accessLevelId, "billing.view")
         ));
 
         var response = negocio.issueAccessToken(userId, tenantId, "member");

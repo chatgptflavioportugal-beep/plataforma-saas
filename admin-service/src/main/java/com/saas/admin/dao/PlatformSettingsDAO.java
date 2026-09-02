@@ -1,6 +1,8 @@
 package com.saas.admin.dao;
 
 import com.saas.admin.dto.PlatformSettingDTO;
+import com.saas.admin.to.PlatformSettingTO;
+import com.saas.platformdatabase.query.DatabaseQuery;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -13,14 +15,17 @@ public class PlatformSettingsDAO {
     @Inject
     EntityManager em;
 
-    @SuppressWarnings("unchecked")
+    @Inject
+    DatabaseQuery databaseQuery;
+
     public List<PlatformSettingDTO> findAll() {
-        List<Object[]> rows = em.createNativeQuery(
-            "SELECT key, value, description, updated_at::text FROM platform_settings ORDER BY key"
-        ).getResultList();
+        List<PlatformSettingTO> rows = databaseQuery
+                .nativeQuery(em, "SELECT key, value, description, updated_at::text FROM platform_settings ORDER BY key",
+                        PlatformSettingTO.class)
+                .getResultList();
 
         return rows.stream()
-            .map(row -> new PlatformSettingDTO((String) row[0], (String) row[1], (String) row[2], (String) row[3]))
+            .map(row -> new PlatformSettingDTO(row.key(), row.value(), row.description(), row.updatedAt()))
             .toList();
     }
 

@@ -28,6 +28,7 @@ module-catalog-service/target/
 usage-service/target/
 admin-service/target/
 libs/platform-module-security-quarkus/target/
+libs/platform-database/target/
 
 # Python
 pdf-service/**/__pycache__/

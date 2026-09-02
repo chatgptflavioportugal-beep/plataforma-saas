@@ -1,6 +1,8 @@
 package com.saas.admin.dao;
 
 import com.saas.admin.dto.FeatureFlagDTO;
+import com.saas.admin.to.FeatureFlagTO;
+import com.saas.platformdatabase.query.DatabaseQuery;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -14,22 +16,19 @@ public class FeatureFlagDAO {
     @Inject
     EntityManager em;
 
-    @SuppressWarnings("unchecked")
+    @Inject
+    DatabaseQuery databaseQuery;
+
     public List<FeatureFlagDTO> findAll() {
-        List<Object[]> rows = em.createNativeQuery(
-            "SELECT id::text, key, name, description, is_enabled, created_at::text, updated_at::text " +
-            "FROM feature_flags ORDER BY key"
-        ).getResultList();
+        List<FeatureFlagTO> rows = databaseQuery
+                .nativeQuery(em, "SELECT id::text, key, name, description, is_enabled, created_at::text, updated_at::text " +
+                        "FROM feature_flags ORDER BY key", FeatureFlagTO.class)
+                .getResultList();
 
         return rows.stream()
             .map(row -> new FeatureFlagDTO(
-                (String) row[0],
-                (String) row[1],
-                (String) row[2],
-                (String) row[3],
-                (Boolean) row[4],
-                (String) row[5],
-                (String) row[6]))
+                row.id(), row.key(), row.name(), row.description(),
+                row.isEnabled(), row.createdAt(), row.updatedAt()))
             .toList();
     }
 

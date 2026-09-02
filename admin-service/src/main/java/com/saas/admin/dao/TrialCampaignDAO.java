@@ -6,13 +6,20 @@ import com.saas.admin.dto.TrialCampaignHistoryEntryDTO;
 import com.saas.admin.dto.TrialCampaignListItemDTO;
 import com.saas.admin.dto.TrialCampaignParticipantDTO;
 import com.saas.admin.dto.TrialCampaignRequest;
+import com.saas.admin.to.StatusCountTO;
+import com.saas.admin.to.TrialCampaignBaseTO;
+import com.saas.admin.to.TrialCampaignDetailTO;
+import com.saas.admin.to.TrialCampaignHistoryEntryTO;
+import com.saas.admin.to.TrialCampaignListItemTO;
+import com.saas.admin.to.TrialCampaignParticipantTO;
+import com.saas.platformdatabase.query.DatabaseQuery;
+import com.saas.platformdatabase.query.NativeQuery;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.Query;
 
-import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,15 +32,20 @@ public class TrialCampaignDAO {
     @Inject
     EntityManager em;
 
+    @Inject
+    DatabaseQuery databaseQuery;
+
     // Colunas comuns a listByPlan/listAll/getDetail — mantidas em um só lugar para
-    // não deixar os três SELECTs divergirem ao adicionar campos (índices 0-19).
+    // não deixar os três SELECTs divergirem ao adicionar campos. Cada coluna tem alias
+    // explicito porque tc/pm/cu/uu repetem nomes de coluna entre si (id, name, full_name).
     private static final String COMMON_COLUMNS =
-        "tc.id::text, tc.plan_version_module_id::text, pm.id::text, pm.name, " +
-        "tc.name, tc.status, tc.days, tc.max_slots, tc.used_slots, " +
-        "tc.start_date::text, tc.end_date::text, tc.notes, tc.priority, " +
-        "tc.created_at::text, tc.updated_at::text, " +
-        "tc.created_by_user_id::text, cu.full_name, " +
-        "tc.updated_by_user_id::text, uu.full_name, " +
+        "tc.id::text AS id, tc.plan_version_module_id::text AS plan_version_module_id, " +
+        "pm.id::text AS module_id, pm.name AS module_name, " +
+        "tc.name AS name, tc.status AS status, tc.days AS days, tc.max_slots AS max_slots, tc.used_slots AS used_slots, " +
+        "tc.start_date::text AS start_date, tc.end_date::text AS end_date, tc.notes AS notes, tc.priority AS priority, " +
+        "tc.created_at::text AS created_at, tc.updated_at::text AS updated_at, " +
+        "tc.created_by_user_id::text AS created_by_user_id, cu.full_name AS created_by_name, " +
+        "tc.updated_by_user_id::text AS updated_by_user_id, uu.full_name AS updated_by_name, " +
         "(tc.status = 'CLOSED' AND tc.end_date IS NOT NULL AND tc.end_date < CURRENT_DATE) AS expired ";
 
     private static final String COMMON_JOINS =
@@ -43,26 +55,23 @@ public class TrialCampaignDAO {
         "LEFT JOIN user_profiles cu ON cu.id = tc.created_by_user_id " +
         "LEFT JOIN user_profiles uu ON uu.id = tc.updated_by_user_id ";
 
-    private static TrialCampaignDTO toDTO(Object[] row) {
+    private static TrialCampaignDTO toDTO(TrialCampaignBaseTO row) {
         return new TrialCampaignDTO(
-            (String) row[0], (String) row[1], (String) row[2], (String) row[3],
-            (String) row[4], (String) row[5],
-            row[6] != null ? ((Number) row[6]).intValue() : null,
-            row[7] != null ? ((Number) row[7]).intValue() : null,
-            row[8] != null ? ((Number) row[8]).intValue() : null,
-            (String) row[9], (String) row[10], (String) row[11],
-            row[12] != null ? ((Number) row[12]).intValue() : null,
-            (String) row[13], (String) row[14], (String) row[15], (String) row[16],
-            (String) row[17], (String) row[18], Boolean.TRUE.equals(row[19]));
+            row.id(), row.planVersionModuleId(), row.moduleId(), row.moduleName(),
+            row.name(), row.status(), row.days(), row.maxSlots(), row.usedSlots(),
+            row.startDate(), row.endDate(), row.notes(), row.priority(),
+            row.createdAt(), row.updatedAt(), row.createdByUserId(), row.createdByName(),
+            row.updatedByUserId(), row.updatedByName(), row.expired());
     }
 
-    @SuppressWarnings("unchecked")
     public List<TrialCampaignDTO> findByPlan(String planId) {
-        List<Object[]> rows = em.createNativeQuery(
-            "SELECT " + COMMON_COLUMNS + COMMON_JOINS +
-            "WHERE pvm.plan_id::text = :planId " +
-            "ORDER BY pm.name, tc.priority DESC, tc.created_at DESC"
-        ).setParameter("planId", planId).getResultList();
+        List<TrialCampaignBaseTO> rows = databaseQuery
+                .nativeQuery(em, "SELECT " + COMMON_COLUMNS + COMMON_JOINS +
+                        "WHERE pvm.plan_id::text = :planId " +
+                        "ORDER BY pm.name, tc.priority DESC, tc.created_at DESC",
+                        TrialCampaignBaseTO.class)
+                .setParameter("planId", planId)
+                .getResultList();
 
         return rows.stream().map(TrialCampaignDAO::toDTO).toList();
     }
@@ -73,7 +82,6 @@ public class TrialCampaignDAO {
         String sortBy, String sortDir, int page, int size) {
     }
 
-    @SuppressWarnings("unchecked")
     public TrialCampaignListResult listAll(ListFilters f) {
         StringBuilder where = new StringBuilder("WHERE 1 = 1 ");
         Map<String, Object> params = new LinkedHashMap<>();
@@ -133,29 +141,25 @@ public class TrialCampaignDAO {
         long total = ((Number) countQuery.getSingleResult()).longValue();
 
         int offset = (f.page() - 1) * f.size();
-        Query dataQuery = em.createNativeQuery(
+        NativeQuery<TrialCampaignListItemTO> dataQuery = databaseQuery.nativeQuery(em,
             "SELECT " + COMMON_COLUMNS + ", p.name AS plan_name, p.code AS plan_code, p.version AS plan_version " +
             COMMON_JOINS + "JOIN plans p ON p.id = pvm.plan_id " + where +
             "ORDER BY " + orderColumn + " " + orderDir + ", tc.id " +
-            "LIMIT :limit OFFSET :offset"
+            "LIMIT :limit OFFSET :offset",
+            TrialCampaignListItemTO.class
         );
         params.forEach(dataQuery::setParameter);
         dataQuery.setParameter("limit", f.size());
         dataQuery.setParameter("offset", offset);
-        List<Object[]> rows = dataQuery.getResultList();
+        List<TrialCampaignListItemTO> rows = dataQuery.getResultList();
 
         List<TrialCampaignListItemDTO> items = rows.stream().map(row -> new TrialCampaignListItemDTO(
-            (String) row[0], (String) row[1], (String) row[2], (String) row[3],
-            (String) row[4], (String) row[5],
-            row[6] != null ? ((Number) row[6]).intValue() : null,
-            row[7] != null ? ((Number) row[7]).intValue() : null,
-            row[8] != null ? ((Number) row[8]).intValue() : null,
-            (String) row[9], (String) row[10], (String) row[11],
-            row[12] != null ? ((Number) row[12]).intValue() : null,
-            (String) row[13], (String) row[14], (String) row[15], (String) row[16],
-            (String) row[17], (String) row[18], Boolean.TRUE.equals(row[19]),
-            (String) row[20], (String) row[21],
-            row[22] != null ? ((Number) row[22]).intValue() : null
+            row.id(), row.planVersionModuleId(), row.moduleId(), row.moduleName(),
+            row.name(), row.status(), row.days(), row.maxSlots(), row.usedSlots(),
+            row.startDate(), row.endDate(), row.notes(), row.priority(),
+            row.createdAt(), row.updatedAt(), row.createdByUserId(), row.createdByName(),
+            row.updatedByUserId(), row.updatedByName(), row.expired(),
+            row.planName(), row.planCode(), row.planVersion()
         )).toList();
 
         return new TrialCampaignListResult(items, total);
@@ -164,19 +168,20 @@ public class TrialCampaignDAO {
     public record TrialCampaignListResult(List<TrialCampaignListItemDTO> items, long total) {
     }
 
-    @SuppressWarnings("unchecked")
     public Optional<TrialCampaignDetailDTO> findDetail(String id) {
-        Object[] row;
-        try {
-            row = (Object[]) em.createNativeQuery(
-                "SELECT " + COMMON_COLUMNS +
-                ", pm.slug, pm.icon_path, p.name, p.code, p.version, pvm.monthly_price, pvm.annual_monthly_price " +
-                COMMON_JOINS + "JOIN plans p ON p.id = pvm.plan_id " +
-                "WHERE tc.id::text = :id"
-            ).setParameter("id", id).getSingleResult();
-        } catch (NoResultException e) {
-            return Optional.empty();
-        }
+        TrialCampaignDetailTO row = databaseQuery
+                .nativeQuery(em, "SELECT " + COMMON_COLUMNS +
+                        ", pm.slug AS module_slug, pm.icon_path AS module_icon, p.name AS plan_name, " +
+                        "p.code AS plan_code, p.version AS plan_version, pvm.monthly_price AS plan_monthly_price, " +
+                        "pvm.annual_monthly_price AS plan_annual_price " +
+                        COMMON_JOINS + "JOIN plans p ON p.id = pvm.plan_id " +
+                        "WHERE tc.id::text = :id",
+                        TrialCampaignDetailTO.class)
+                .setParameter("id", id)
+                .getOptionalResult()
+                .orElse(null);
+
+        if (row == null) return Optional.empty();
 
         long totalParticipants = ((Number) em.createNativeQuery(
             "SELECT COUNT(*) FROM module_trial_history WHERE trial_campaign_id::text = :id"
@@ -189,73 +194,76 @@ public class TrialCampaignDAO {
         double conversionPercent = totalParticipants == 0 ? 0.0 : (converted * 100.0 / totalParticipants);
         conversionPercent = Math.round(conversionPercent * 10.0) / 10.0;
 
-        List<Object[]> statusCounts = em.createNativeQuery(
-            "SELECT pms.status, COUNT(*) FROM profile_module_subscriptions pms " +
-            "JOIN module_trial_history h ON h.id = pms.trial_history_id " +
-            "WHERE h.trial_campaign_id::text = :id " +
-            "GROUP BY pms.status"
-        ).setParameter("id", id).getResultList();
+        List<StatusCountTO> statusCounts = databaseQuery
+                .nativeQuery(em, """
+                        SELECT pms.status, COUNT(*)
+                        FROM profile_module_subscriptions pms
+                        JOIN module_trial_history h ON h.id = pms.trial_history_id
+                        WHERE h.trial_campaign_id::text = :id
+                        GROUP BY pms.status
+                        """, StatusCountTO.class)
+                .setParameter("id", id)
+                .getResultList();
 
         long active = 0, expiredCount = 0, cancelledCount = 0;
-        for (Object[] sc : statusCounts) {
-            String st = (String) sc[0];
-            long count = ((Number) sc[1]).longValue();
+        for (StatusCountTO sc : statusCounts) {
+            String st = sc.status();
+            long count = sc.count();
             if ("TRIAL".equals(st)) active += count;
             else if ("EXPIRED".equals(st)) expiredCount += count;
             else if ("TRIAL_CANCELLED".equals(st) || "CANCELED".equals(st)) cancelledCount += count;
         }
 
         return Optional.of(new TrialCampaignDetailDTO(
-            (String) row[0], (String) row[1], (String) row[2], (String) row[3],
-            (String) row[4], (String) row[5],
-            row[6] != null ? ((Number) row[6]).intValue() : null,
-            row[7] != null ? ((Number) row[7]).intValue() : null,
-            row[8] != null ? ((Number) row[8]).intValue() : null,
-            (String) row[9], (String) row[10], (String) row[11],
-            row[12] != null ? ((Number) row[12]).intValue() : null,
-            (String) row[13], (String) row[14], (String) row[15], (String) row[16],
-            (String) row[17], (String) row[18], Boolean.TRUE.equals(row[19]),
-            (String) row[20], (String) row[21], (String) row[22], (String) row[23],
-            row[24] != null ? ((Number) row[24]).intValue() : null,
-            (BigDecimal) row[25], (BigDecimal) row[26],
+            row.id(), row.planVersionModuleId(), row.moduleId(), row.moduleName(),
+            row.name(), row.status(), row.days(), row.maxSlots(), row.usedSlots(),
+            row.startDate(), row.endDate(), row.notes(), row.priority(),
+            row.createdAt(), row.updatedAt(), row.createdByUserId(), row.createdByName(),
+            row.updatedByUserId(), row.updatedByName(), row.expired(),
+            row.moduleSlug(), row.moduleIcon(), row.planName(), row.planCode(), row.planVersion(),
+            row.planMonthlyPrice(), row.planAnnualPrice(),
             totalParticipants, conversionPercent, active, expiredCount, cancelledCount));
     }
 
-    @SuppressWarnings("unchecked")
     public List<TrialCampaignParticipantDTO> findParticipants(String id) {
-        List<Object[]> rows = em.createNativeQuery(
-            "SELECT t.id::text, t.name, t.type, up.full_name, au.email, " +
-            "h.trial_started_at::text, h.trial_finished_at::text, h.trial_canceled_at::text, " +
-            "pms.status, h.became_customer " +
-            "FROM module_trial_history h " +
-            "JOIN tenants t ON t.id = h.tenant_id " +
-            "LEFT JOIN user_profiles up ON up.id = h.started_by_user_id " +
-            "LEFT JOIN auth.users au ON au.id = h.started_by_user_id " +
-            "LEFT JOIN profile_module_subscriptions pms ON pms.trial_history_id = h.id " +
-            "WHERE h.trial_campaign_id::text = :id " +
-            "ORDER BY h.trial_started_at DESC"
-        ).setParameter("id", id).getResultList();
+        List<TrialCampaignParticipantTO> rows = databaseQuery
+                .nativeQuery(em, """
+                        SELECT t.id::text, t.name, t.type, up.full_name, au.email,
+                        h.trial_started_at::text, h.trial_finished_at::text, h.trial_canceled_at::text,
+                        pms.status, h.became_customer
+                        FROM module_trial_history h
+                        JOIN tenants t ON t.id = h.tenant_id
+                        LEFT JOIN user_profiles up ON up.id = h.started_by_user_id
+                        LEFT JOIN auth.users au ON au.id = h.started_by_user_id
+                        LEFT JOIN profile_module_subscriptions pms ON pms.trial_history_id = h.id
+                        WHERE h.trial_campaign_id::text = :id
+                        ORDER BY h.trial_started_at DESC
+                        """, TrialCampaignParticipantTO.class)
+                .setParameter("id", id)
+                .getResultList();
 
         return rows.stream().map(row -> new TrialCampaignParticipantDTO(
-            (String) row[0], (String) row[1],
-            "individual".equals(row[2]) ? "INDIVIDUAL" : "COMPANY",
-            (String) row[3], (String) row[4], (String) row[5], (String) row[6], (String) row[7],
-            (String) row[8], Boolean.TRUE.equals(row[9])
+            row.tenantId(), row.tenantName(),
+            "individual".equals(row.tenantType()) ? "INDIVIDUAL" : "COMPANY",
+            row.fullName(), row.email(), row.trialStartedAt(), row.trialFinishedAt(), row.trialCanceledAt(),
+            row.subscriptionStatus(), Boolean.TRUE.equals(row.becameCustomer())
         )).toList();
     }
 
-    @SuppressWarnings("unchecked")
     public List<TrialCampaignHistoryEntryDTO> findHistory(String id) {
-        List<Object[]> rows = em.createNativeQuery(
-            "SELECT al.action, up.full_name, al.created_at::text " +
-            "FROM admin_audit_logs al " +
-            "LEFT JOIN user_profiles up ON up.id = al.actor_user_id " +
-            "WHERE al.resource = 'trial_campaigns' AND al.resource_id = :id " +
-            "ORDER BY al.created_at ASC"
-        ).setParameter("id", id).getResultList();
+        List<TrialCampaignHistoryEntryTO> rows = databaseQuery
+                .nativeQuery(em, """
+                        SELECT al.action, up.full_name AS actor_name, al.created_at::text
+                        FROM admin_audit_logs al
+                        LEFT JOIN user_profiles up ON up.id = al.actor_user_id
+                        WHERE al.resource = 'trial_campaigns' AND al.resource_id = :id
+                        ORDER BY al.created_at ASC
+                        """, TrialCampaignHistoryEntryTO.class)
+                .setParameter("id", id)
+                .getResultList();
 
         return rows.stream()
-            .map(row -> new TrialCampaignHistoryEntryDTO((String) row[0], (String) row[1], (String) row[2]))
+            .map(row -> new TrialCampaignHistoryEntryDTO(row.action(), row.actorName(), row.createdAt()))
             .toList();
     }
 

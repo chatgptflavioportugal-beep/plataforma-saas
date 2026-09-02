@@ -6,6 +6,7 @@ import com.saas.subscription.dto.response.DashboardModuleResponse;
 import com.saas.subscription.dto.response.DashboardServiceResponse;
 import com.saas.subscription.negocio.impl.DashboardNegocio;
 import com.saas.subscription.negocio.impl.TrialCampaignNegocio;
+import com.saas.subscription.to.ModuleAccessStatusTO;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -40,7 +41,7 @@ public class DashboardNegocioImpl implements DashboardNegocio {
 
     @Override
     public List<DashboardModuleResponse> listModulesWithAccessStatus(UUID tenantId, UUID userId, String role) {
-        List<DashboardDAO.ModuleRow> moduleRows = dashboardDAO.listModulesWithAccessStatus(tenantId);
+        List<ModuleAccessStatusTO> moduleRows = dashboardDAO.listModulesWithAccessStatus(tenantId);
 
         Set<UUID> memberServiceIds = "member".equals(role)
             ? profileAccessLevelPermissionDAO.findServiceIdsForMember(userId, tenantId)

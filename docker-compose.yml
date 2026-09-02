@@ -9,8 +9,11 @@ services:
   # -------------------------------------------------------
   auth-service:
     build:
-      context: ./auth-service
-      dockerfile: Dockerfile.dev
+      # Contexto na raiz do repo: o Dockerfile.dev precisa instalar
+      # libs/platform-database no repositório Maven local antes de compilar o
+      # serviço (ver libs/platform-database/README.md).
+      context: .
+      dockerfile: auth-service/Dockerfile.dev
     ports:
       - "8082:8082"
     environment:
@@ -42,8 +45,11 @@ services:
   # -------------------------------------------------------
   module-catalog-service:
     build:
-      context: ./module-catalog-service
-      dockerfile: Dockerfile.dev
+      # Contexto na raiz do repo: o Dockerfile.dev precisa instalar
+      # libs/platform-database no repositório Maven local antes de compilar o
+      # serviço (ver libs/platform-database/README.md).
+      context: .
+      dockerfile: module-catalog-service/Dockerfile.dev
     ports:
       - "8083:8083"
     environment:
@@ -69,8 +75,11 @@ services:
   # -------------------------------------------------------
   profile-service:
     build:
-      context: ./profile-service
-      dockerfile: Dockerfile.dev
+      # Contexto na raiz do repo: o Dockerfile.dev precisa instalar
+      # libs/platform-database no repositório Maven local antes de compilar o
+      # serviço (ver libs/platform-database/README.md).
+      context: .
+      dockerfile: profile-service/Dockerfile.dev
     ports:
       - "8084:8084"
     environment:
@@ -103,8 +112,11 @@ services:
   # -------------------------------------------------------
   subscription-service:
     build:
-      context: ./subscription-service
-      dockerfile: Dockerfile.dev
+      # Contexto na raiz do repo: o Dockerfile.dev precisa instalar
+      # libs/platform-database no repositório Maven local antes de compilar o
+      # serviço (ver libs/platform-database/README.md).
+      context: .
+      dockerfile: subscription-service/Dockerfile.dev
     ports:
       - "8085:8085"
     environment:
@@ -132,8 +144,9 @@ services:
   usage-service:
     build:
       # Contexto na raiz do repo: o Dockerfile.dev precisa instalar
-      # libs/platform-module-security-quarkus no repositório Maven local antes
-      # de compilar o serviço (ver libs/platform-module-security-quarkus/README.md).
+      # libs/platform-module-security-quarkus e libs/platform-database no
+      # repositório Maven local antes de compilar o serviço (ver README.md de
+      # cada lib).
       context: .
       dockerfile: usage-service/Dockerfile.dev
     ports:
@@ -160,8 +173,11 @@ services:
   # -------------------------------------------------------
   admin-service:
     build:
-      context: ./admin-service
-      dockerfile: Dockerfile.dev
+      # Contexto na raiz do repo: o Dockerfile.dev precisa instalar
+      # libs/platform-database no repositório Maven local antes de compilar o
+      # serviço (ver libs/platform-database/README.md).
+      context: .
+      dockerfile: admin-service/Dockerfile.dev
     ports:
       - "8087:8087"
     environment:

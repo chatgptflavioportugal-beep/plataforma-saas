@@ -1,8 +1,17 @@
 # syntax=docker/dockerfile:1.4
 FROM maven:3.9-eclipse-temurin-21
+
+# libs/platform-database não tem repositório Maven privado — instala no ~/.m2
+# local do container antes de compilar o serviço (ver libs/platform-database/README.md).
+# Contexto de build é a raiz do repositório (ver docker-compose.yml).
+WORKDIR /libs/platform-database
+COPY libs/platform-database/pom.xml .
+COPY libs/platform-database/src ./src
+RUN mvn install -N -DskipTests -q
+
 WORKDIR /app
-COPY pom.xml .
+COPY profile-service/pom.xml .
 RUN mvn dependency:go-offline -q
-COPY src ./src
+COPY profile-service/src ./src
 EXPOSE 8084
 CMD ["mvn", "quarkus:dev", "-Dquarkus.http.host=0.0.0.0"]

@@ -1,12 +1,14 @@
 package com.saas.subscription.dao;
 
 import com.saas.subscription.entity.Plan;
+import com.saas.subscription.to.ModuleBillingOptionTO;
+import com.saas.subscription.to.PlanCatalogTO;
+import com.saas.platformdatabase.query.DatabaseQuery;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -20,6 +22,9 @@ public class PlanDAO implements PanacheRepositoryBase<Plan, UUID> {
 
     @Inject
     EntityManager em;
+
+    @Inject
+    DatabaseQuery databaseQuery;
 
     // ----------------------------------------------------------------
     // Expressões SQL reutilizáveis para cálculo de totais pelos módulos
@@ -47,13 +52,6 @@ public class PlanDAO implements PanacheRepositoryBase<Plan, UUID> {
         " JOIN platform_modules pm ON pm.id = pvm.module_id" +
         " WHERE pvm.plan_id = p.id AND pvm.status = 'active'), '[]'::json)::text";
 
-    public record PlanCatalogRow(
-        UUID id, String name, String code, String description, BigDecimal priceMonthly, BigDecimal priceAnnual,
-        BigDecimal discountAnnualPercent, int maxUsers, int maxAiRequestsMonth, int sortOrder, int version,
-        String billingType, boolean isMostPopular, String planType, BigDecimal totalMonthlyPrice,
-        BigDecimal totalAnnualMonthlyPrice, BigDecimal totalAnnualPrice, int moduleCount, String modulesJson
-    ) {}
-
     /**
      * Versões correntes e ativas dos planos, com filtro opcional por tipo.
      * Mantida como Native Query: os totais/JSON de módulos são agregações
@@ -62,7 +60,7 @@ public class PlanDAO implements PanacheRepositoryBase<Plan, UUID> {
      * versão anterior concatenava o valor diretamente na string SQL.
      */
     @SuppressWarnings("unchecked")
-    public List<PlanCatalogRow> listActivePlans(String planType) {
+    public List<PlanCatalogTO> listActivePlans(String planType) {
         return listActivePlans(planType, null, null);
     }
 
@@ -72,12 +70,11 @@ public class PlanDAO implements PanacheRepositoryBase<Plan, UUID> {
      * informados, aplica LIMIT/OFFSET no próprio banco em vez de paginar em
      * memória após buscar tudo.
      */
-    @SuppressWarnings("unchecked")
-    public List<PlanCatalogRow> listActivePlans(String planType, Integer page, Integer size) {
+    public List<PlanCatalogTO> listActivePlans(String planType, Integer page, Integer size) {
         String typeFilter = (planType != null && !planType.isBlank()) ? " AND plan_type = :planType" : "";
         boolean paginate = page != null && size != null && page > 0 && size > 0;
 
-        var query = em.createNativeQuery(
+        var query = databaseQuery.nativeQuery(em,
                 "SELECT id, name, code, description, price_monthly, price_annual, " +
                 "discount_annual_percent, max_users, max_ai_requests_month, " +
                 "sort_order, version, billing_type, is_most_popular, plan_type, " +
@@ -89,26 +86,13 @@ public class PlanDAO implements PanacheRepositoryBase<Plan, UUID> {
                 "FROM plans p " +
                 "WHERE is_active = TRUE AND is_current_version = TRUE" + typeFilter +
                 " ORDER BY sort_order" +
-                (paginate ? " LIMIT :limit OFFSET :offset" : "")
-        );
+                (paginate ? " LIMIT :limit OFFSET :offset" : ""),
+                PlanCatalogTO.class);
         if (!typeFilter.isEmpty()) query.setParameter("planType", planType);
         if (paginate) query.setParameter("limit", size).setParameter("offset", (page - 1) * size);
 
-        List<Object[]> rows = query.getResultList();
-        return rows.stream().map(row -> new PlanCatalogRow(
-            (UUID) row[0], (String) row[1], (String) row[2], (String) row[3],
-            (BigDecimal) row[4], (BigDecimal) row[5], (BigDecimal) row[6],
-            ((Number) row[7]).intValue(), ((Number) row[8]).intValue(), ((Number) row[9]).intValue(),
-            ((Number) row[10]).intValue(), (String) row[11], (Boolean) row[12], (String) row[13],
-            (BigDecimal) row[14], (BigDecimal) row[15], (BigDecimal) row[16],
-            ((Number) row[17]).intValue(), (String) row[18]
-        )).toList();
+        return query.getResultList();
     }
-
-    public record ModuleBillingOptionRow(
-        UUID moduleId, String moduleName, String moduleSlug, String moduleDescription,
-        String iconPath, String servicesJson, String availablePlansJson
-    ) {}
 
     /**
      * Módulos ativos com as opções de plano disponíveis para contratação.
@@ -116,15 +100,14 @@ public class PlanDAO implements PanacheRepositoryBase<Plan, UUID> {
      * agravante de uma LATERAL JOIN para resolver a campanha de Trial vigente
      * de cada plan_version_module — sem equivalente direto em JPQL.
      */
-    public List<ModuleBillingOptionRow> listModuleBillingOptions() {
+    public List<ModuleBillingOptionTO> listModuleBillingOptions() {
         return listModuleBillingOptions(null, null);
     }
 
     /** page/size opcionais (1-based) — mesmo raciocínio de listActivePlans(type, page, size). */
-    @SuppressWarnings("unchecked")
-    public List<ModuleBillingOptionRow> listModuleBillingOptions(Integer page, Integer size) {
+    public List<ModuleBillingOptionTO> listModuleBillingOptions(Integer page, Integer size) {
         boolean paginate = page != null && size != null && page > 0 && size > 0;
-        var query = em.createNativeQuery(
+        var query = databaseQuery.nativeQuery(em,
             "SELECT pm.id, pm.name, pm.slug, pm.description, pm.icon_path, " +
             "COALESCE((SELECT json_agg(json_build_object(" +
             "  'id', pms.id::text, 'name', pms.name, 'description', pms.description, 'icon_path', pms.icon_path" +
@@ -160,14 +143,11 @@ public class PlanDAO implements PanacheRepositoryBase<Plan, UUID> {
             " WHERE pvm.module_id = pm.id AND pvm.status = 'active'" +
             " AND p.is_active = TRUE AND p.is_current_version = TRUE), '[]'::json)::text AS available_plans_json " +
             "FROM platform_modules pm WHERE pm.is_active = TRUE ORDER BY pm.sort_order, pm.name" +
-            (paginate ? " LIMIT :limit OFFSET :offset" : "")
+            (paginate ? " LIMIT :limit OFFSET :offset" : ""),
+            ModuleBillingOptionTO.class
         );
         if (paginate) query.setParameter("limit", size).setParameter("offset", (page - 1) * size);
-        List<Object[]> rows = query.getResultList();
 
-        return rows.stream().map(row -> new ModuleBillingOptionRow(
-            (UUID) row[0], (String) row[1], (String) row[2], (String) row[3], (String) row[4],
-            (String) row[5], (String) row[6]
-        )).toList();
+        return query.getResultList();
     }
 }

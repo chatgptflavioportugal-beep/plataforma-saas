@@ -1,6 +1,8 @@
 package com.saas.usage.dao;
 
 import com.saas.usage.dto.UsageSummaryItem;
+import com.saas.usage.to.UsageSummaryTO;
+import com.saas.platformdatabase.query.DatabaseQuery;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -15,6 +17,9 @@ public class UsageCounterDAO {
 
     @Inject
     EntityManager em;
+
+    @Inject
+    DatabaseQuery databaseQuery;
 
     /** Upsert atômico: incrementa o contador do dia e retorna o novo total. */
     @Transactional
@@ -49,35 +54,30 @@ public class UsageCounterDAO {
         return result.isEmpty() ? 0L : ((Number) result.get(0)).longValue();
     }
 
-    @SuppressWarnings("unchecked")
     public List<UsageSummaryItem> summary(UUID tenantId, String moduleSlug, String metricCode,
                                            LocalDate from, LocalDate to, int page, int pageSize) {
-        var query = em.createNativeQuery("""
-                SELECT module_slug, metric_code, period_date, count
-                FROM module_usage_counters
-                WHERE tenant_id = :tenantId
-                  AND (:moduleSlug IS NULL OR module_slug = :moduleSlug)
-                  AND (:metricCode IS NULL OR metric_code = :metricCode)
-                  AND period_date BETWEEN :from AND :to
-                ORDER BY period_date DESC
-                OFFSET :offset LIMIT :limit
-                """)
+        List<UsageSummaryTO> rows = databaseQuery
+                .nativeQuery(em, """
+                        SELECT module_slug, metric_code, period_date, count
+                        FROM module_usage_counters
+                        WHERE tenant_id = :tenantId
+                          AND (:moduleSlug IS NULL OR module_slug = :moduleSlug)
+                          AND (:metricCode IS NULL OR metric_code = :metricCode)
+                          AND period_date BETWEEN :from AND :to
+                        ORDER BY period_date DESC
+                        OFFSET :offset LIMIT :limit
+                        """, UsageSummaryTO.class)
                 .setParameter("tenantId", tenantId)
                 .setParameter("moduleSlug", moduleSlug)
                 .setParameter("metricCode", metricCode)
                 .setParameter("from", from)
                 .setParameter("to", to)
                 .setParameter("offset", page * pageSize)
-                .setParameter("limit", pageSize);
+                .setParameter("limit", pageSize)
+                .getResultList();
 
-        List<Object[]> rows = query.getResultList();
         return rows.stream()
-                .map(r -> new UsageSummaryItem(
-                        (String) r[0],
-                        (String) r[1],
-                        ((java.sql.Date) r[2]).toLocalDate(),
-                        ((Number) r[3]).longValue()
-                ))
+                .map(r -> new UsageSummaryItem(r.moduleSlug(), r.metricCode(), r.periodDate(), r.count()))
                 .toList();
     }
 

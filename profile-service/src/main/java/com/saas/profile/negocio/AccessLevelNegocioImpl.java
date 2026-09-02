@@ -5,6 +5,7 @@ import com.saas.profile.dao.UserTenantDAO;
 import com.saas.profile.dto.accesslevel.*;
 import com.saas.profile.dto.request.AccessLevelRequest;
 import com.saas.profile.exception.ConflictException;
+import com.saas.profile.to.ModuleServiceTO;
 import com.saas.profile.negocio.impl.AccessLevelNegocio;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -86,12 +87,12 @@ public class AccessLevelNegocioImpl implements AccessLevelNegocio {
     // ─── available-modules ─────────────────────────────────────────────────
 
     public AvailableModulesResponse availableModules(UUID tenantId) {
-        List<AccessLevelDAO.ModuleServiceRow> rows = accessLevelDAO.findAvailableModuleTree(tenantId);
+        List<ModuleServiceTO> rows = accessLevelDAO.findAvailableModuleTree(tenantId);
 
         Map<String, ModuleBuilder> moduleMap = new LinkedHashMap<>();
         Map<String, GroupBuilder> groupMap = new LinkedHashMap<>();
 
-        for (AccessLevelDAO.ModuleServiceRow row : rows) {
+        for (ModuleServiceTO row : rows) {
             String moduleId = row.moduleId();
             String groupId = row.groupId(); // null se sem grupo ou grupo inativo
 
@@ -125,7 +126,7 @@ public class AccessLevelNegocioImpl implements AccessLevelNegocio {
         final List<GroupBuilder> groups = new ArrayList<>();
         final List<ServiceDto> ungroupedServices = new ArrayList<>();
 
-        ModuleBuilder(AccessLevelDAO.ModuleServiceRow row) {
+        ModuleBuilder(ModuleServiceTO row) {
             this.moduleId = row.moduleId();
             this.moduleName = row.moduleName();
             this.moduleSlug = row.moduleSlug();
@@ -143,7 +144,7 @@ public class AccessLevelNegocioImpl implements AccessLevelNegocio {
         final Integer sortOrder;
         final List<ServiceDto> services = new ArrayList<>();
 
-        GroupBuilder(AccessLevelDAO.ModuleServiceRow row) {
+        GroupBuilder(ModuleServiceTO row) {
             this.groupId = row.groupId();
             this.groupName = row.groupName();
             this.groupDescription = row.groupDescription();

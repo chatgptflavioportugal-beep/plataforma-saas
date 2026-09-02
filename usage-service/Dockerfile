@@ -3,13 +3,19 @@
 # Dockerfile.dev via docker-compose.
 # Contexto de build precisa ser a raiz do repositório (ex.: `docker build -f
 # usage-service/Dockerfile .`), pois este Dockerfile instala
-# libs/platform-module-security-quarkus antes de compilar o serviço.
+# libs/platform-module-security-quarkus e libs/platform-database antes de
+# compilar o serviço.
 
 # --- Build stage ---
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /libs/platform-module-security-quarkus
 COPY libs/platform-module-security-quarkus/pom.xml .
 COPY libs/platform-module-security-quarkus/src ./src
+RUN mvn install -N -DskipTests -q
+
+WORKDIR /libs/platform-database
+COPY libs/platform-database/pom.xml .
+COPY libs/platform-database/src ./src
 RUN mvn install -N -DskipTests -q
 
 WORKDIR /app

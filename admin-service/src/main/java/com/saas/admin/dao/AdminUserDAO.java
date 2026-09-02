@@ -2,10 +2,15 @@ package com.saas.admin.dao;
 
 import com.saas.admin.dto.AdminUserCreatedDTO;
 import com.saas.admin.dto.AdminUserDTO;
+import com.saas.admin.to.AdminEmailTO;
+import com.saas.admin.to.AdminUserTO;
+import com.saas.admin.to.EmailRoleTO;
+import com.saas.admin.to.ExistingUserTO;
+import com.saas.platformdatabase.query.DatabaseQuery;
+import com.saas.platformdatabase.query.NativeQuery;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.Query;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,10 +23,9 @@ public class AdminUserDAO {
     @Inject
     EntityManager em;
 
-    public record ExistingUserRow(String id, String systemRole) {
-    }
+    @Inject
+    DatabaseQuery databaseQuery;
 
-    @SuppressWarnings("unchecked")
     public List<AdminUserDTO> findAll(String search, String status, String accessLevelId) {
         StringBuilder sql = new StringBuilder(
             "SELECT up.id::text, au.email, up.full_name, up.system_role, up.is_active, " +
@@ -47,13 +51,13 @@ public class AdminUserDAO {
         }
         sql.append(" ORDER BY up.system_role DESC, up.full_name");
 
-        Query query = em.createNativeQuery(sql.toString());
+        NativeQuery<AdminUserTO> query = databaseQuery.nativeQuery(em, sql.toString(), AdminUserTO.class);
         params.forEach(query::setParameter);
-        List<Object[]> rows = query.getResultList();
+        List<AdminUserTO> rows = query.getResultList();
 
         return rows.stream().map(r -> new AdminUserDTO(
-            (String) r[0], (String) r[1], (String) r[2], (String) r[3], (Boolean) r[4],
-            (String) r[5], (String) r[6], (String) r[7], (String) r[8]
+            r.id(), r.email(), r.fullName(), r.systemRole(), r.isActive(),
+            r.adminAccessLevelId(), r.accessLevelName(), r.createdAt(), r.lastSignInAt()
         )).toList();
     }
 
@@ -63,16 +67,14 @@ public class AdminUserDAO {
         ).setParameter("id", accessLevelId).getSingleResult()).longValue();
     }
 
-    @SuppressWarnings("unchecked")
-    public Optional<ExistingUserRow> findByEmail(String email) {
-        List<Object[]> rows = em.createNativeQuery(
-            "SELECT up.id::text, up.system_role FROM user_profiles up " +
-            "JOIN auth.users au ON au.id = up.id WHERE au.email = :email"
-        ).setParameter("email", email).getResultList();
-
-        if (rows.isEmpty()) return Optional.empty();
-        Object[] row = rows.get(0);
-        return Optional.of(new ExistingUserRow((String) row[0], (String) row[1]));
+    public Optional<ExistingUserTO> findByEmail(String email) {
+        return databaseQuery
+                .nativeQuery(em, """
+                        SELECT up.id::text, up.system_role FROM user_profiles up
+                        JOIN auth.users au ON au.id = up.id WHERE au.email = :email
+                        """, ExistingUserTO.class)
+                .setParameter("email", email)
+                .getOptionalResult();
     }
 
     public void promoteToAdmin(String userId, String fullName, String accessLevelId) {
@@ -95,23 +97,22 @@ public class AdminUserDAO {
         }
     }
 
-    @SuppressWarnings("unchecked")
     public Optional<AdminUserCreatedDTO> findCreatedById(String userId) {
-        List<Object[]> result = em.createNativeQuery(
-            "SELECT up.id::text, au.email, up.full_name, up.system_role, up.is_active, " +
-            "up.admin_access_level_id::text, al.name, up.created_at::text " +
-            "FROM user_profiles up " +
-            "JOIN auth.users au ON au.id = up.id " +
-            "LEFT JOIN admin_access_levels al ON al.id = up.admin_access_level_id " +
-            "WHERE up.id::text = :userId"
-        ).setParameter("userId", userId).getResultList();
-
-        if (result.isEmpty()) return Optional.empty();
-        Object[] r = result.get(0);
-        // tempPassword/emailSent são preenchidos pela camada de negócio, não fazem parte da consulta
-        return Optional.of(new AdminUserCreatedDTO(
-            (String) r[0], (String) r[1], (String) r[2], (String) r[3], (Boolean) r[4],
-            (String) r[5], (String) r[6], (String) r[7], null, null));
+        return databaseQuery
+                .nativeQuery(em, """
+                        SELECT up.id::text, au.email, up.full_name, up.system_role, up.is_active,
+                        up.admin_access_level_id::text, al.name AS access_level_name, up.created_at::text
+                        FROM user_profiles up
+                        JOIN auth.users au ON au.id = up.id
+                        LEFT JOIN admin_access_levels al ON al.id = up.admin_access_level_id
+                        WHERE up.id::text = :userId
+                        """, AdminUserTO.class)
+                .setParameter("userId", userId)
+                .getOptionalResult()
+                // tempPassword/emailSent são preenchidos pela camada de negócio, não fazem parte da consulta
+                .map(r -> new AdminUserCreatedDTO(
+                        r.id(), r.email(), r.fullName(), r.systemRole(), r.isActive(),
+                        r.adminAccessLevelId(), r.accessLevelName(), r.createdAt(), null, null));
     }
 
     public long countSuperAdmin(String id) {
@@ -147,29 +148,25 @@ public class AdminUserDAO {
          .executeUpdate();
     }
 
-    public record EmailRoleRow(String email, String systemRole) {
+    public Optional<EmailRoleTO> findEmailAndRole(String id) {
+        return databaseQuery
+                .nativeQuery(em, """
+                        SELECT au.email, up.system_role FROM user_profiles up
+                        JOIN auth.users au ON au.id = up.id WHERE up.id::text = :id
+                        """, EmailRoleTO.class)
+                .setParameter("id", id)
+                .getOptionalResult();
     }
 
-    @SuppressWarnings("unchecked")
-    public Optional<EmailRoleRow> findEmailAndRole(String id) {
-        List<Object[]> rows = em.createNativeQuery(
-            "SELECT au.email, up.system_role FROM user_profiles up " +
-            "JOIN auth.users au ON au.id = up.id WHERE up.id::text = :id"
-        ).setParameter("id", id).getResultList();
-
-        if (rows.isEmpty()) return Optional.empty();
-        Object[] row = rows.get(0);
-        return Optional.of(new EmailRoleRow((String) row[0], (String) row[1]));
-    }
-
-    @SuppressWarnings("unchecked")
     public Optional<String> findAdminEmail(String id) {
-        List<Object[]> rows = em.createNativeQuery(
-            "SELECT au.email FROM user_profiles up " +
-            "JOIN auth.users au ON au.id = up.id " +
-            "WHERE up.id::text = :id AND up.system_role IN ('SUPER_ADMIN', 'ADMIN_USER')"
-        ).setParameter("id", id).getResultList();
-
-        return rows.isEmpty() ? Optional.empty() : Optional.of((String) rows.get(0)[0]);
+        return databaseQuery
+                .nativeQuery(em, """
+                        SELECT au.email FROM user_profiles up
+                        JOIN auth.users au ON au.id = up.id
+                        WHERE up.id::text = :id AND up.system_role IN ('SUPER_ADMIN', 'ADMIN_USER')
+                        """, AdminEmailTO.class)
+                .setParameter("id", id)
+                .getOptionalResult()
+                .map(AdminEmailTO::email);
     }
 }

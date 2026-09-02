@@ -1,13 +1,21 @@
 # syntax=docker/dockerfile:1
 # Produção — build multi-stage. Para desenvolvimento local (hot-reload), use
 # Dockerfile.dev via docker-compose.
+# Contexto de build precisa ser a raiz do repositório (ex.: `docker build -f
+# profile-service/Dockerfile .`), pois este Dockerfile instala libs/platform-database
+# antes de compilar o serviço.
 
 # --- Build stage ---
 FROM maven:3.9-eclipse-temurin-21 AS build
+WORKDIR /libs/platform-database
+COPY libs/platform-database/pom.xml .
+COPY libs/platform-database/src ./src
+RUN mvn install -N -DskipTests -q
+
 WORKDIR /app
-COPY pom.xml .
+COPY profile-service/pom.xml .
 RUN mvn -B dependency:go-offline -q
-COPY src ./src
+COPY profile-service/src ./src
 RUN mvn -B package -DskipTests -q
 
 # --- Runtime stage ---

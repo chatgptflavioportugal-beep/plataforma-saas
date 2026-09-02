@@ -1,5 +1,11 @@
 package com.saas.profile.dao;
 
+import com.saas.profile.to.ActiveMemberTO;
+import com.saas.profile.to.CreatedInvitationTO;
+import com.saas.profile.to.InvitationPreviewTO;
+import com.saas.profile.to.InvitationTO;
+import com.saas.platformdatabase.query.DatabaseQuery;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -18,38 +24,23 @@ public class InvitationDAO {
     @Inject
     EntityManager em;
 
-    public record MemberRow(
-            String userId, String fullName, String email, String role,
-            String joinedAt, String accessLevelId, String accessLevelName
-    ) {}
+    @Inject
+    DatabaseQuery databaseQuery;
 
-    public record InvitationRow(
-            String id, String email, String role, String status,
-            String expiresAt, String createdAt, String accessLevelId, String accessLevelName
-    ) {}
-
-    public record InvitationPreviewRow(
-            String email, String role, String status, String expiresAt, String tenantName, String accessLevelName
-    ) {}
-
-    public record CreatedInvitation(String id, String token, String expiresAt) {}
-
-    @SuppressWarnings("unchecked")
-    public List<MemberRow> findActiveMembers(UUID tenantId) {
-        List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
-                "SELECT ut.user_id::text, up.full_name, au.email, ut.role, ut.created_at::text, " +
-                "       ut.access_level_id::text, pal.name AS access_level_name " +
-                "FROM user_tenants ut " +
-                "LEFT JOIN user_profiles up ON up.id = ut.user_id " +
-                "LEFT JOIN auth.users au ON au.id = ut.user_id " +
-                "LEFT JOIN profile_access_levels pal ON pal.id = ut.access_level_id " +
-                "WHERE ut.tenant_id = :tenantId AND ut.is_active = TRUE " +
-                "ORDER BY ut.created_at ASC"
-        ).setParameter("tenantId", tenantId).getResultList();
-
-        return rows.stream().map(r -> new MemberRow(
-                (String) r[0], (String) r[1], (String) r[2], (String) r[3], (String) r[4], (String) r[5], (String) r[6]
-        )).toList();
+    public List<ActiveMemberTO> findActiveMembers(UUID tenantId) {
+        return databaseQuery
+                .nativeQuery(em, """
+                        SELECT ut.user_id::text, up.full_name, au.email, ut.role, ut.created_at::text,
+                               ut.access_level_id::text, pal.name AS access_level_name
+                        FROM user_tenants ut
+                        LEFT JOIN user_profiles up ON up.id = ut.user_id
+                        LEFT JOIN auth.users au ON au.id = ut.user_id
+                        LEFT JOIN profile_access_levels pal ON pal.id = ut.access_level_id
+                        WHERE ut.tenant_id = :tenantId AND ut.is_active = TRUE
+                        ORDER BY ut.created_at ASC
+                        """, ActiveMemberTO.class)
+                .setParameter("tenantId", tenantId)
+                .getResultList();
     }
 
     public Optional<String> findActiveMemberRole(UUID tenantId, UUID userId) {
@@ -94,20 +85,18 @@ public class InvitationDAO {
         .executeUpdate();
     }
 
-    @SuppressWarnings("unchecked")
-    public List<InvitationRow> findAllByTenant(UUID tenantId) {
-        List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
-                "SELECT i.id::text, i.email, i.role, i.status, i.expires_at::text, i.created_at::text, " +
-                "       i.access_level_id::text, pal.name AS access_level_name " +
-                "FROM invitations i " +
-                "LEFT JOIN profile_access_levels pal ON pal.id = i.access_level_id " +
-                "WHERE i.tenant_id = :tenantId " +
-                "ORDER BY i.created_at DESC"
-        ).setParameter("tenantId", tenantId).getResultList();
-
-        return rows.stream().map(r -> new InvitationRow(
-                (String) r[0], (String) r[1], (String) r[2], (String) r[3], (String) r[4], (String) r[5], (String) r[6], (String) r[7]
-        )).toList();
+    public List<InvitationTO> findAllByTenant(UUID tenantId) {
+        return databaseQuery
+                .nativeQuery(em, """
+                        SELECT i.id::text, i.email, i.role, i.status, i.expires_at::text, i.created_at::text,
+                               i.access_level_id::text, pal.name AS access_level_name
+                        FROM invitations i
+                        LEFT JOIN profile_access_levels pal ON pal.id = i.access_level_id
+                        WHERE i.tenant_id = :tenantId
+                        ORDER BY i.created_at DESC
+                        """, InvitationTO.class)
+                .setParameter("tenantId", tenantId)
+                .getResultList();
     }
 
     public long countActiveMemberByEmail(UUID tenantId, String email) {
@@ -132,19 +121,19 @@ public class InvitationDAO {
     }
 
     /** Cria o convite e devolve id/token/expiração num único round-trip (RETURNING). */
-    public CreatedInvitation insertInvitation(UUID tenantId, UUID invitedBy, String email, UUID accessLevelId) {
-        Object[] row = (Object[]) em.createNativeQuery(
-                "INSERT INTO invitations (tenant_id, invited_by, email, role, access_level_id) " +
-                "VALUES (:tenantId, :invitedBy, :email, 'member', :alId) " +
-                "RETURNING id::text, token, expires_at::text"
-        )
-        .setParameter("tenantId", tenantId)
-        .setParameter("invitedBy", invitedBy)
-        .setParameter("email", email)
-        .setParameter("alId", accessLevelId)
-        .getSingleResult();
-
-        return new CreatedInvitation((String) row[0], (String) row[1], (String) row[2]);
+    public CreatedInvitationTO insertInvitation(UUID tenantId, UUID invitedBy, String email, UUID accessLevelId) {
+        return databaseQuery
+                .nativeQuery(em, """
+                        INSERT INTO invitations (tenant_id, invited_by, email, role, access_level_id)
+                        VALUES (:tenantId, :invitedBy, :email, 'member', :alId)
+                        RETURNING id::text, token, expires_at::text
+                        """, CreatedInvitationTO.class)
+                .setParameter("tenantId", tenantId)
+                .setParameter("invitedBy", invitedBy)
+                .setParameter("email", email)
+                .setParameter("alId", accessLevelId)
+                .getOptionalResult()
+                .orElseThrow();
     }
 
     /** @return {@code true} se um convite pendente foi cancelado. */
@@ -156,20 +145,18 @@ public class InvitationDAO {
         return updated > 0;
     }
 
-    public Optional<InvitationPreviewRow> findPreviewByToken(String token) {
-        @SuppressWarnings("unchecked")
-        List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
-                "SELECT i.email, i.role, i.status, i.expires_at::text, t.name AS tenant_name, " +
-                "       pal.name AS access_level_name " +
-                "FROM invitations i " +
-                "JOIN tenants t ON t.id = i.tenant_id " +
-                "LEFT JOIN profile_access_levels pal ON pal.id = i.access_level_id " +
-                "WHERE i.token = :token"
-        ).setParameter("token", token).getResultList();
-
-        if (rows.isEmpty()) return Optional.empty();
-        Object[] r = rows.get(0);
-        return Optional.of(new InvitationPreviewRow((String) r[0], (String) r[1], (String) r[2], (String) r[3], (String) r[4], (String) r[5]));
+    public Optional<InvitationPreviewTO> findPreviewByToken(String token) {
+        return databaseQuery
+                .nativeQuery(em, """
+                        SELECT i.email, i.role, i.status, i.expires_at::text, t.name AS tenant_name,
+                               pal.name AS access_level_name
+                        FROM invitations i
+                        JOIN tenants t ON t.id = i.tenant_id
+                        LEFT JOIN profile_access_levels pal ON pal.id = i.access_level_id
+                        WHERE i.token = :token
+                        """, InvitationPreviewTO.class)
+                .setParameter("token", token)
+                .getOptionalResult();
     }
 
     /** E-mail do convite, apenas se ainda estiver pendente e não expirado. */

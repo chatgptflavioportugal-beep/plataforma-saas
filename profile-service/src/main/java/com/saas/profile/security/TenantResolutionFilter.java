@@ -2,6 +2,7 @@ package com.saas.profile.security;
 
 import com.saas.profile.dao.TenantSubscriptionDAO;
 import com.saas.profile.dao.UserTenantDAO;
+import com.saas.profile.to.UserTenantTO;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -78,7 +79,7 @@ public class TenantResolutionFilter implements ContainerRequestFilter {
         });
     }
 
-    private UserTenantDAO.UserTenantResult resolveUserTenant(UUID userId, String tenantIdHeader) {
+    private UserTenantTO resolveUserTenant(UUID userId, String tenantIdHeader) {
         if (tenantIdHeader != null && !tenantIdHeader.isBlank()) {
             UUID tenantId = UUID.fromString(tenantIdHeader);
             return userTenantDAO.findByUserAndTenant(userId, tenantId)

@@ -1,12 +1,13 @@
 package com.saas.subscription.dao;
 
 import com.saas.subscription.entity.ProfileModuleSubscription;
+import com.saas.subscription.to.SubscriptionListTO;
+import com.saas.platformdatabase.query.DatabaseQuery;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 
-import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -17,6 +18,9 @@ public class ProfileModuleSubscriptionDAO implements PanacheRepositoryBase<Profi
 
     @Inject
     EntityManager em;
+
+    @Inject
+    DatabaseQuery databaseQuery;
 
     public Optional<ProfileModuleSubscription> findByTenantAndModule(UUID tenantId, UUID moduleId) {
         return find("tenantId = ?1 and moduleId = ?2", tenantId, moduleId).firstResultOptional();
@@ -120,63 +124,37 @@ public class ProfileModuleSubscriptionDAO implements PanacheRepositoryBase<Profi
             .executeUpdate();
     }
 
-    public record SubscriptionListRow(
-        UUID id, UUID tenantId, String tenantType, UUID moduleId, String moduleName, String moduleIconPath,
-        UUID planVersionId, UUID planId, String planName, String planCode, Integer planVersion, Integer planSortOrder,
-        String billingCycle, BigDecimal monthlyPrice, BigDecimal annualMonthlyPrice, String status,
-        OffsetDateTime startedAt, OffsetDateTime expiresAt, OffsetDateTime canceledAt, Integer trialDays,
-        OffsetDateTime trialStartAt, OffsetDateTime trialEndAt, OffsetDateTime billingStartsAt,
-        UUID trialCampaignId, String limitsJson
-    ) {}
-
     /**
      * Consulta de leitura agregada com JOINs em 4 tabelas e um sub-SELECT
      * json_agg (limites do plano) — mantida como Native Query (benefício real
      * de performance: uma única ida ao banco em vez de N+1 entidades JPA
-     * carregadas e agregadas em memória). Object[] nunca sai desta classe —
-     * cada linha é convertida para SubscriptionListRow aqui mesmo.
+     * carregadas e agregadas em memória). Mapeada via {@code DatabaseQuery}/TO — Object[]
+     * nunca aparece nesta classe.
      */
-    @SuppressWarnings("unchecked")
-    public List<SubscriptionListRow> listByTenantOrderByStartedDesc(UUID tenantId) {
-        List<Object[]> rows = em.createNativeQuery(
-            "SELECT " +
-            "  pms.id, pms.tenant_id, t.type AS profile_type, pms.module_id, pm.name AS module_name, " +
-            "  pm.icon_path AS module_icon_path, pms.plan_version_id, p.id AS plan_id, p.name AS plan_name, " +
-            "  p.code AS plan_code, p.version AS plan_version, p.sort_order AS plan_sort_order, pms.billing_cycle, " +
-            "  pvm.monthly_price, pvm.annual_monthly_price, pms.status, pms.started_at, pms.expires_at, " +
-            "  pms.canceled_at, pms.trial_days, pms.trial_start_at, pms.trial_end_at, pms.billing_starts_at, " +
-            "  pms.trial_campaign_id, " +
-            "  COALESCE((SELECT json_agg(json_build_object(" +
-            "    'title', pvml.title, 'description', pvml.description," +
-            "    'limit_value', pvml.limit_value, 'unit', pvml.unit, 'sort_order', pvml.sort_order" +
-            "  ) ORDER BY pvml.sort_order) FROM plan_version_module_limits pvml" +
-            "  WHERE pvml.plan_version_module_id = pvm.id), '[]'::json)::text AS limits_json " +
-            "FROM profile_module_subscriptions pms " +
-            "JOIN platform_modules pm ON pm.id = pms.module_id " +
-            "JOIN plan_version_modules pvm ON pvm.id = pms.plan_version_id " +
-            "JOIN plans p ON p.id = pvm.plan_id " +
-            "JOIN tenants t ON t.id = pms.tenant_id " +
-            "WHERE pms.tenant_id = :tenantId " +
-            "ORDER BY pms.started_at DESC"
-        ).setParameter("tenantId", tenantId).getResultList();
-
-        return rows.stream().map(row -> new SubscriptionListRow(
-            (UUID) row[0], (UUID) row[1], (String) row[2], (UUID) row[3], (String) row[4], (String) row[5],
-            (UUID) row[6], (UUID) row[7], (String) row[8], (String) row[9],
-            row[10] != null ? ((Number) row[10]).intValue() : null,
-            row[11] != null ? ((Number) row[11]).intValue() : null,
-            (String) row[12], (BigDecimal) row[13], (BigDecimal) row[14], (String) row[15],
-            toOffsetDateTime(row[16]), toOffsetDateTime(row[17]), toOffsetDateTime(row[18]),
-            row[19] != null ? ((Number) row[19]).intValue() : null,
-            toOffsetDateTime(row[20]), toOffsetDateTime(row[21]), toOffsetDateTime(row[22]),
-            (UUID) row[23], (String) row[24]
-        )).toList();
-    }
-
-    private static OffsetDateTime toOffsetDateTime(Object value) {
-        if (value == null) return null;
-        if (value instanceof OffsetDateTime odt) return odt;
-        if (value instanceof java.sql.Timestamp ts) return ts.toInstant().atOffset(java.time.ZoneOffset.UTC);
-        throw new IllegalStateException("Tipo de data inesperado: " + value.getClass());
+    public List<SubscriptionListTO> listByTenantOrderByStartedDesc(UUID tenantId) {
+        return databaseQuery
+                .nativeQuery(em, """
+                        SELECT
+                          pms.id, pms.tenant_id, t.type AS profile_type, pms.module_id, pm.name AS module_name,
+                          pm.icon_path AS module_icon_path, pms.plan_version_id, p.id AS plan_id, p.name AS plan_name,
+                          p.code AS plan_code, p.version AS plan_version, p.sort_order AS plan_sort_order, pms.billing_cycle,
+                          pvm.monthly_price, pvm.annual_monthly_price, pms.status, pms.started_at, pms.expires_at,
+                          pms.canceled_at, pms.trial_days, pms.trial_start_at, pms.trial_end_at, pms.billing_starts_at,
+                          pms.trial_campaign_id,
+                          COALESCE((SELECT json_agg(json_build_object(
+                            'title', pvml.title, 'description', pvml.description,
+                            'limit_value', pvml.limit_value, 'unit', pvml.unit, 'sort_order', pvml.sort_order
+                          ) ORDER BY pvml.sort_order) FROM plan_version_module_limits pvml
+                          WHERE pvml.plan_version_module_id = pvm.id), '[]'::json)::text AS limits_json
+                        FROM profile_module_subscriptions pms
+                        JOIN platform_modules pm ON pm.id = pms.module_id
+                        JOIN plan_version_modules pvm ON pvm.id = pms.plan_version_id
+                        JOIN plans p ON p.id = pvm.plan_id
+                        JOIN tenants t ON t.id = pms.tenant_id
+                        WHERE pms.tenant_id = :tenantId
+                        ORDER BY pms.started_at DESC
+                        """, SubscriptionListTO.class)
+                .setParameter("tenantId", tenantId)
+                .getResultList();
     }
 }

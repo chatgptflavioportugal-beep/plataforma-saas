@@ -1,11 +1,14 @@
 package com.saas.profile.dao;
 
+import com.saas.profile.to.IndividualTenantTO;
+import com.saas.profile.to.TenantProfileTO;
+import com.saas.platformdatabase.query.DatabaseQuery;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,56 +23,35 @@ public class TenantDAO {
     @Inject
     EntityManager em;
 
-    public record TenantProfileRow(
-            String tenantId, String tenantName, String tenantSlug, String tenantStatus, String tenantType, String trialEndsAt,
-            String subId, String subStatus, String trialEnd, String currentPeriodStart, String currentPeriodEnd,
-            String billingType, Object planVersion,
-            String planId, String planName, String planCode, String planType,
-            Object priceMonthly, Object priceAnnual, Object maxUsers, Object maxAiRequestsMonth,
-            String features, String role,
-            Object totalMonthlyPrice, Object totalAnnualMonthlyPrice, Object totalAnnualPrice
-    ) {}
+    @Inject
+    DatabaseQuery databaseQuery;
 
-    public record IndividualTenantRow(String id, String name, String slug) {}
-
-    @SuppressWarnings("unchecked")
-    public Optional<TenantProfileRow> findTenantProfile(UUID tenantId) {
-        List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
-                "SELECT t.id::text, t.name, t.slug, t.status, t.type, t.trial_ends_at::text, " +
-                "ts.id::text as sub_id, ts.status as sub_status, ts.trial_end::text, " +
-                "ts.current_period_start::text, ts.current_period_end::text, " +
-                "ts.billing_type, ts.plan_version, " +
-                "p.id::text as plan_id, p.name as plan_name, p.code as plan_code, p.plan_type, " +
-                "p.price_monthly, p.price_annual, p.max_users, p.max_ai_requests_month, " +
-                "(SELECT COALESCE(json_object_agg(pm.slug, true), '{}'::json) " +
-                " FROM plan_version_modules pvm " +
-                " JOIN platform_modules pm ON pm.id = pvm.module_id AND pm.is_active = true " +
-                " WHERE pvm.plan_id = p.id AND pvm.status = 'active')::text AS features, " +
-                "ut.role, " +
-                "COALESCE((SELECT SUM(pvm.monthly_price) FROM plan_version_modules pvm WHERE pvm.plan_id = p.id AND pvm.status = 'active'), 0) AS total_monthly_price, " +
-                "COALESCE((SELECT SUM(pvm.annual_monthly_price) FROM plan_version_modules pvm WHERE pvm.plan_id = p.id AND pvm.status = 'active'), 0) AS total_annual_monthly_price, " +
-                "COALESCE((SELECT SUM(pvm.annual_monthly_price) FROM plan_version_modules pvm WHERE pvm.plan_id = p.id AND pvm.status = 'active'), 0) * 12 AS total_annual_price " +
-                "FROM tenants t " +
-                "LEFT JOIN tenant_subscriptions ts ON ts.tenant_id = t.id " +
-                "LEFT JOIN plans p ON p.id = ts.plan_id " +
-                "LEFT JOIN user_tenants ut ON ut.tenant_id = t.id " +
-                "WHERE t.id = :tenantId " +
-                "ORDER BY ts.created_at DESC LIMIT 1"
-        )
-        .setParameter("tenantId", tenantId)
-        .getResultList();
-
-        if (rows.isEmpty()) return Optional.empty();
-        Object[] r = rows.get(0);
-        return Optional.of(new TenantProfileRow(
-                (String) r[0], (String) r[1], (String) r[2], (String) r[3], (String) r[4], (String) r[5],
-                (String) r[6], (String) r[7], (String) r[8], (String) r[9], (String) r[10],
-                (String) r[11], r[12],
-                (String) r[13], (String) r[14], (String) r[15], (String) r[16],
-                r[17], r[18], r[19], r[20],
-                (String) r[21], (String) r[22],
-                r[23], r[24], r[25]
-        ));
+    public Optional<TenantProfileTO> findTenantProfile(UUID tenantId) {
+        return databaseQuery
+                .nativeQuery(em, """
+                        SELECT t.id::text, t.name, t.slug, t.status, t.type, t.trial_ends_at::text,
+                        ts.id::text as sub_id, ts.status as sub_status, ts.trial_end::text,
+                        ts.current_period_start::text, ts.current_period_end::text,
+                        ts.billing_type, ts.plan_version,
+                        p.id::text as plan_id, p.name as plan_name, p.code as plan_code, p.plan_type,
+                        p.price_monthly, p.price_annual, p.max_users, p.max_ai_requests_month,
+                        (SELECT COALESCE(json_object_agg(pm.slug, true), '{}'::json)
+                         FROM plan_version_modules pvm
+                         JOIN platform_modules pm ON pm.id = pvm.module_id AND pm.is_active = true
+                         WHERE pvm.plan_id = p.id AND pvm.status = 'active')::text AS features,
+                        ut.role,
+                        COALESCE((SELECT SUM(pvm.monthly_price) FROM plan_version_modules pvm WHERE pvm.plan_id = p.id AND pvm.status = 'active'), 0) AS total_monthly_price,
+                        COALESCE((SELECT SUM(pvm.annual_monthly_price) FROM plan_version_modules pvm WHERE pvm.plan_id = p.id AND pvm.status = 'active'), 0) AS total_annual_monthly_price,
+                        COALESCE((SELECT SUM(pvm.annual_monthly_price) FROM plan_version_modules pvm WHERE pvm.plan_id = p.id AND pvm.status = 'active'), 0) * 12 AS total_annual_price
+                        FROM tenants t
+                        LEFT JOIN tenant_subscriptions ts ON ts.tenant_id = t.id
+                        LEFT JOIN plans p ON p.id = ts.plan_id
+                        LEFT JOIN user_tenants ut ON ut.tenant_id = t.id
+                        WHERE t.id = :tenantId
+                        ORDER BY ts.created_at DESC LIMIT 1
+                        """, TenantProfileTO.class)
+                .setParameter("tenantId", tenantId)
+                .getOptionalResult();
     }
 
     public Optional<UUID> findPlanIdByType(String type) {
@@ -123,16 +105,14 @@ public class TenantDAO {
         .executeUpdate();
     }
 
-    @SuppressWarnings("unchecked")
-    public Optional<IndividualTenantRow> findIndividualTenantByUser(UUID userId) {
-        List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
-                "SELECT t.id::text, t.name, t.slug FROM tenants t " +
-                "JOIN user_tenants ut ON ut.tenant_id = t.id " +
-                "WHERE ut.user_id = :userId AND t.type = 'individual'"
-        ).setParameter("userId", userId).getResultList();
-
-        if (rows.isEmpty()) return Optional.empty();
-        Object[] r = rows.get(0);
-        return Optional.of(new IndividualTenantRow((String) r[0], (String) r[1], (String) r[2]));
+    public Optional<IndividualTenantTO> findIndividualTenantByUser(UUID userId) {
+        return databaseQuery
+                .nativeQuery(em, """
+                        SELECT t.id::text, t.name, t.slug FROM tenants t
+                        JOIN user_tenants ut ON ut.tenant_id = t.id
+                        WHERE ut.user_id = :userId AND t.type = 'individual'
+                        """, IndividualTenantTO.class)
+                .setParameter("userId", userId)
+                .getOptionalResult();
     }
 }

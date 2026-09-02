@@ -1,5 +1,10 @@
 package com.saas.profile.dao;
 
+import com.saas.profile.to.AccessLevelPermissionTO;
+import com.saas.profile.to.AccessLevelTO;
+import com.saas.profile.to.ModuleServiceTO;
+import com.saas.platformdatabase.query.DatabaseQuery;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -18,69 +23,56 @@ public class AccessLevelDAO {
     @Inject
     EntityManager em;
 
-    public record ModuleServiceRow(
-            String moduleId, String moduleName, String moduleSlug, String moduleIconPath,
-            String groupId, String groupName, String groupDescription, String groupIconPath, Integer groupSortOrder,
-            String serviceId, String serviceName, String serviceSlug, String serviceIconPath, Integer serviceSortOrder
-    ) {}
+    @Inject
+    DatabaseQuery databaseQuery;
 
-    public record AccessLevelRow(
-            String id, String name, String description, String status, String createdAt, String updatedAt
-    ) {}
-
-    public record AccessLevelPermissionRow(String id, String moduleId, String serviceId) {}
-
-    @SuppressWarnings("unchecked")
-    public List<ModuleServiceRow> findAvailableModuleTree(UUID tenantId) {
-        List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
-                "SELECT pm.id::text, pm.name, pm.slug, pm.icon_path, " +
-                "  CASE WHEN g.status = 'ACTIVE' THEN g.id::text ELSE NULL END, " +
-                "  CASE WHEN g.status = 'ACTIVE' THEN g.name ELSE NULL END, " +
-                "  CASE WHEN g.status = 'ACTIVE' THEN g.description ELSE NULL END, " +
-                "  CASE WHEN g.status = 'ACTIVE' THEN g.icon_path ELSE NULL END, " +
-                "  CASE WHEN g.status = 'ACTIVE' THEN g.sort_order ELSE NULL END, " +
-                "  pms.id::text, pms.name, pms.slug, pms.icon_path, pms.sort_order " +
-                "FROM profile_module_subscriptions sub " +
-                "JOIN platform_modules pm ON pm.id = sub.module_id " +
-                "JOIN platform_module_services pms ON pms.module_id = pm.id " +
-                "LEFT JOIN platform_module_service_groups g ON g.id = pms.service_group_id " +
-                "WHERE sub.tenant_id = :tenantId AND sub.status = 'ACTIVE' " +
-                "  AND pm.is_active = TRUE AND pms.is_active = TRUE " +
-                "ORDER BY pm.sort_order, " +
-                "  CASE WHEN g.status = 'ACTIVE' THEN g.sort_order ELSE 9999 END, " +
-                "  pms.sort_order"
-        ).setParameter("tenantId", tenantId).getResultList();
-
-        return rows.stream().map(r -> new ModuleServiceRow(
-                (String) r[0], (String) r[1], (String) r[2], (String) r[3],
-                (String) r[4], (String) r[5], (String) r[6], (String) r[7], (Integer) r[8],
-                (String) r[9], (String) r[10], (String) r[11], (String) r[12], (Integer) r[13]
-        )).toList();
+    public List<ModuleServiceTO> findAvailableModuleTree(UUID tenantId) {
+        return databaseQuery
+                .nativeQuery(em, """
+                        SELECT pm.id::text AS module_id, pm.name AS module_name, pm.slug AS module_slug,
+                          pm.icon_path AS module_icon_path,
+                          CASE WHEN g.status = 'ACTIVE' THEN g.id::text ELSE NULL END AS group_id,
+                          CASE WHEN g.status = 'ACTIVE' THEN g.name ELSE NULL END AS group_name,
+                          CASE WHEN g.status = 'ACTIVE' THEN g.description ELSE NULL END AS group_description,
+                          CASE WHEN g.status = 'ACTIVE' THEN g.icon_path ELSE NULL END AS group_icon_path,
+                          CASE WHEN g.status = 'ACTIVE' THEN g.sort_order ELSE NULL END AS group_sort_order,
+                          pms.id::text AS service_id, pms.name AS service_name, pms.slug AS service_slug,
+                          pms.icon_path AS service_icon_path, pms.sort_order AS service_sort_order
+                        FROM profile_module_subscriptions sub
+                        JOIN platform_modules pm ON pm.id = sub.module_id
+                        JOIN platform_module_services pms ON pms.module_id = pm.id
+                        LEFT JOIN platform_module_service_groups g ON g.id = pms.service_group_id
+                        WHERE sub.tenant_id = :tenantId AND sub.status = 'ACTIVE'
+                          AND pm.is_active = TRUE AND pms.is_active = TRUE
+                        ORDER BY pm.sort_order,
+                          CASE WHEN g.status = 'ACTIVE' THEN g.sort_order ELSE 9999 END,
+                          pms.sort_order
+                        """, ModuleServiceTO.class)
+                .setParameter("tenantId", tenantId)
+                .getResultList();
     }
 
-    @SuppressWarnings("unchecked")
-    public List<AccessLevelRow> findAllByTenant(UUID tenantId) {
-        List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
-                "SELECT id::text, name, description, status, created_at::text, updated_at::text " +
-                "FROM profile_access_levels " +
-                "WHERE tenant_id = :tenantId " +
-                "ORDER BY created_at ASC"
-        ).setParameter("tenantId", tenantId).getResultList();
-
-        return rows.stream().map(r -> new AccessLevelRow(
-                (String) r[0], (String) r[1], (String) r[2], (String) r[3], (String) r[4], (String) r[5]
-        )).toList();
+    public List<AccessLevelTO> findAllByTenant(UUID tenantId) {
+        return databaseQuery
+                .nativeQuery(em, """
+                        SELECT id::text, name, description, status, created_at::text, updated_at::text
+                        FROM profile_access_levels
+                        WHERE tenant_id = :tenantId
+                        ORDER BY created_at ASC
+                        """, AccessLevelTO.class)
+                .setParameter("tenantId", tenantId)
+                .getResultList();
     }
 
-    @SuppressWarnings("unchecked")
-    public List<AccessLevelPermissionRow> findPermissions(UUID accessLevelId) {
-        List<Object[]> rows = (List<Object[]>) em.createNativeQuery(
-                "SELECT id::text, module_id::text, service_id::text " +
-                "FROM profile_access_level_permissions " +
-                "WHERE access_level_id = :levelId"
-        ).setParameter("levelId", accessLevelId).getResultList();
-
-        return rows.stream().map(r -> new AccessLevelPermissionRow((String) r[0], (String) r[1], (String) r[2])).toList();
+    public List<AccessLevelPermissionTO> findPermissions(UUID accessLevelId) {
+        return databaseQuery
+                .nativeQuery(em, """
+                        SELECT id::text, module_id::text, service_id::text
+                        FROM profile_access_level_permissions
+                        WHERE access_level_id = :levelId
+                        """, AccessLevelPermissionTO.class)
+                .setParameter("levelId", accessLevelId)
+                .getResultList();
     }
 
     @SuppressWarnings("unchecked")

@@ -1,8 +1,9 @@
 package com.saas.admin.negocio.impl;
 
-import com.saas.admin.dao.AdminUserDAO;
 import com.saas.admin.dto.AdminUserCreatedDTO;
 import com.saas.admin.dto.AdminUserDTO;
+import com.saas.admin.to.EmailRoleTO;
+import com.saas.admin.to.ExistingUserTO;
 
 import java.util.List;
 import java.util.Optional;
@@ -18,7 +19,7 @@ public interface AdminUsersNegocio {
 
     boolean isAccessLevelActive(String accessLevelId);
 
-    Optional<AdminUserDAO.ExistingUserRow> findExistingByEmail(String normalizedEmail);
+    Optional<ExistingUserTO> findExistingByEmail(String normalizedEmail);
 
     boolean isSupabaseConfigured();
 
@@ -34,7 +35,7 @@ public interface AdminUsersNegocio {
 
     int updateActiveStatus(String id, boolean isActive, String actorUserId);
 
-    Optional<AdminUserDAO.EmailRoleRow> findEmailAndRole(String id);
+    Optional<EmailRoleTO> findEmailAndRole(String id);
 
     String generateTempPassword();
 

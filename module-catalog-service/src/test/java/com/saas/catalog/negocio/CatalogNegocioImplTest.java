@@ -1,9 +1,9 @@
 package com.saas.catalog.negocio;
 
 import com.saas.catalog.dao.ServiceCatalogDAO;
-import com.saas.catalog.dao.ServiceCatalogDAO.CatalogServiceRow;
 import com.saas.catalog.dto.ServiceRouteResolutionDTO;
 import com.saas.catalog.negocio.CatalogNegocioImpl;
+import com.saas.catalog.to.CatalogServiceTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -42,7 +42,7 @@ class CatalogNegocioImplTest {
     @Test
     void resolveRoute_buildsPermissionKeyWithGroupWhenServiceBelongsToAGroup() {
         when(serviceCatalogDAO.findActiveByRouteKey("relatorios")).thenReturn(Optional.of(
-                new CatalogServiceRow(
+                new CatalogServiceTO(
                         "service-id", "Relatórios", "relatorios",
                         "module-id", "Financeiro", "financeiro",
                         "relatorios-mensais", "relatorios-grupo")));
@@ -57,7 +57,7 @@ class CatalogNegocioImplTest {
     @Test
     void resolveRoute_buildsPermissionKeyWithoutGroupWhenServiceHasNoGroup() {
         when(serviceCatalogDAO.findActiveByRouteKey("dashboard")).thenReturn(Optional.of(
-                new CatalogServiceRow(
+                new CatalogServiceTO(
                         "service-id", "Dashboard", "dashboard",
                         "module-id", "Financeiro", "financeiro",
                         "dashboard", null)));

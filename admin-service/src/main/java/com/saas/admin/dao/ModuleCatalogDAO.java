@@ -6,6 +6,11 @@ import com.saas.admin.dto.ModuleServiceRequest;
 import com.saas.admin.dto.PlatformModuleDTO;
 import com.saas.admin.dto.PlatformModuleServiceDTO;
 import com.saas.admin.dto.PlatformModuleServiceGroupDTO;
+import com.saas.admin.to.PlatformModuleServiceGroupTO;
+import com.saas.admin.to.PlatformModuleServiceTO;
+import com.saas.admin.to.PlatformModuleTO;
+import com.saas.platformdatabase.query.DatabaseQuery;
+import com.saas.platformdatabase.query.NativeQuery;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -27,9 +32,11 @@ public class ModuleCatalogDAO {
     @Inject
     EntityManager em;
 
+    @Inject
+    DatabaseQuery databaseQuery;
+
     // ─── Módulos ───────────────────────────────────────────────────────────
 
-    @SuppressWarnings("unchecked")
     public List<PlatformModuleDTO> findModules(String search, Boolean isActive) {
         StringBuilder sql = new StringBuilder(
             "SELECT m.id::text, m.name, m.slug, m.description, m.module_url, m.icon_path, " +
@@ -47,14 +54,14 @@ public class ModuleCatalogDAO {
         }
         sql.append(" ORDER BY m.sort_order, m.name");
 
-        Query query = em.createNativeQuery(sql.toString());
+        NativeQuery<PlatformModuleTO> query = databaseQuery.nativeQuery(em, sql.toString(), PlatformModuleTO.class);
         params.forEach(query::setParameter);
-        List<Object[]> rows = query.getResultList();
+        List<PlatformModuleTO> rows = query.getResultList();
 
         return rows.stream().map(row -> new PlatformModuleDTO(
-            (String) row[0], (String) row[1], (String) row[2], (String) row[3], (String) row[4],
-            (String) row[5], (Boolean) row[6], (Integer) row[7], (String) row[8], (String) row[9],
-            (Integer) row[10]
+            row.id(), row.name(), row.slug(), row.description(), row.moduleUrl(),
+            row.iconPath(), row.isActive(), row.sortOrder(), row.createdAt(), row.updatedAt(),
+            row.serviceCount()
         )).toList();
     }
 
@@ -70,29 +77,29 @@ public class ModuleCatalogDAO {
         ).setParameter("slug", slug).setParameter("id", excludeId).getSingleResult()).longValue();
     }
 
-    @SuppressWarnings("unchecked")
     public PlatformModuleDTO insertModule(ModuleRequest req) {
         boolean isActive = req.isActive() == null || Boolean.TRUE.equals(req.isActive());
         int sortOrder = req.sortOrder() != null ? req.sortOrder() : 99;
 
-        List<Object[]> rows = em.createNativeQuery(
-            "INSERT INTO platform_modules (name, slug, description, module_url, icon_path, is_active, sort_order) " +
-            "VALUES (:name, :slug, :description, :moduleUrl, :iconPath, :isActive, :sortOrder) " +
-            "RETURNING id::text, name, slug, description, module_url, icon_path, is_active, sort_order, created_at::text, updated_at::text"
-        )
-        .setParameter("name", req.name())
-        .setParameter("slug", req.slug())
-        .setParameter("description", req.description())
-        .setParameter("moduleUrl", req.moduleUrl())
-        .setParameter("iconPath", req.iconPath())
-        .setParameter("isActive", isActive)
-        .setParameter("sortOrder", sortOrder)
-        .getResultList();
+        PlatformModuleTO r = databaseQuery
+                .nativeQuery(em, """
+                        INSERT INTO platform_modules (name, slug, description, module_url, icon_path, is_active, sort_order)
+                        VALUES (:name, :slug, :description, :moduleUrl, :iconPath, :isActive, :sortOrder)
+                        RETURNING id::text, name, slug, description, module_url, icon_path, is_active, sort_order, created_at::text, updated_at::text
+                        """, PlatformModuleTO.class)
+                .setParameter("name", req.name())
+                .setParameter("slug", req.slug())
+                .setParameter("description", req.description())
+                .setParameter("moduleUrl", req.moduleUrl())
+                .setParameter("iconPath", req.iconPath())
+                .setParameter("isActive", isActive)
+                .setParameter("sortOrder", sortOrder)
+                .getOptionalResult()
+                .orElseThrow();
 
-        Object[] r = rows.get(0);
         return new PlatformModuleDTO(
-            (String) r[0], (String) r[1], (String) r[2], (String) r[3], (String) r[4],
-            (String) r[5], (Boolean) r[6], (Integer) r[7], (String) r[8], (String) r[9], 0);
+            r.id(), r.name(), r.slug(), r.description(), r.moduleUrl(),
+            r.iconPath(), r.isActive(), r.sortOrder(), r.createdAt(), r.updatedAt(), 0);
     }
 
     public int updateModule(String id, ModuleRequest req) {
@@ -135,22 +142,24 @@ public class ModuleCatalogDAO {
 
     // ─── Serviços ──────────────────────────────────────────────────────────
 
-    @SuppressWarnings("unchecked")
     public List<PlatformModuleServiceDTO> findServices(String moduleId) {
-        List<Object[]> rows = em.createNativeQuery(
-            "SELECT s.id::text, s.module_id::text, s.name, s.slug, s.description, " +
-            "  s.icon_path, s.is_active, s.sort_order, s.created_at::text, s.updated_at::text, " +
-            "  s.service_group_id::text, g.name AS group_name, g.slug AS group_slug, s.route_key " +
-            "FROM platform_module_services s " +
-            "LEFT JOIN platform_module_service_groups g ON g.id = s.service_group_id " +
-            "WHERE s.module_id::text = :moduleId " +
-            "ORDER BY COALESCE(g.sort_order, 9999), s.sort_order, s.name"
-        ).setParameter("moduleId", moduleId).getResultList();
+        List<PlatformModuleServiceTO> rows = databaseQuery
+                .nativeQuery(em, """
+                        SELECT s.id::text, s.module_id::text, s.name, s.slug, s.description,
+                          s.icon_path, s.is_active, s.sort_order, s.created_at::text, s.updated_at::text,
+                          s.service_group_id::text, g.name AS group_name, g.slug AS group_slug, s.route_key
+                        FROM platform_module_services s
+                        LEFT JOIN platform_module_service_groups g ON g.id = s.service_group_id
+                        WHERE s.module_id::text = :moduleId
+                        ORDER BY COALESCE(g.sort_order, 9999), s.sort_order, s.name
+                        """, PlatformModuleServiceTO.class)
+                .setParameter("moduleId", moduleId)
+                .getResultList();
 
         return rows.stream().map(row -> new PlatformModuleServiceDTO(
-            (String) row[0], (String) row[1], (String) row[2], (String) row[3], (String) row[4],
-            (String) row[5], (Boolean) row[6], (Integer) row[7], (String) row[8], (String) row[9],
-            (String) row[10], (String) row[11], (String) row[12], (String) row[13]
+            row.id(), row.moduleId(), row.name(), row.slug(), row.description(),
+            row.iconPath(), row.isActive(), row.sortOrder(), row.createdAt(), row.updatedAt(),
+            row.serviceGroupId(), row.groupName(), row.groupSlug(), row.routeKey()
         )).toList();
     }
 
@@ -190,7 +199,6 @@ public class ModuleCatalogDAO {
         ).setParameter("routeKey", routeKey).setParameter("id", excludeId).getSingleResult()).longValue();
     }
 
-    @SuppressWarnings("unchecked")
     public PlatformModuleServiceDTO insertService(String moduleId, ModuleServiceRequest req, UUID serviceGroupId, String routeKey) {
         boolean isActive = req.isActive() == null || Boolean.TRUE.equals(req.isActive());
         int sortOrder = req.sortOrder() != null ? req.sortOrder() : 99;
@@ -201,7 +209,7 @@ public class ModuleCatalogDAO {
             ":name, :slug, :description, :iconPath, :isActive, :sortOrder, :routeKey) " +
             "RETURNING id::text, module_id::text, name, slug, description, icon_path, is_active, sort_order, created_at::text, updated_at::text, service_group_id::text, route_key";
 
-        Query query = em.createNativeQuery(sql)
+        NativeQuery<PlatformModuleServiceTO> query = databaseQuery.nativeQuery(em, sql, PlatformModuleServiceTO.class)
             .setParameter("moduleId", moduleId)
             .setParameter("name", req.name())
             .setParameter("slug", req.slug())
@@ -212,12 +220,11 @@ public class ModuleCatalogDAO {
             .setParameter("routeKey", routeKey);
         if (serviceGroupId != null) query.setParameter("serviceGroupId", serviceGroupId.toString());
 
-        List<Object[]> rows = query.getResultList();
-        Object[] r = rows.get(0);
+        PlatformModuleServiceTO r = query.getOptionalResult().orElseThrow();
         return new PlatformModuleServiceDTO(
-            (String) r[0], (String) r[1], (String) r[2], (String) r[3], (String) r[4],
-            (String) r[5], (Boolean) r[6], (Integer) r[7], (String) r[8], (String) r[9],
-            (String) r[10], null, null, (String) r[11]);
+            r.id(), r.moduleId(), r.name(), r.slug(), r.description(),
+            r.iconPath(), r.isActive(), r.sortOrder(), r.createdAt(), r.updatedAt(),
+            r.serviceGroupId(), null, null, r.routeKey());
     }
 
     public int updateService(String moduleId, String id, ModuleServiceRequest req, UUID serviceGroupId, String routeKey) {
@@ -252,21 +259,23 @@ public class ModuleCatalogDAO {
 
     // ─── Grupos de serviços ────────────────────────────────────────────────
 
-    @SuppressWarnings("unchecked")
     public List<PlatformModuleServiceGroupDTO> findServiceGroups(String moduleId) {
-        List<Object[]> rows = em.createNativeQuery(
-            "SELECT g.id::text, g.module_id::text, g.name, g.slug, g.description, g.icon_path, " +
-            "  g.sort_order, g.status, g.created_at::text, g.updated_at::text, " +
-            "  (SELECT COUNT(*) FROM platform_module_services s WHERE s.service_group_id = g.id)::int " +
-            "FROM platform_module_service_groups g " +
-            "WHERE g.module_id::text = :moduleId " +
-            "ORDER BY g.sort_order, g.name"
-        ).setParameter("moduleId", moduleId).getResultList();
+        List<PlatformModuleServiceGroupTO> rows = databaseQuery
+                .nativeQuery(em, """
+                        SELECT g.id::text, g.module_id::text, g.name, g.slug, g.description, g.icon_path,
+                          g.sort_order, g.status, g.created_at::text, g.updated_at::text,
+                          (SELECT COUNT(*) FROM platform_module_services s WHERE s.service_group_id = g.id)::int AS service_count
+                        FROM platform_module_service_groups g
+                        WHERE g.module_id::text = :moduleId
+                        ORDER BY g.sort_order, g.name
+                        """, PlatformModuleServiceGroupTO.class)
+                .setParameter("moduleId", moduleId)
+                .getResultList();
 
         return rows.stream().map(row -> new PlatformModuleServiceGroupDTO(
-            (String) row[0], (String) row[1], (String) row[2], (String) row[3], (String) row[4],
-            (String) row[5], (Integer) row[6], (String) row[7], (String) row[8], (String) row[9],
-            (Integer) row[10]
+            row.id(), row.moduleId(), row.name(), row.slug(), row.description(),
+            row.iconPath(), row.sortOrder(), row.status(), row.createdAt(), row.updatedAt(),
+            row.serviceCount()
         )).toList();
     }
 
@@ -282,25 +291,25 @@ public class ModuleCatalogDAO {
         ).setParameter("moduleId", moduleId).setParameter("slug", slug).setParameter("id", excludeId).getSingleResult()).longValue();
     }
 
-    @SuppressWarnings("unchecked")
     public PlatformModuleServiceGroupDTO insertServiceGroup(String moduleId, ModuleServiceGroupRequest req) {
         int sortOrder = req.sortOrder() != null ? req.sortOrder() : 99;
         String status = req.status() != null ? req.status() : "ACTIVE";
 
-        List<Object[]> rows = em.createNativeQuery(
-            "INSERT INTO platform_module_service_groups (module_id, name, slug, description, icon_path, sort_order, status) " +
-            "VALUES (CAST(:moduleId AS uuid), :name, :slug, :description, :iconPath, :sortOrder, :status) " +
-            "RETURNING id::text, module_id::text, name, slug, description, icon_path, sort_order, status, created_at::text, updated_at::text"
-        )
-        .setParameter("moduleId", moduleId).setParameter("name", req.name().trim()).setParameter("slug", req.slug())
-        .setParameter("description", req.description()).setParameter("iconPath", req.iconPath())
-        .setParameter("sortOrder", sortOrder).setParameter("status", status)
-        .getResultList();
+        PlatformModuleServiceGroupTO r = databaseQuery
+                .nativeQuery(em, """
+                        INSERT INTO platform_module_service_groups (module_id, name, slug, description, icon_path, sort_order, status)
+                        VALUES (CAST(:moduleId AS uuid), :name, :slug, :description, :iconPath, :sortOrder, :status)
+                        RETURNING id::text, module_id::text, name, slug, description, icon_path, sort_order, status, created_at::text, updated_at::text
+                        """, PlatformModuleServiceGroupTO.class)
+                .setParameter("moduleId", moduleId).setParameter("name", req.name().trim()).setParameter("slug", req.slug())
+                .setParameter("description", req.description()).setParameter("iconPath", req.iconPath())
+                .setParameter("sortOrder", sortOrder).setParameter("status", status)
+                .getOptionalResult()
+                .orElseThrow();
 
-        Object[] r = rows.get(0);
         return new PlatformModuleServiceGroupDTO(
-            (String) r[0], (String) r[1], (String) r[2], (String) r[3], (String) r[4],
-            (String) r[5], (Integer) r[6], (String) r[7], (String) r[8], (String) r[9], 0);
+            r.id(), r.moduleId(), r.name(), r.slug(), r.description(),
+            r.iconPath(), r.sortOrder(), r.status(), r.createdAt(), r.updatedAt(), 0);
     }
 
     public int updateServiceGroup(String moduleId, String id, ModuleServiceGroupRequest req) {

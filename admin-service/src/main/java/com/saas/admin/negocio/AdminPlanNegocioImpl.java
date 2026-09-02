@@ -11,6 +11,9 @@ import com.saas.admin.dto.PlanVersionModuleRequest;
 import com.saas.admin.negocio.impl.AdminAuditNegocio;
 import com.saas.admin.negocio.impl.AdminPlanNegocio;
 import com.saas.admin.negocio.impl.TrialCampaignAdminNegocio;
+import com.saas.admin.to.CurrentPlanTO;
+import com.saas.admin.to.PlanActiveFlagsTO;
+import com.saas.admin.to.PlanPopularEligibilityTO;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -69,7 +72,7 @@ public class AdminPlanNegocioImpl implements AdminPlanNegocio {
     @Override
     @Transactional
     public Map<String, Object> createNewVersion(String currentPlanId, PlanRequest req, String actorUserId) {
-        PlanDAO.CurrentPlanRow current = dao.fetchCurrentPlan(currentPlanId)
+        CurrentPlanTO current = dao.fetchCurrentPlan(currentPlanId)
             .orElseThrow(() -> new NotFoundException("Plano não encontrado ou já não é a versão atual"));
 
         dao.deactivateCurrentVersion(currentPlanId);
@@ -103,7 +106,7 @@ public class AdminPlanNegocioImpl implements AdminPlanNegocio {
     @Override
     @Transactional
     public Map<String, Object> setMostPopular(String planId) {
-        PlanDAO.PlanPopularEligibility eligibility = dao.fetchPopularEligibility(planId)
+        PlanPopularEligibilityTO eligibility = dao.fetchPopularEligibility(planId)
             .orElseThrow(() -> new NotFoundException("Plano não encontrado"));
 
         if (!eligibility.isActive())
@@ -127,7 +130,7 @@ public class AdminPlanNegocioImpl implements AdminPlanNegocio {
         int updated = dao.toggleActive(planId);
         if (updated == 0) throw new NotFoundException("Plano não encontrado");
 
-        PlanDAO.PlanActiveFlags flags = dao.fetchActiveFlags(planId)
+        PlanActiveFlagsTO flags = dao.fetchActiveFlags(planId)
             .orElseThrow(() -> new NotFoundException("Plano não encontrado"));
 
         if (!flags.isActive() && flags.isMostPopular()) {
@@ -252,7 +255,7 @@ public class AdminPlanNegocioImpl implements AdminPlanNegocio {
             List<PlanModuleWithLimitsRequest> modules,
             String actorUserId) {
 
-        PlanDAO.CurrentPlanRow current = dao.fetchCurrentPlan(currentPlanId)
+        CurrentPlanTO current = dao.fetchCurrentPlan(currentPlanId)
             .orElseThrow(() -> new NotFoundException("Plano não encontrado ou já não é a versão atual"));
 
         dao.deactivateCurrentVersion(currentPlanId);

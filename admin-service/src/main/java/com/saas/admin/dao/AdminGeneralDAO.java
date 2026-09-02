@@ -6,12 +6,20 @@ import com.saas.admin.dto.DashboardStatsDTO;
 import com.saas.admin.dto.SubscriptionListItemDTO;
 import com.saas.admin.dto.SubscriptionsSummaryDTO;
 import com.saas.admin.dto.SystemAdminDTO;
+import com.saas.admin.to.AdminUserTO;
+import com.saas.admin.to.CustomerSummaryTO;
+import com.saas.admin.to.CustomerUserTO;
+import com.saas.admin.to.IndividualProfileTO;
+import com.saas.admin.to.MemberCompanyTO;
+import com.saas.admin.to.OwnedCompanyTO;
+import com.saas.admin.to.SubscriptionListItemTO;
+import com.saas.admin.to.SubscriptionsSummaryTO;
+import com.saas.platformdatabase.query.DatabaseQuery;
+import com.saas.platformdatabase.query.NativeQuery;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.Query;
 
-import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +34,9 @@ public class AdminGeneralDAO {
 
     @Inject
     EntityManager em;
+
+    @Inject
+    DatabaseQuery databaseQuery;
 
     // ─── Dashboard ─────────────────────────────────────────────────────────
 
@@ -74,7 +85,6 @@ public class AdminGeneralDAO {
 
     // ─── Clientes ──────────────────────────────────────────────────────────
 
-    @SuppressWarnings("unchecked")
     public List<CustomerSummaryDTO> findCustomers(
             String search, Boolean hasIndividual, Boolean hasOwnedCompany, Boolean isMember,
             Boolean isActive, String profileType) {
@@ -133,86 +143,94 @@ public class AdminGeneralDAO {
         }
         sql.append(" ORDER BY created_at DESC");
 
-        Query query = em.createNativeQuery(sql.toString());
+        NativeQuery<CustomerSummaryTO> query = databaseQuery.nativeQuery(em, sql.toString(), CustomerSummaryTO.class);
         params.forEach(query::setParameter);
-        List<Object[]> rows = query.getResultList();
+        List<CustomerSummaryTO> rows = query.getResultList();
 
         return rows.stream().map(row -> {
-            int owned  = row[7] instanceof Number n1 ? n1.intValue() : 0;
-            int member = row[8] instanceof Number n2 ? n2.intValue() : 0;
-            boolean hasInd = Boolean.TRUE.equals(row[6]);
+            int owned = row.ownedCompaniesCount() != null ? row.ownedCompaniesCount() : 0;
+            int member = row.memberCompaniesCount() != null ? row.memberCompaniesCount() : 0;
+            boolean hasInd = Boolean.TRUE.equals(row.hasIndividualProfile());
             return new CustomerSummaryDTO(
-                (String) row[0], (String) row[1], (String) row[2], (Boolean) row[3], (String) row[4],
-                (String) row[5], (Boolean) row[6], (Integer) row[7], (Integer) row[8],
+                row.id(), row.email(), row.fullName(), row.isActive(), row.createdAt(),
+                row.lastSignInAt(), row.hasIndividualProfile(), row.ownedCompaniesCount(), row.memberCompaniesCount(),
                 (hasInd ? 1 : 0) + owned + member);
         }).toList();
     }
 
-    @SuppressWarnings("unchecked")
     public Optional<CustomerDetailDTO> findCustomerDetail(String id) {
-        List<Object[]> userRows = em.createNativeQuery(
-            "SELECT up.id::text, au.email, up.full_name, up.is_active, up.created_at::text, au.last_sign_in_at::text " +
-            "FROM user_profiles up " +
-            "JOIN auth.users au ON au.id = up.id " +
-            "WHERE up.id::text = :id " +
-            "AND up.system_role NOT IN ('SUPER_ADMIN','ADMIN','SUPPORT','FINANCE_ADMIN')"
-        ).setParameter("id", id).getResultList();
+        CustomerUserTO u = databaseQuery
+                .nativeQuery(em, """
+                        SELECT up.id::text, au.email, up.full_name, up.is_active, up.created_at::text, au.last_sign_in_at::text
+                        FROM user_profiles up
+                        JOIN auth.users au ON au.id = up.id
+                        WHERE up.id::text = :id
+                        AND up.system_role NOT IN ('SUPER_ADMIN','ADMIN','SUPPORT','FINANCE_ADMIN')
+                        """, CustomerUserTO.class)
+                .setParameter("id", id)
+                .getOptionalResult()
+                .orElse(null);
 
-        if (userRows.isEmpty()) return Optional.empty();
-        Object[] u = userRows.get(0);
+        if (u == null) return Optional.empty();
 
-        List<Object[]> indRows = em.createNativeQuery(
-            "SELECT t.id::text, t.name, t.slug, t.status, t.created_at::text " +
-            "FROM tenants t " +
-            "JOIN user_tenants ut ON ut.tenant_id = t.id AND ut.user_id::text = :id AND ut.is_active = TRUE " +
-            "WHERE t.type = 'individual'"
-        ).setParameter("id", id).getResultList();
+        Optional<IndividualProfileTO> indRow = databaseQuery
+                .nativeQuery(em, """
+                        SELECT t.id::text, t.name, t.slug, t.status, t.created_at::text
+                        FROM tenants t
+                        JOIN user_tenants ut ON ut.tenant_id = t.id AND ut.user_id::text = :id AND ut.is_active = TRUE
+                        WHERE t.type = 'individual'
+                        """, IndividualProfileTO.class)
+                .setParameter("id", id)
+                .getOptionalResult();
 
-        CustomerDetailDTO.IndividualProfileDTO individualProfile = null;
-        if (!indRows.isEmpty()) {
-            Object[] ip = indRows.get(0);
-            individualProfile = new CustomerDetailDTO.IndividualProfileDTO(
-                (String) ip[0], (String) ip[1], (String) ip[2], (String) ip[3], (String) ip[4]);
-        }
+        CustomerDetailDTO.IndividualProfileDTO individualProfile = indRow
+                .map(ip -> new CustomerDetailDTO.IndividualProfileDTO(ip.id(), ip.name(), ip.slug(), ip.status(), ip.createdAt()))
+                .orElse(null);
 
-        List<Object[]> ownedRows = em.createNativeQuery(
-            "SELECT t.id::text, t.name, t.slug, t.status, t.created_at::text, " +
-            "  p.name AS plan_name, p.code AS plan_code, " +
-            "  (SELECT COUNT(*) FROM user_tenants ut2 WHERE ut2.tenant_id = t.id AND ut2.is_active = TRUE)::int " +
-            "FROM tenants t " +
-            "JOIN user_tenants ut ON ut.tenant_id = t.id AND ut.user_id::text = :id AND ut.role = 'owner' AND ut.is_active = TRUE " +
-            "LEFT JOIN plans p ON p.id = t.plan_id " +
-            "WHERE t.type = 'business' " +
-            "ORDER BY t.created_at DESC"
-        ).setParameter("id", id).getResultList();
+        List<OwnedCompanyTO> ownedRows = databaseQuery
+                .nativeQuery(em, """
+                        SELECT t.id::text, t.name, t.slug, t.status, t.created_at::text,
+                          p.name AS plan_name, p.code AS plan_code,
+                          (SELECT COUNT(*) FROM user_tenants ut2 WHERE ut2.tenant_id = t.id AND ut2.is_active = TRUE)::int AS member_count
+                        FROM tenants t
+                        JOIN user_tenants ut ON ut.tenant_id = t.id AND ut.user_id::text = :id AND ut.role = 'owner' AND ut.is_active = TRUE
+                        LEFT JOIN plans p ON p.id = t.plan_id
+                        WHERE t.type = 'business'
+                        ORDER BY t.created_at DESC
+                        """, OwnedCompanyTO.class)
+                .setParameter("id", id)
+                .getResultList();
 
         List<CustomerDetailDTO.OwnedCompanyDTO> ownedCompanies = ownedRows.stream().map(row ->
             new CustomerDetailDTO.OwnedCompanyDTO(
-                (String) row[0], (String) row[1], (String) row[2], (String) row[3], (String) row[4],
-                (String) row[5], (String) row[6], (Integer) row[7])
+                row.id(), row.name(), row.slug(), row.status(), row.createdAt(),
+                row.planName(), row.planCode(), row.memberCount())
         ).toList();
 
-        List<Object[]> memberRows = em.createNativeQuery(
-            "SELECT t.id::text, t.name, t.slug, ut.role, ut.is_active, ut.created_at::text, " +
-            "  (SELECT up2.full_name FROM invitations inv " +
-            "   JOIN user_profiles up2 ON up2.id = inv.invited_by " +
-            "   WHERE inv.tenant_id = t.id " +
-            "   AND inv.email = (SELECT email FROM auth.users WHERE id::text = :id) " +
-            "   AND inv.status = 'accepted' LIMIT 1) " +
-            "FROM tenants t " +
-            "JOIN user_tenants ut ON ut.tenant_id = t.id AND ut.user_id::text = :id AND ut.role != 'owner' " +
-            "WHERE t.type = 'business' " +
-            "ORDER BY ut.created_at DESC"
-        ).setParameter("id", id).getResultList();
+        List<MemberCompanyTO> memberRows = databaseQuery
+                .nativeQuery(em, """
+                        SELECT t.id::text, t.name, t.slug, ut.role, ut.is_active, ut.created_at::text,
+                          (SELECT up2.full_name FROM invitations inv
+                           JOIN user_profiles up2 ON up2.id = inv.invited_by
+                           WHERE inv.tenant_id = t.id
+                           AND inv.email = (SELECT email FROM auth.users WHERE id::text = :id)
+                           AND inv.status = 'accepted' LIMIT 1) AS invited_by_name
+                        FROM tenants t
+                        JOIN user_tenants ut ON ut.tenant_id = t.id AND ut.user_id::text = :id AND ut.role != 'owner'
+                        WHERE t.type = 'business'
+                        ORDER BY ut.created_at DESC
+                        """, MemberCompanyTO.class)
+                .setParameter("id", id)
+                .getResultList();
 
         List<CustomerDetailDTO.MemberCompanyDTO> memberCompanies = memberRows.stream().map(row ->
             new CustomerDetailDTO.MemberCompanyDTO(
-                (String) row[0], (String) row[1], (String) row[2], (String) row[3], (Boolean) row[4],
-                (String) row[5], (String) row[6])
+                row.id(), row.name(), row.slug(), row.role(), row.linkActive(),
+                row.joinedAt(), row.invitedByName())
         ).toList();
 
         return Optional.of(new CustomerDetailDTO(
-            (String) u[0], (String) u[1], (String) u[2], (Boolean) u[3], (String) u[4], (String) u[5],
+            u.id(), u.email(), u.fullName(), u.isActive(), u.createdAt(), u.lastSignInAt(),
             individualProfile, ownedCompanies, memberCompanies));
     }
 
@@ -224,42 +242,46 @@ public class AdminGeneralDAO {
 
     // ─── Administradores do sistema (papéis legados) ──────────────────────
 
-    @SuppressWarnings("unchecked")
     public List<SystemAdminDTO> findSystemAdmins() {
-        List<Object[]> rows = em.createNativeQuery(
-                "SELECT up.id::text, au.email, up.full_name, up.system_role, up.is_active, " +
-                "up.created_at::text " +
-                "FROM user_profiles up " +
-                "JOIN auth.users au ON au.id = up.id " +
-                "WHERE up.system_role IN ('SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'FINANCE_ADMIN') " +
-                "ORDER BY up.system_role, up.created_at DESC"
-        ).getResultList();
+        List<AdminUserTO> rows = databaseQuery
+                .nativeQuery(em, """
+                        SELECT up.id::text, au.email, up.full_name, up.system_role, up.is_active,
+                        up.created_at::text
+                        FROM user_profiles up
+                        JOIN auth.users au ON au.id = up.id
+                        WHERE up.system_role IN ('SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'FINANCE_ADMIN')
+                        ORDER BY up.system_role, up.created_at DESC
+                        """, AdminUserTO.class)
+                .getResultList();
 
         return rows.stream().map(row -> new SystemAdminDTO(
-            (String) row[0], (String) row[1], (String) row[2], (String) row[3], (Boolean) row[4], (String) row[5]
+            row.id(), row.email(), row.fullName(), row.systemRole(), row.isActive(), row.createdAt()
         )).toList();
     }
 
     // ─── Assinaturas ───────────────────────────────────────────────────────
 
     public SubscriptionsSummaryDTO fetchSubscriptionsSummary() {
-        Object[] row = (Object[]) em.createNativeQuery(
-            "SELECT COUNT(*)::bigint, " +
-            "COUNT(*) FILTER (WHERE status = 'ACTIVE')::bigint, " +
-            "COUNT(*) FILTER (WHERE billing_cycle = 'MONTHLY')::bigint, " +
-            "COUNT(*) FILTER (WHERE billing_cycle = 'ANNUAL')::bigint, " +
-            "COUNT(*) FILTER (WHERE status = 'CANCELED')::bigint, " +
-            "COUNT(*) FILTER (WHERE status = 'EXPIRED')::bigint, " +
-            "COUNT(*) FILTER (WHERE status = 'PENDING_PAYMENT')::bigint, " +
-            "COUNT(*) FILTER (WHERE status = 'TRIAL')::bigint, " +
-            "COUNT(*) FILTER (WHERE status = 'TRIAL_CANCELLED')::bigint " +
-            "FROM profile_module_subscriptions"
-        ).getSingleResult();
+        SubscriptionsSummaryTO row = databaseQuery
+                .nativeQuery(em, """
+                        SELECT COUNT(*)::bigint AS total_count,
+                        COUNT(*) FILTER (WHERE status = 'ACTIVE')::bigint AS active_count,
+                        COUNT(*) FILTER (WHERE billing_cycle = 'MONTHLY')::bigint AS monthly_count,
+                        COUNT(*) FILTER (WHERE billing_cycle = 'ANNUAL')::bigint AS annual_count,
+                        COUNT(*) FILTER (WHERE status = 'CANCELED')::bigint AS canceled_count,
+                        COUNT(*) FILTER (WHERE status = 'EXPIRED')::bigint AS expired_count,
+                        COUNT(*) FILTER (WHERE status = 'PENDING_PAYMENT')::bigint AS pending_payment_count,
+                        COUNT(*) FILTER (WHERE status = 'TRIAL')::bigint AS trial_count,
+                        COUNT(*) FILTER (WHERE status = 'TRIAL_CANCELLED')::bigint AS trial_cancelled_count
+                        FROM profile_module_subscriptions
+                        """, SubscriptionsSummaryTO.class)
+                .getOptionalResult()
+                .orElseThrow();
 
         return new SubscriptionsSummaryDTO(
-            ((Number) row[0]).longValue(), ((Number) row[1]).longValue(), ((Number) row[2]).longValue(),
-            ((Number) row[3]).longValue(), ((Number) row[4]).longValue(), ((Number) row[5]).longValue(),
-            ((Number) row[6]).longValue(), ((Number) row[7]).longValue(), ((Number) row[8]).longValue());
+            row.total(), row.active(), row.monthly(),
+            row.annual(), row.canceled(), row.expired(),
+            row.pendingPayment(), row.trial(), row.trialCancelled());
     }
 
     public record SubscriptionSearchFilters(
@@ -272,22 +294,21 @@ public class AdminGeneralDAO {
     public record SubscriptionListResult(List<SubscriptionListItemDTO> items, long total) {
     }
 
-    @SuppressWarnings("unchecked")
     public SubscriptionListResult findSubscriptions(SubscriptionSearchFilters f) {
         StringBuilder sql = new StringBuilder(
-            "SELECT pms.id::text, " +
-            "t.id::text, t.name, t.type, " +
-            "CASE WHEN t.type = 'business' THEN t.id::text ELSE NULL END, " +
-            "CASE WHEN t.type = 'business' THEN t.name ELSE NULL END, " +
-            "CASE WHEN t.type = 'business' THEN t.slug ELSE NULL END, " +
-            "up.id::text, up.full_name, au.email, " +
-            "pm.id::text, pm.name, pm.icon_path, " +
-            "p.id::text, p.name, pvm.id::text, p.version, " +
-            "pms.billing_cycle, " +
-            "CASE WHEN pms.billing_cycle = 'MONTHLY' THEN pvm.monthly_price ELSE pvm.annual_monthly_price * 12 END, " +
-            "CASE WHEN pms.billing_cycle = 'ANNUAL' THEN pvm.annual_monthly_price * 12 ELSE NULL END, " +
-            "pms.status, pms.started_at::text, pms.expires_at::text, pms.canceled_at::text, " +
-            "(pms.status = 'ACTIVE'), COUNT(*) OVER() " +
+            "SELECT pms.id::text AS id, " +
+            "t.id::text AS profile_id, t.name AS profile_name, t.type AS profile_type, " +
+            "CASE WHEN t.type = 'business' THEN t.id::text ELSE NULL END AS company_id, " +
+            "CASE WHEN t.type = 'business' THEN t.name ELSE NULL END AS company_name, " +
+            "CASE WHEN t.type = 'business' THEN t.slug ELSE NULL END AS company_slug, " +
+            "up.id::text AS owner_user_id, up.full_name AS owner_name, au.email AS owner_email, " +
+            "pm.id::text AS module_id, pm.name AS module_name, pm.icon_path AS module_icon_path, " +
+            "p.id::text AS plan_id, p.name AS plan_name, pvm.id::text AS plan_version_id, p.version AS plan_version_number, " +
+            "pms.billing_cycle AS billing_cycle, " +
+            "CASE WHEN pms.billing_cycle = 'MONTHLY' THEN pvm.monthly_price ELSE pvm.annual_monthly_price * 12 END AS price, " +
+            "CASE WHEN pms.billing_cycle = 'ANNUAL' THEN pvm.annual_monthly_price * 12 ELSE NULL END AS annual_total_price, " +
+            "pms.status AS status, pms.started_at::text AS started_at, pms.expires_at::text AS expires_at, pms.canceled_at::text AS canceled_at, " +
+            "(pms.status = 'ACTIVE') AS renewal_active, COUNT(*) OVER() AS total_count " +
             "FROM profile_module_subscriptions pms " +
             "JOIN tenants t ON t.id = pms.tenant_id " +
             "JOIN platform_modules pm ON pm.id = pms.module_id " +
@@ -373,23 +394,22 @@ public class AdminGeneralDAO {
         params.put("size",   f.size());
         params.put("offset", f.offset());
 
-        Query query = em.createNativeQuery(sql.toString());
+        NativeQuery<SubscriptionListItemTO> query = databaseQuery.nativeQuery(em, sql.toString(), SubscriptionListItemTO.class);
         params.forEach(query::setParameter);
-        List<Object[]> rows = query.getResultList();
+        List<SubscriptionListItemTO> rows = query.getResultList();
 
-        long totalCount = rows.isEmpty() ? 0L : ((Number) rows.get(0)[25]).longValue();
+        long totalCount = rows.isEmpty() ? 0L : rows.get(0).totalCount();
 
         List<SubscriptionListItemDTO> items = rows.stream().map(row -> new SubscriptionListItemDTO(
-            (String) row[0], (String) row[1], (String) row[2],
-            "business".equals(row[3]) ? "COMPANY" : "INDIVIDUAL",
-            (String) row[4], (String) row[5], (String) row[6],
-            (String) row[7], (String) row[8], (String) row[9],
-            (String) row[10], (String) row[11], (String) row[12],
-            (String) row[13], (String) row[14], (String) row[15],
-            row[16] != null ? ((Number) row[16]).intValue() : null,
-            (String) row[17], (BigDecimal) row[18], (BigDecimal) row[19],
-            (String) row[20], (String) row[21], (String) row[22], (String) row[23],
-            (Boolean) row[24]
+            row.id(), row.profileId(), row.profileName(),
+            "business".equals(row.profileType()) ? "COMPANY" : "INDIVIDUAL",
+            row.companyId(), row.companyName(), row.companySlug(),
+            row.ownerUserId(), row.ownerName(), row.ownerEmail(),
+            row.moduleId(), row.moduleName(), row.moduleIconPath(),
+            row.planId(), row.planName(), row.planVersionId(), row.planVersionNumber(),
+            row.billingCycle(), row.price(), row.annualTotalPrice(),
+            row.status(), row.startedAt(), row.expiresAt(), row.canceledAt(),
+            row.renewalActive()
         )).toList();
 
         return new SubscriptionListResult(items, totalCount);

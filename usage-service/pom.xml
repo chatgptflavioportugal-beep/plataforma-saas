@@ -75,6 +75,14 @@
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
 
+        <!-- Mapeamento de native query (Tuple) -> TO por reflection, sem Object[]
+             posicional (ver com.saas.platformdatabase.mapper.TupleTOMapper) -->
+        <dependency>
+            <groupId>com.saas</groupId>
+            <artifactId>platform-database</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
         <!-- Testes -->
         <dependency>
             <groupId>io.quarkus</groupId>

@@ -6,6 +6,13 @@ import com.saas.admin.dto.PlanVersionModuleDTO;
 import com.saas.admin.dto.PlanVersionModuleLimitRequest;
 import com.saas.admin.dto.PlanVersionModuleRequest;
 import com.saas.admin.dto.PlanSummaryDTO;
+import com.saas.admin.to.CurrentPlanTO;
+import com.saas.admin.to.PlanActiveFlagsTO;
+import com.saas.admin.to.PlanPopularEligibilityTO;
+import com.saas.admin.to.PlanSummaryTO;
+import com.saas.admin.to.PlanVersionHistoryTO;
+import com.saas.admin.to.PlanVersionModuleTO;
+import com.saas.platformdatabase.query.DatabaseQuery;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -27,6 +34,9 @@ public class PlanDAO {
 
     @Inject
     EntityManager em;
+
+    @Inject
+    DatabaseQuery databaseQuery;
 
     // ----------------------------------------------------------------
     // Expressões SQL reutilizáveis para cálculo de totais pelos módulos
@@ -97,89 +107,80 @@ public class PlanDAO {
     // Snapshot interno da versão atual de um plano (DAO -> Negocio apenas)
     // ----------------------------------------------------------------
 
-    public record CurrentPlanRow(
-            String code, int maxUsers, int maxAiRequestsMonth, int version,
-            String name, String description, int sortOrder, String billingType,
-            int discountAnnualPercent, boolean isMostPopular, String planType) {
-    }
-
-    public record PlanActiveFlags(boolean isActive, boolean isMostPopular) {
-    }
-
-    public record PlanPopularEligibility(boolean isActive, boolean isCurrentVersion) {
-    }
-
     // ----------------------------------------------------------------
 
-    @SuppressWarnings("unchecked")
     public List<PlanSummaryDTO> findAllPlansAdmin() {
-        List<Object[]> rows = em.createNativeQuery(
-                "SELECT p.id::text, p.name, p.code, p.description, " +
-                "p.price_monthly, p.price_annual, p.discount_annual_percent, " +
-                "p.max_users, p.max_ai_requests_month, " +
-                "p.is_active, p.sort_order, p.version, p.is_current_version, " +
-                "p.parent_plan_id::text, p.billing_type, p.created_at::text, " +
-                "p.is_most_popular, p.plan_type, " +
-                PAID_SUBS_EXPR + " AS paid_subscriptions, " +
-                TRIAL_SUBS_EXPR + " AS trial_subscriptions, " +
-                TOTAL_MONTHLY_EXPR + " AS total_monthly_price, " +
-                TOTAL_ANNUAL_MONTHLY_EXPR + " AS total_annual_monthly_price, " +
-                TOTAL_ANNUAL_MONTHLY_EXPR + " * 12 AS total_annual_price, " +
-                MODULE_COUNT_EXPR + " AS module_count " +
-                "FROM plans p " +
-                "ORDER BY p.plan_type, p.code, p.version"
-        ).getResultList();
+        List<PlanSummaryTO> rows = databaseQuery
+                .nativeQuery(em, """
+                        SELECT p.id::text, p.name, p.code, p.description,
+                        p.price_monthly, p.price_annual, p.discount_annual_percent,
+                        p.max_users, p.max_ai_requests_month,
+                        p.is_active, p.sort_order, p.version, p.is_current_version,
+                        p.parent_plan_id::text, p.billing_type, p.created_at::text,
+                        p.is_most_popular, p.plan_type,
+                        """ + PAID_SUBS_EXPR + " AS paid_subscriptions, " +
+                        TRIAL_SUBS_EXPR + " AS trial_subscriptions, " +
+                        TOTAL_MONTHLY_EXPR + " AS total_monthly_price, " +
+                        TOTAL_ANNUAL_MONTHLY_EXPR + " AS total_annual_monthly_price, " +
+                        TOTAL_ANNUAL_MONTHLY_EXPR + " * 12 AS total_annual_price, " +
+                        MODULE_COUNT_EXPR + " AS module_count " +
+                        "FROM plans p " +
+                        "ORDER BY p.plan_type, p.code, p.version",
+                        PlanSummaryTO.class)
+                .getResultList();
 
         return rows.stream().map(row -> {
-            long paidSubs  = ((Number) row[18]).longValue();
-            long trialSubs = ((Number) row[19]).longValue();
+            long paidSubs  = row.paidSubscriptions();
+            long trialSubs = row.trialSubscriptions();
             return new PlanSummaryDTO(
-                (String) row[0], (String) row[1], (String) row[2], (String) row[3],
-                (BigDecimal) row[4], (BigDecimal) row[5], ((Number) row[6]).intValue(),
-                (Integer) row[7], (Integer) row[8], (Boolean) row[9], (Integer) row[10],
-                (Integer) row[11], (Boolean) row[12], (String) row[13], (String) row[14],
-                (String) row[15], (Boolean) row[16], (String) row[17],
+                row.id(), row.name(), row.code(), row.description(),
+                row.priceMonthly(), row.priceAnnual(), row.discountAnnualPercent(),
+                row.maxUsers(), row.maxAiRequestsMonth(), row.isActive(), row.sortOrder(),
+                row.version(), row.isCurrentVersion(), row.parentPlanId(), row.billingType(),
+                row.createdAt(), row.isMostPopular(), row.planType(),
                 paidSubs, trialSubs, paidSubs + trialSubs,
-                (BigDecimal) row[20], (BigDecimal) row[21], (BigDecimal) row[22],
-                ((Number) row[23]).intValue());
+                row.totalMonthlyPrice(), row.totalAnnualMonthlyPrice(), row.totalAnnualPrice(),
+                row.moduleCount());
         }).toList();
     }
 
-    @SuppressWarnings("unchecked")
     public List<PlanVersionHistoryDTO> findVersionHistory(String planCode) {
-        List<Object[]> rows = em.createNativeQuery(
-                "SELECT p.id::text, p.name, p.code, p.description, " +
-                "p.price_monthly, p.price_annual, p.discount_annual_percent, " +
-                "p.max_users, p.max_ai_requests_month, " +
-                "p.is_active, p.sort_order, p.version, p.is_current_version, " +
-                "p.is_most_popular, p.created_at::text, p.plan_type, " +
-                PAID_SUBS_EXPR + " AS paid_subscriptions, " +
-                TRIAL_SUBS_EXPR + " AS trial_subscriptions, " +
-                TOTAL_MONTHLY_EXPR + " AS total_monthly_price, " +
-                TOTAL_ANNUAL_MONTHLY_EXPR + " AS total_annual_monthly_price, " +
-                TOTAL_ANNUAL_MONTHLY_EXPR + " * 12 AS total_annual_price, " +
-                MODULE_COUNT_EXPR + " AS module_count, " +
-                "p.billing_type, " +
-                TRIAL_CAMPAIGNS_ACTIVE_EXPR + " AS trial_campaigns_active, " +
-                TRIAL_CAMPAIGNS_CANCELLED_EXPR + " AS trial_campaigns_cancelled, " +
-                MODULES_DETAIL_JSON_EXPR + " AS modules_json " +
-                "FROM plans p " +
-                "WHERE p.code = :code " +
-                "ORDER BY p.version DESC"
-        ).setParameter("code", planCode).getResultList();
+        List<PlanVersionHistoryTO> rows = databaseQuery
+                .nativeQuery(em, """
+                        SELECT p.id::text, p.name, p.code, p.description,
+                        p.price_monthly, p.price_annual, p.discount_annual_percent,
+                        p.max_users, p.max_ai_requests_month,
+                        p.is_active, p.sort_order, p.version, p.is_current_version,
+                        p.is_most_popular, p.created_at::text, p.plan_type,
+                        """ + PAID_SUBS_EXPR + " AS paid_subscriptions, " +
+                        TRIAL_SUBS_EXPR + " AS trial_subscriptions, " +
+                        TOTAL_MONTHLY_EXPR + " AS total_monthly_price, " +
+                        TOTAL_ANNUAL_MONTHLY_EXPR + " AS total_annual_monthly_price, " +
+                        TOTAL_ANNUAL_MONTHLY_EXPR + " * 12 AS total_annual_price, " +
+                        MODULE_COUNT_EXPR + " AS module_count, " +
+                        "p.billing_type, " +
+                        TRIAL_CAMPAIGNS_ACTIVE_EXPR + " AS trial_campaigns_active, " +
+                        TRIAL_CAMPAIGNS_CANCELLED_EXPR + " AS trial_campaigns_cancelled, " +
+                        MODULES_DETAIL_JSON_EXPR + " AS modules_json " +
+                        "FROM plans p " +
+                        "WHERE p.code = :code " +
+                        "ORDER BY p.version DESC",
+                        PlanVersionHistoryTO.class)
+                .setParameter("code", planCode)
+                .getResultList();
 
         return rows.stream().map(row -> {
-            long paidSubs  = ((Number) row[16]).longValue();
-            long trialSubs = ((Number) row[17]).longValue();
+            long paidSubs  = row.paidSubscriptions();
+            long trialSubs = row.trialSubscriptions();
             return new PlanVersionHistoryDTO(
-                (String) row[0], (String) row[1], (String) row[2], (String) row[3],
-                (BigDecimal) row[4], (BigDecimal) row[5], ((Number) row[6]).intValue(),
-                (Integer) row[7], (Integer) row[8], (Boolean) row[9], (Integer) row[10],
-                (Integer) row[11], (Boolean) row[12], (Boolean) row[13], (String) row[14],
-                (String) row[15], paidSubs, trialSubs, paidSubs + trialSubs,
-                (BigDecimal) row[18], (BigDecimal) row[19], (BigDecimal) row[20],
-                ((Number) row[21]).intValue(), (String) row[22],
-                ((Number) row[23]).longValue(), ((Number) row[24]).longValue(), (String) row[25]);
+                row.id(), row.name(), row.code(), row.description(),
+                row.priceMonthly(), row.priceAnnual(), row.discountAnnualPercent(),
+                row.maxUsers(), row.maxAiRequestsMonth(), row.isActive(), row.sortOrder(),
+                row.version(), row.isCurrentVersion(), row.isMostPopular(), row.createdAt(),
+                row.planType(), paidSubs, trialSubs, paidSubs + trialSubs,
+                row.totalMonthlyPrice(), row.totalAnnualMonthlyPrice(), row.totalAnnualPrice(),
+                row.moduleCount(), row.billingType(),
+                row.trialCampaignsActive(), row.trialCampaignsCancelled(), row.modulesJson());
         }).toList();
     }
 
@@ -209,24 +210,16 @@ public class PlanDAO {
         return id;
     }
 
-    @SuppressWarnings("unchecked")
-    public Optional<CurrentPlanRow> fetchCurrentPlan(String planId) {
-        try {
-            Object[] r = (Object[]) em.createNativeQuery(
-                    "SELECT code, max_users, max_ai_requests_month, " +
-                    "version, name, description, sort_order, billing_type, " +
-                    "discount_annual_percent, is_most_popular, plan_type " +
-                    "FROM plans WHERE id::text = :id AND is_current_version = TRUE"
-            ).setParameter("id", planId).getSingleResult();
-
-            return Optional.of(new CurrentPlanRow(
-                (String) r[0], ((Number) r[1]).intValue(), ((Number) r[2]).intValue(),
-                ((Number) r[3]).intValue(), (String) r[4], (String) r[5],
-                ((Number) r[6]).intValue(), (String) r[7], ((Number) r[8]).intValue(),
-                (Boolean) r[9], (String) r[10]));
-        } catch (NoResultException e) {
-            return Optional.empty();
-        }
+    public Optional<CurrentPlanTO> fetchCurrentPlan(String planId) {
+        return databaseQuery
+                .nativeQuery(em, """
+                        SELECT code, max_users, max_ai_requests_month,
+                        version, name, description, sort_order, billing_type,
+                        discount_annual_percent, is_most_popular, plan_type
+                        FROM plans WHERE id::text = :id AND is_current_version = TRUE
+                        """, CurrentPlanTO.class)
+                .setParameter("id", planId)
+                .getOptionalResult();
     }
 
     public void deactivateCurrentVersion(String planId) {
@@ -284,28 +277,20 @@ public class PlanDAO {
         ).setParameter("newPlanId", newPlanId.toString()).setParameter("oldPlanId", oldPlanId).executeUpdate();
     }
 
-    @SuppressWarnings("unchecked")
-    public Optional<PlanPopularEligibility> fetchPopularEligibility(String planId) {
-        try {
-            Object[] r = (Object[]) em.createNativeQuery(
-                    "SELECT is_active, is_current_version FROM plans WHERE id::text = :id"
-            ).setParameter("id", planId).getSingleResult();
-            return Optional.of(new PlanPopularEligibility((Boolean) r[0], (Boolean) r[1]));
-        } catch (NoResultException e) {
-            return Optional.empty();
-        }
+    public Optional<PlanPopularEligibilityTO> fetchPopularEligibility(String planId) {
+        return databaseQuery
+                .nativeQuery(em, "SELECT is_active, is_current_version FROM plans WHERE id::text = :id",
+                        PlanPopularEligibilityTO.class)
+                .setParameter("id", planId)
+                .getOptionalResult();
     }
 
-    @SuppressWarnings("unchecked")
-    public Optional<PlanActiveFlags> fetchActiveFlags(String planId) {
-        try {
-            Object[] r = (Object[]) em.createNativeQuery(
-                    "SELECT is_active, is_most_popular FROM plans WHERE id::text = :id"
-            ).setParameter("id", planId).getSingleResult();
-            return Optional.of(new PlanActiveFlags((Boolean) r[0], (Boolean) r[1]));
-        } catch (NoResultException e) {
-            return Optional.empty();
-        }
+    public Optional<PlanActiveFlagsTO> fetchActiveFlags(String planId) {
+        return databaseQuery
+                .nativeQuery(em, "SELECT is_active, is_most_popular FROM plans WHERE id::text = :id",
+                        PlanActiveFlagsTO.class)
+                .setParameter("id", planId)
+                .getOptionalResult();
     }
 
     public int toggleActive(String planId) {
@@ -334,30 +319,32 @@ public class PlanDAO {
     // plan_version_modules
     // ----------------------------------------------------------------
 
-    @SuppressWarnings("unchecked")
     public List<PlanVersionModuleDTO> findPlanVersionModules(String planId) {
-        List<Object[]> rows = em.createNativeQuery(
-                "SELECT pvm.id::text, pvm.plan_id::text, pvm.module_id::text, " +
-                "pm.name AS module_name, pm.slug AS module_slug, pm.icon_path AS module_icon_path, " +
-                "pvm.monthly_price, pvm.annual_monthly_price, pvm.status, pvm.sort_order, " +
-                "pvm.created_at::text, pvm.updated_at::text, " +
-                "COALESCE((SELECT json_agg(json_build_object(" +
-                "  'id', pvml.id::text, 'title', pvml.title, 'description', pvml.description, " +
-                "  'code', pvml.code, 'limit_value', pvml.limit_value, " +
-                "  'unit', pvml.unit, 'sort_order', pvml.sort_order" +
-                ") ORDER BY pvml.sort_order) FROM plan_version_module_limits pvml " +
-                "WHERE pvml.plan_version_module_id = pvm.id), '[]'::json)::text AS limits_json " +
-                "FROM plan_version_modules pvm " +
-                "JOIN platform_modules pm ON pm.id = pvm.module_id " +
-                "WHERE pvm.plan_id::text = :planId " +
-                "ORDER BY pvm.sort_order, pm.name"
-        ).setParameter("planId", planId).getResultList();
+        List<PlanVersionModuleTO> rows = databaseQuery
+                .nativeQuery(em, """
+                        SELECT pvm.id::text, pvm.plan_id::text, pvm.module_id::text,
+                        pm.name AS module_name, pm.slug AS module_slug, pm.icon_path AS module_icon_path,
+                        pvm.monthly_price, pvm.annual_monthly_price, pvm.status, pvm.sort_order,
+                        pvm.created_at::text, pvm.updated_at::text,
+                        COALESCE((SELECT json_agg(json_build_object(
+                          'id', pvml.id::text, 'title', pvml.title, 'description', pvml.description,
+                          'code', pvml.code, 'limit_value', pvml.limit_value,
+                          'unit', pvml.unit, 'sort_order', pvml.sort_order
+                        ) ORDER BY pvml.sort_order) FROM plan_version_module_limits pvml
+                        WHERE pvml.plan_version_module_id = pvm.id), '[]'::json)::text AS limits_json
+                        FROM plan_version_modules pvm
+                        JOIN platform_modules pm ON pm.id = pvm.module_id
+                        WHERE pvm.plan_id::text = :planId
+                        ORDER BY pvm.sort_order, pm.name
+                        """, PlanVersionModuleTO.class)
+                .setParameter("planId", planId)
+                .getResultList();
 
         return rows.stream()
             .map(row -> new PlanVersionModuleDTO(
-                (String) row[0], (String) row[1], (String) row[2], (String) row[3],
-                (String) row[4], (String) row[5], (BigDecimal) row[6], (BigDecimal) row[7],
-                (String) row[8], (Integer) row[9], (String) row[10], (String) row[11], (String) row[12]))
+                row.id(), row.planId(), row.moduleId(), row.moduleName(),
+                row.moduleSlug(), row.moduleIconPath(), row.monthlyPrice(), row.annualMonthlyPrice(),
+                row.status(), row.sortOrder(), row.createdAt(), row.updatedAt(), row.limitsJson()))
             .toList();
     }
 

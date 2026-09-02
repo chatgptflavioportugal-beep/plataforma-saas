@@ -7,6 +7,8 @@ import com.saas.admin.negocio.impl.AdminAuditNegocio;
 import com.saas.admin.negocio.impl.AdminUsersNegocio;
 import com.saas.admin.repository.EmailRepository;
 import com.saas.admin.repository.SupabaseAdminRepository;
+import com.saas.admin.to.EmailRoleTO;
+import com.saas.admin.to.ExistingUserTO;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -44,7 +46,7 @@ public class AdminUsersNegocioImpl implements AdminUsersNegocio {
     }
 
     @Override
-    public Optional<AdminUserDAO.ExistingUserRow> findExistingByEmail(String normalizedEmail) {
+    public Optional<ExistingUserTO> findExistingByEmail(String normalizedEmail) {
         return dao.findByEmail(normalizedEmail);
     }
 
@@ -107,7 +109,7 @@ public class AdminUsersNegocioImpl implements AdminUsersNegocio {
     }
 
     @Override
-    public Optional<AdminUserDAO.EmailRoleRow> findEmailAndRole(String id) {
+    public Optional<EmailRoleTO> findEmailAndRole(String id) {
         return dao.findEmailAndRole(id);
     }
 

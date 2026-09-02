@@ -1,12 +1,15 @@
 # .dockerignore da raiz — usado pelos builds cujo contexto é a raiz do repo
-# (pdf-service, whatsapp-service, usage-service — ver docker-compose.yml).
-# Objetivo: reduzir o build context enviado ao daemon e evitar que arquivos
-# de cache/segredos/outros serviços acabem copiados para dentro da imagem
-# por um `COPY <dir>/ .` amplo.
+# (pdf-service, whatsapp-service, usage-service, auth-service, profile-service,
+# subscription-service, module-catalog-service, admin-service — ver
+# docker-compose.yml). Objetivo: reduzir o build context enviado ao daemon e
+# evitar que arquivos de cache/segredos/outros serviços acabem copiados para
+# dentro da imagem por um `COPY <dir>/ .` amplo.
 #
-# NÃO excluir: pdf-service/, whatsapp-service/, usage-service/,
-# libs/platform-module-security/, libs/platform-module-security-quarkus/
-# — são usados por pelo menos um destes três Dockerfiles.
+# NÃO excluir: pdf-service/, whatsapp-service/, usage-service/, auth-service/,
+# profile-service/, subscription-service/, module-catalog-service/,
+# admin-service/, libs/platform-module-security/,
+# libs/platform-module-security-quarkus/, libs/platform-database/ — são
+# usados por pelo menos um destes Dockerfiles.
 
 .git/
 .claude/
@@ -14,13 +17,7 @@
 database/
 docs/
 
-# Demais microsserviços/frontends — nenhum dos 3 builds com contexto raiz
-# (pdf-service, whatsapp-service, usage-service) precisa deles.
-auth-service/
-profile-service/
-module-catalog-service/
-subscription-service/
-admin-service/
+# Demais frontends — nenhum build com contexto raiz precisa deles.
 frontend-host/
 frontend-admin/
 pdf-frontend/

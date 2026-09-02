@@ -2,6 +2,9 @@ package com.saas.admin.dao;
 
 import com.saas.admin.dto.AccessLevelDTO;
 import com.saas.admin.dto.AccessLevelDetailDTO;
+import com.saas.admin.to.AccessLevelBasicTO;
+import com.saas.admin.to.AccessLevelSummaryTO;
+import com.saas.platformdatabase.query.DatabaseQuery;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -14,6 +17,9 @@ public class AccessLevelDAO {
 
     @Inject
     EntityManager em;
+
+    @Inject
+    DatabaseQuery databaseQuery;
 
     /**
      * Retorna o admin_access_level_id (pode conter null) do usuário, ou
@@ -35,55 +41,57 @@ public class AccessLevelDAO {
         ).setParameter("id", accessLevelId).getResultList();
     }
 
-    @SuppressWarnings("unchecked")
     public List<AccessLevelDTO> findAll(String status) {
         String normalizedStatus = (status != null && !status.isBlank()) ? status.toUpperCase().trim() : null;
 
-        List<Object[]> rows = em.createNativeQuery(
-            "SELECT al.id::text, al.name, al.description, al.status, " +
-            "al.created_at::text, al.updated_at::text, " +
-            "(SELECT COUNT(*) FROM admin_access_level_permissions p WHERE p.access_level_id = al.id)::int AS perm_count, " +
-            "(SELECT COUNT(*) FROM user_profiles up WHERE up.admin_access_level_id = al.id AND up.system_role = 'ADMIN_USER')::int AS user_count " +
-            "FROM admin_access_levels al WHERE (:status IS NULL OR al.status = :status) " +
-            "ORDER BY al.name"
-        ).setParameter("status", normalizedStatus).getResultList();
+        List<AccessLevelSummaryTO> rows = databaseQuery
+                .nativeQuery(em, """
+                        SELECT al.id::text, al.name, al.description, al.status,
+                        al.created_at::text, al.updated_at::text,
+                        (SELECT COUNT(*) FROM admin_access_level_permissions p WHERE p.access_level_id = al.id)::int AS perm_count,
+                        (SELECT COUNT(*) FROM user_profiles up WHERE up.admin_access_level_id = al.id AND up.system_role = 'ADMIN_USER')::int AS user_count
+                        FROM admin_access_levels al WHERE (:status IS NULL OR al.status = :status)
+                        ORDER BY al.name
+                        """, AccessLevelSummaryTO.class)
+                .setParameter("status", normalizedStatus)
+                .getResultList();
 
         return rows.stream()
             .map(r -> new AccessLevelDTO(
-                (String) r[0], (String) r[1], (String) r[2], (String) r[3],
-                (String) r[4], (String) r[5], (Integer) r[6], (Integer) r[7]))
+                r.id(), r.name(), r.description(), r.status(),
+                r.createdAt(), r.updatedAt(), r.permCount(), r.userCount()))
             .toList();
     }
 
-    @SuppressWarnings("unchecked")
     public Optional<AccessLevelDetailDTO> findById(String id, List<String> permissionKeys) {
-        List<Object[]> rows = em.createNativeQuery(
-            "SELECT id::text, name, description, status, created_at::text, updated_at::text " +
-            "FROM admin_access_levels WHERE id::text = :id"
-        ).setParameter("id", id).getResultList();
-
-        if (rows.isEmpty()) return Optional.empty();
-        Object[] r = rows.get(0);
-        return Optional.of(new AccessLevelDetailDTO(
-            (String) r[0], (String) r[1], (String) r[2], (String) r[3],
-            (String) r[4], (String) r[5], permissionKeys));
+        return databaseQuery
+                .nativeQuery(em, """
+                        SELECT id::text, name, description, status, created_at::text, updated_at::text
+                        FROM admin_access_levels WHERE id::text = :id
+                        """, AccessLevelBasicTO.class)
+                .setParameter("id", id)
+                .getOptionalResult()
+                .map(r -> new AccessLevelDetailDTO(
+                        r.id(), r.name(), r.description(), r.status(),
+                        r.createdAt(), r.updatedAt(), permissionKeys));
     }
 
-    @SuppressWarnings("unchecked")
     public AccessLevelDetailDTO insert(String name, String description, String status, List<String> permissionKeys) {
-        List<Object[]> rows = em.createNativeQuery(
-            "INSERT INTO admin_access_levels (name, description, status) " +
-            "VALUES (:name, :description, :status) " +
-            "RETURNING id::text, name, description, status, created_at::text, updated_at::text"
-        ).setParameter("name", name)
-         .setParameter("description", description)
-         .setParameter("status", status)
-         .getResultList();
+        AccessLevelBasicTO r = databaseQuery
+                .nativeQuery(em, """
+                        INSERT INTO admin_access_levels (name, description, status)
+                        VALUES (:name, :description, :status)
+                        RETURNING id::text, name, description, status, created_at::text, updated_at::text
+                        """, AccessLevelBasicTO.class)
+                .setParameter("name", name)
+                .setParameter("description", description)
+                .setParameter("status", status)
+                .getOptionalResult()
+                .orElseThrow();
 
-        Object[] r = rows.get(0);
         return new AccessLevelDetailDTO(
-            (String) r[0], (String) r[1], (String) r[2], (String) r[3],
-            (String) r[4], (String) r[5], permissionKeys);
+            r.id(), r.name(), r.description(), r.status(),
+            r.createdAt(), r.updatedAt(), permissionKeys);
     }
 
     public int updateNameDescription(String id, String name, String description) {
