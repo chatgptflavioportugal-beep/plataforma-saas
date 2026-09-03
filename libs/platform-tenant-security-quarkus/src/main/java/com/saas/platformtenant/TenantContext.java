@@ -1,5 +1,7 @@
 package com.saas.platformtenant;
 
+import com.saas.platformtenant.exceptions.TenantPathMismatchException;
+
 import java.util.UUID;
 
 public class TenantContext {
@@ -45,7 +47,7 @@ public class TenantContext {
     public static TenantContext resolveAndCheck(jakarta.ws.rs.core.SecurityContext ctx, UUID tenantId) {
         TenantContext tc = from(ctx);
         if (!tc.getTenantId().equals(tenantId)) {
-            throw new jakarta.ws.rs.ForbiddenException("Acesso negado ao tenant");
+            throw new TenantPathMismatchException("Acesso negado ao tenant");
         }
         return tc;
     }

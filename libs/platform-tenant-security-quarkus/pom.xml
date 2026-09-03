@@ -71,6 +71,20 @@
             <artifactId>rest-assured</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- @TestSecurity + @JwtSecurity — simula um JsonWebToken/SecurityIdentity autenticado
+             nos testes do filtro sem depender de chaves reais do Supabase. -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-test-security-jwt</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Serialização JSON só para o recurso de teste (TestTenantResource); os serviços
+             consumidores já trazem seu próprio provider JSON (jackson) em runtime. -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-resteasy-reactive-jackson</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

@@ -1,8 +1,10 @@
 package com.saas.platformtenant;
 
+import com.saas.platformtenant.exceptions.InvalidTenantIdException;
+import com.saas.platformtenant.exceptions.NoTenantMembershipException;
+import com.saas.platformtenant.exceptions.TenantAccessDeniedException;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.NotAuthorizedException;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.core.SecurityContext;
@@ -76,11 +78,16 @@ public abstract class AbstractTenantResolutionFilter implements ContainerRequest
 
     private TenantMembership resolveMembership(UUID userId, String tenantIdHeader) {
         if (tenantIdHeader != null && !tenantIdHeader.isBlank()) {
-            UUID tenantId = UUID.fromString(tenantIdHeader);
+            UUID tenantId;
+            try {
+                tenantId = UUID.fromString(tenantIdHeader);
+            } catch (IllegalArgumentException e) {
+                throw new InvalidTenantIdException("X-Tenant-ID inválido");
+            }
             return membershipResolver.findByUserAndTenant(userId, tenantId)
-                    .orElseThrow(() -> new NotAuthorizedException("Acesso negado ao tenant"));
+                    .orElseThrow(() -> new TenantAccessDeniedException("Acesso negado ao tenant"));
         }
         return membershipResolver.findDefaultTenant(userId)
-                .orElseThrow(() -> new NotAuthorizedException("Usuário sem tenant"));
+                .orElseThrow(() -> new NoTenantMembershipException("Usuário sem tenant"));
     }
 }

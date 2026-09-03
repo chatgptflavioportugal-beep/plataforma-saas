@@ -2,7 +2,7 @@ package com.saas.auth.resource;
 
 import com.saas.auth.negocio.ModuleTokenResult;
 import com.saas.auth.negocio.impl.ModuleTokenNegocio;
-import com.saas.auth.security.TenantContext;
+import com.saas.platformtenant.TenantContext;
 import io.quarkus.security.Authenticated;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
