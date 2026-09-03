@@ -1,7 +1,7 @@
 # platform-module-security-quarkus
 
 Biblioteca compartilhada de autenticacao/autorizacao para os backends **Quarkus** de modulo da
-plataforma. Equivalente Java da biblioteca Python [`platform-module-security`](../platform-module-security)
+plataforma. Equivalente Java da biblioteca Python [`platform-module-security-python`](../platform-module-security-python)
 — mesma responsabilidade (validar o `ModuleAccessToken`), mesmos conceitos (`ModuleContext`,
 permissoes, limites), adaptados aos idiomas de CDI/JAX-RS.
 
@@ -40,7 +40,7 @@ local. O servico consumidor entao declara a dependencia normalmente:
 
 Em Docker, o build multi-stage do servico consumidor precisa copiar o codigo-fonte desta lib
 para dentro do contexto de build e rodar `mvn install -N -DskipTests` nela **antes** de compilar
-o servico — mesmo principio do `COPY libs/platform-module-security` usado nos Dockerfiles do
+o servico — mesmo principio do `COPY libs/platform-module-security-python` usado nos Dockerfiles do
 pdf-service/whatsapp-service, adaptado para Maven (contexto de build do `docker-compose.yml`
 precisa ser a raiz do repositorio, nao a pasta do servico).
 

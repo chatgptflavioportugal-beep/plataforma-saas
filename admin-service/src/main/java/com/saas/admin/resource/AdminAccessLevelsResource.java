@@ -5,7 +5,7 @@ import com.saas.admin.dto.AccessLevelDetailDTO;
 import com.saas.admin.dto.AccessLevelRequest;
 import com.saas.admin.dto.PermissionGroupDTO;
 import com.saas.admin.dto.UpdateStatusRequest;
-import com.saas.admin.security.AdminAuthService;
+import com.saas.platformadmin.PlatformAdminAuthService;
 import com.saas.admin.negocio.impl.AccessLevelNegocio;
 import io.quarkus.security.Authenticated;
 import org.eclipse.microprofile.openapi.annotations.Operation;
@@ -37,7 +37,7 @@ import java.util.Optional;
 @Consumes(MediaType.APPLICATION_JSON)
 public class AdminAccessLevelsResource {
 
-    @Inject AdminAuthService adminAuth;
+    @Inject PlatformAdminAuthService adminAuth;
     @Inject AccessLevelNegocio accessLevelNegocio;
 
     /**

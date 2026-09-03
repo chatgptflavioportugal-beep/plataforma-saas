@@ -10,8 +10,8 @@ services:
   auth-service:
     build:
       # Contexto na raiz do repo: o Dockerfile.dev precisa instalar
-      # libs/platform-database no repositório Maven local antes de compilar o
-      # serviço (ver libs/platform-database/README.md).
+      # libs/platform-database-quarkus no repositório Maven local antes de compilar o
+      # serviço (ver libs/platform-database-quarkus/README.md).
       context: .
       dockerfile: auth-service/Dockerfile.dev
     ports:
@@ -46,8 +46,8 @@ services:
   module-catalog-service:
     build:
       # Contexto na raiz do repo: o Dockerfile.dev precisa instalar
-      # libs/platform-database no repositório Maven local antes de compilar o
-      # serviço (ver libs/platform-database/README.md).
+      # libs/platform-database-quarkus no repositório Maven local antes de compilar o
+      # serviço (ver libs/platform-database-quarkus/README.md).
       context: .
       dockerfile: module-catalog-service/Dockerfile.dev
     ports:
@@ -76,8 +76,8 @@ services:
   profile-service:
     build:
       # Contexto na raiz do repo: o Dockerfile.dev precisa instalar
-      # libs/platform-database no repositório Maven local antes de compilar o
-      # serviço (ver libs/platform-database/README.md).
+      # libs/platform-database-quarkus no repositório Maven local antes de compilar o
+      # serviço (ver libs/platform-database-quarkus/README.md).
       context: .
       dockerfile: profile-service/Dockerfile.dev
     ports:
@@ -113,8 +113,8 @@ services:
   subscription-service:
     build:
       # Contexto na raiz do repo: o Dockerfile.dev precisa instalar
-      # libs/platform-database no repositório Maven local antes de compilar o
-      # serviço (ver libs/platform-database/README.md).
+      # libs/platform-database-quarkus no repositório Maven local antes de compilar o
+      # serviço (ver libs/platform-database-quarkus/README.md).
       context: .
       dockerfile: subscription-service/Dockerfile.dev
     ports:
@@ -144,7 +144,7 @@ services:
   usage-service:
     build:
       # Contexto na raiz do repo: o Dockerfile.dev precisa instalar
-      # libs/platform-module-security-quarkus e libs/platform-database no
+      # libs/platform-module-security-quarkus e libs/platform-database-quarkus no
       # repositório Maven local antes de compilar o serviço (ver README.md de
       # cada lib).
       context: .
@@ -174,8 +174,8 @@ services:
   admin-service:
     build:
       # Contexto na raiz do repo: o Dockerfile.dev precisa instalar
-      # libs/platform-database no repositório Maven local antes de compilar o
-      # serviço (ver libs/platform-database/README.md).
+      # libs/platform-database-quarkus no repositório Maven local antes de compilar o
+      # serviço (ver libs/platform-database-quarkus/README.md).
       context: .
       dockerfile: admin-service/Dockerfile.dev
     ports:

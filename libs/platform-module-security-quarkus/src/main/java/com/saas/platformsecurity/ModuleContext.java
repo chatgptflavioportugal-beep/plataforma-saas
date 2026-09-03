@@ -10,7 +10,7 @@ import java.util.UUID;
 /**
  * Claims já validadas do ModuleAccessToken, disponíveis para o endpoint via
  * {@link CurrentModuleContext}. Equivalente ao ModuleContext da biblioteca Python
- * platform-module-security — mesmos campos, mesmos helpers.
+ * platform-module-security-python — mesmos campos, mesmos helpers.
  */
 public record ModuleContext(
         UUID userId,

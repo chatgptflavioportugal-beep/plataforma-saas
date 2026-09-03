@@ -7,7 +7,7 @@ import com.saas.admin.dto.SystemAdminDTO;
 import com.saas.admin.dto.TenantDetailDTO;
 import com.saas.admin.dto.TenantSummaryDTO;
 import com.saas.admin.dto.UpdateStatusRequest;
-import com.saas.admin.security.AdminAuthService;
+import com.saas.platformadmin.PlatformAdminAuthService;
 import com.saas.admin.negocio.impl.AdminGeneralNegocio;
 import com.saas.admin.negocio.impl.TenantNegocio;
 import io.quarkus.security.Authenticated;
@@ -53,7 +53,7 @@ public class AdminResource {
 
     @Inject TenantNegocio tenantNegocio;
     @Inject AdminGeneralNegocio adminGeneralNegocio;
-    @Inject AdminAuthService adminAuth;
+    @Inject PlatformAdminAuthService adminAuth;
 
     // ----------------------------------------------------------------
     // Dashboard stats

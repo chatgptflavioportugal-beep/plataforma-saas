@@ -1,6 +1,7 @@
 package com.saas.usage.resource;
 
 import com.saas.platformsecurity.CurrentModuleContext;
+import com.saas.platformsecurity.RequireModuleAccess;
 import com.saas.usage.dto.PagedResponse;
 import com.saas.usage.dto.UsageAuditRequest;
 import com.saas.usage.dto.UsageIncrementRequest;
@@ -22,8 +23,10 @@ import java.time.LocalDate;
 
 /**
  * Controle de uso de módulos: incremento/verificação de quota e auditoria de uso.
- * Todas as rotas exigem ModuleAccessToken (ver ModuleTokenFilter) — tenant, módulo e
- * limites vêm direto das claims do token, sem consultar nenhum outro serviço.
+ * Todas as rotas exigem ModuleAccessToken (ver {@link RequireModuleAccess}) — tenant, módulo e
+ * limites vêm direto das claims do token, sem consultar nenhum outro serviço. Aceita token de
+ * qualquer módulo (moduleSlug vazio) — usage-service é consumido por todos os módulos, não é
+ * exclusivo de um.
  */
 @Path("/api/v1/usage")
 @Tag(name = "Usage", description = "Incremento de contadores de uso, consulta de consumo e auditoria por módulo.")
@@ -35,6 +38,7 @@ import java.time.LocalDate;
     description = "ModuleAccessToken emitido pelo auth-service (POST /api/v1/module-token/{moduleSlug}). Enviar como 'Authorization: Bearer <token>'."
 )
 @SecurityRequirement(name = "moduleToken")
+@RequireModuleAccess(moduleSlug = "")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class UsageResource {

@@ -1,7 +1,7 @@
 package com.saas.subscription.resource;
 
 import com.saas.subscription.dto.response.SubscriptionActionResponse;
-import com.saas.subscription.security.AdminAuthService;
+import com.saas.platformadmin.PlatformAdminAuthService;
 import com.saas.subscription.negocio.impl.AdminSubscriptionNegocio;
 import io.quarkus.security.Authenticated;
 import org.eclipse.microprofile.openapi.annotations.Operation;
@@ -39,7 +39,7 @@ import java.util.UUID;
 public class AdminSubscriptionResource {
 
     @Inject
-    AdminAuthService adminAuth;
+    PlatformAdminAuthService adminAuth;
 
     @Inject
     AdminSubscriptionNegocio adminSubscriptionNegocio;

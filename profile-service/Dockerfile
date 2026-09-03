@@ -2,14 +2,19 @@
 # Produção — build multi-stage. Para desenvolvimento local (hot-reload), use
 # Dockerfile.dev via docker-compose.
 # Contexto de build precisa ser a raiz do repositório (ex.: `docker build -f
-# profile-service/Dockerfile .`), pois este Dockerfile instala libs/platform-database
+# profile-service/Dockerfile .`), pois este Dockerfile instala libs/platform-database-quarkus
 # antes de compilar o serviço.
 
 # --- Build stage ---
 FROM maven:3.9-eclipse-temurin-21 AS build
-WORKDIR /libs/platform-database
-COPY libs/platform-database/pom.xml .
-COPY libs/platform-database/src ./src
+WORKDIR /libs/platform-database-quarkus
+COPY libs/platform-database-quarkus/pom.xml .
+COPY libs/platform-database-quarkus/src ./src
+RUN mvn install -N -DskipTests -q
+
+WORKDIR /libs/platform-tenant-security-quarkus
+COPY libs/platform-tenant-security-quarkus/pom.xml .
+COPY libs/platform-tenant-security-quarkus/src ./src
 RUN mvn install -N -DskipTests -q
 
 WORKDIR /app

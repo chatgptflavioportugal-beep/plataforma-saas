@@ -3,7 +3,7 @@ package com.saas.profile.resource;
 import com.saas.profile.dto.request.ChangeAccessLevelRequest;
 import com.saas.profile.dto.request.SendInvitationRequest;
 import com.saas.profile.dto.response.SuccessResponse;
-import com.saas.profile.security.TenantContext;
+import com.saas.platformtenant.TenantContext;
 import com.saas.profile.negocio.impl.AdminAccessNegocio;
 import com.saas.profile.negocio.impl.InvitationNegocio;
 import com.saas.profile.negocio.impl.TenantNegocio;

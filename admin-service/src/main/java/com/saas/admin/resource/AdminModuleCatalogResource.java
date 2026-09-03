@@ -7,7 +7,7 @@ import com.saas.admin.dto.PlatformModuleDTO;
 import com.saas.admin.dto.PlatformModuleServiceDTO;
 import com.saas.admin.dto.PlatformModuleServiceGroupDTO;
 import com.saas.admin.dto.UpdateStatusRequest;
-import com.saas.admin.security.AdminAuthService;
+import com.saas.platformadmin.PlatformAdminAuthService;
 import com.saas.admin.negocio.impl.ModuleCatalogNegocio;
 import io.quarkus.security.Authenticated;
 import org.eclipse.microprofile.openapi.annotations.Operation;
@@ -40,7 +40,7 @@ import java.util.Map;
 @Consumes(MediaType.APPLICATION_JSON)
 public class AdminModuleCatalogResource {
 
-    @Inject AdminAuthService adminAuth;
+    @Inject PlatformAdminAuthService adminAuth;
     @Inject ModuleCatalogNegocio moduleCatalogNegocio;
 
     // ----------------------------------------------------------------

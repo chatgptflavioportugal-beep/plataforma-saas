@@ -15,7 +15,7 @@ import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
  * delega para o endpoint /api/v1/admin/subscriptions daquele serviço.
  * Repassa o mesmo Authorization (JWT Supabase) recebido do frontend-admin;
  * subscription-service valida a permissão administrativa localmente via
- * AdminAuthService.
+ * PlatformAdminAuthService.
  */
 @RegisterRestClient(configKey = "subscription-service-api")
 public interface SubscriptionServiceRepository {

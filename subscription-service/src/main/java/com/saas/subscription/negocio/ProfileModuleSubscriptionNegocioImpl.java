@@ -17,7 +17,7 @@ import com.saas.subscription.entity.PlatformModule;
 import com.saas.subscription.entity.ProfileModuleSubscription;
 import com.saas.subscription.negocio.impl.ProfileModuleSubscriptionNegocio;
 import com.saas.subscription.negocio.impl.TrialCampaignNegocio;
-import com.saas.subscription.security.TenantContext;
+import com.saas.platformtenant.TenantContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;

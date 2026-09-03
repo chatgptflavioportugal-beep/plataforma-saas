@@ -9,8 +9,8 @@ from fastapi.responses import JSONResponse
 
 from app_logging.logger import configure_logging
 from config.config import settings
-from db.database import close_pool, init_pool
 from modules.whatsapp.resource import whatsapp_resource as whatsapp_routes
+from platform_database_python import close_pool, init_pool
 from responses.envelopes import ErrorResponse
 
 configure_logging(settings.LOG_LEVEL, settings.LOG_FORMAT)
@@ -25,7 +25,7 @@ _ERROR_CODE_BY_STATUS = {
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_pool()
+    await init_pool(settings.DATABASE_URL)
     yield
     await close_pool()
 
@@ -54,7 +54,7 @@ def custom_openapi():
     """Declara o esquema Bearer (ModuleAccessToken) no schema OpenAPI, para que
     o botão "Authorize" do Swagger UI permita informar o token e repassá-lo
     como header Authorization nas chamadas de teste. Não altera a validação
-    em si (feita por platform_security.module_security), só a documentação.
+    em si (feita por platform_security_python.module_security), só a documentação.
     """
     if app.openapi_schema:
         return app.openapi_schema

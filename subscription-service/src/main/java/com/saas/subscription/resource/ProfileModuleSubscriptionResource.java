@@ -5,7 +5,7 @@ import com.saas.subscription.dto.request.ConfirmSubscriptionRequest;
 import com.saas.subscription.dto.response.ActivateFreeModuleResponse;
 import com.saas.subscription.dto.response.ConfirmSubscriptionResponse;
 import com.saas.subscription.dto.response.SubscriptionActionResponse;
-import com.saas.subscription.security.TenantContext;
+import com.saas.platformtenant.TenantContext;
 import com.saas.subscription.negocio.impl.ProfileModuleSubscriptionNegocio;
 import io.quarkus.security.Authenticated;
 import org.eclipse.microprofile.openapi.annotations.Operation;

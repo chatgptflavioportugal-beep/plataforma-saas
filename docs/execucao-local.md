@@ -82,7 +82,7 @@ mvn install -DskipTests
 
 `pdf-service` e `whatsapp-service` seguem o mesmo padrão. A autorização é
 feita só pelo ModuleAccessToken emitido pelo auth-service, validado pela
-biblioteca compartilhada `libs/platform-module-security` (instalada em modo
+biblioteca compartilhada `libs/platform-module-security-python` (instalada em modo
 editável via `requirements.txt` — não requer nenhum passo extra).
 
 ```bash

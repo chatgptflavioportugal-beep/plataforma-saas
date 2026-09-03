@@ -2,7 +2,7 @@ package com.saas.admin.resource;
 
 import com.saas.admin.dto.PlatformSettingDTO;
 import com.saas.admin.dto.UpdateSettingRequest;
-import com.saas.admin.security.AdminAuthService;
+import com.saas.platformadmin.PlatformAdminAuthService;
 import com.saas.admin.negocio.impl.PlatformSettingsNegocio;
 import io.quarkus.security.Authenticated;
 import org.eclipse.microprofile.openapi.annotations.Operation;
@@ -32,7 +32,7 @@ import java.util.Map;
 @Consumes(MediaType.APPLICATION_JSON)
 public class AdminPlatformSettingsResource {
 
-    @Inject AdminAuthService adminAuth;
+    @Inject PlatformAdminAuthService adminAuth;
     @Inject PlatformSettingsNegocio settingsNegocio;
 
     @GET

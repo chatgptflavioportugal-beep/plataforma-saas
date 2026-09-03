@@ -59,7 +59,16 @@
              posicional (ver com.saas.platformdatabase.mapper.TupleTOMapper) -->
         <dependency>
             <groupId>com.saas</groupId>
-            <artifactId>platform-database</artifactId>
+            <artifactId>platform-database-quarkus</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
+        <!-- Autenticacao de tenant (Supabase JWT + X-Tenant-ID), compartilhada com
+             profile-service/subscription-service (ver
+             com.saas.platformtenant.AbstractTenantResolutionFilter) -->
+        <dependency>
+            <groupId>com.saas</groupId>
+            <artifactId>platform-tenant-security-quarkus</artifactId>
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
 

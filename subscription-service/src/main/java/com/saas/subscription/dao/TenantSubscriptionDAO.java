@@ -1,6 +1,8 @@
 package com.saas.subscription.dao;
 
 import com.saas.subscription.entity.TenantSubscription;
+import com.saas.platformtenant.TenantSubscriptionInfo;
+import com.saas.platformtenant.TenantSubscriptionResolver;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -12,19 +14,13 @@ import java.util.Set;
 import java.util.UUID;
 
 @ApplicationScoped
-public class TenantSubscriptionDAO implements PanacheRepositoryBase<TenantSubscription, UUID> {
+public class TenantSubscriptionDAO implements PanacheRepositoryBase<TenantSubscription, UUID>, TenantSubscriptionResolver {
 
     @Inject
     EntityManager em;
 
-    public record SubscriptionResult(
-            UUID id,
-            String status,
-            String planCode,
-            Set<String> moduleSlugSet
-    ) {}
-
-    public Optional<SubscriptionResult> findActiveByTenant(UUID tenantId) {
+    @Override
+    public Optional<TenantSubscriptionInfo> findActiveByTenant(UUID tenantId) {
         var accountRows = em.createQuery("""
                 select ts.id, ts.status, p.code from TenantSubscription ts
                 join Plan p on p.id = ts.planId
@@ -54,7 +50,7 @@ public class TenantSubscriptionDAO implements PanacheRepositoryBase<TenantSubscr
 
         Set<String> moduleSlugSet = new HashSet<>(slugRows);
 
-        return Optional.of(new SubscriptionResult(
+        return Optional.of(new TenantSubscriptionInfo(
                 (UUID) row[0],
                 (String) row[1],
                 (String) row[2],

@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.saas</groupId>
+    <artifactId>platform-database-quarkus</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>platform-database-quarkus</name>
+    <description>
+        Biblioteca compartilhada de acesso a dados para os microsservicos Quarkus da
+        plataforma: API fluente de Native Query (DatabaseQuery/NativeQuery, bean CDI
+        injetavel via @Inject), mapeamento generico de Tuple/Map para TO via reflection
+        (GenericTOMapper/TupleTOMapper) e conversoes de tipo comuns entre Oracle/PostgreSQL
+        e Java (ConversionUtils).
+    </description>
+
+    <properties>
+        <compiler-plugin.version>3.13.0</compiler-plugin.version>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
+        <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
+        <quarkus.platform.version>3.11.1</quarkus.platform.version>
+        <surefire-plugin.version>3.2.5</surefire-plugin.version>
+        <jandex-plugin.version>3.1.7</jandex-plugin.version>
+        <jakarta.persistence.version>3.1.0</jakarta.persistence.version>
+        <junit.version>5.10.2</junit.version>
+        <mockito.version>5.11.0</mockito.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>${quarkus.platform.group-id}</groupId>
+                <artifactId>${quarkus.platform.artifact-id}</artifactId>
+                <version>${quarkus.platform.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- CDI — permite @Inject DatabaseQuery nos DAOs consumidores; nenhum runtime
+             HTTP/JAX-RS embutido aqui, so o container CDI do servico consumidor. -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-arc</artifactId>
+        </dependency>
+
+        <!-- Apenas a API — quem fornece o runtime (Hibernate ORM) e o servico
+             consumidor; esta lib nunca sobe um EntityManagerFactory. -->
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+            <version>${jakarta.persistence.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Testes -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Mockito puro (sem extensao CDI) — so para mockar EntityManager/Query nos
+             testes de NativeQuery/DatabaseQuery, sem subir Hibernate, CDI nem banco real. -->
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>${mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${compiler-plugin.version}</version>
+            </plugin>
+            <plugin>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${surefire-plugin.version}</version>
+            </plugin>
+            <!-- Gera META-INF/jandex.idx — necessario para o Quarkus ArC dos servicos
+                 consumidores descobrirem o bean CDI (DatabaseQuery) desta lib como bean
+                 archive (mesmo principio do libs/platform-module-security-quarkus). -->
+            <plugin>
+                <groupId>io.smallrye</groupId>
+                <artifactId>jandex-maven-plugin</artifactId>
+                <version>${jandex-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>make-index</id>
+                        <goals>
+                            <goal>jandex</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

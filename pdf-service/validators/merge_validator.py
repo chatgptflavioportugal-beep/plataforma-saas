@@ -4,7 +4,7 @@ from fastapi import UploadFile
 from pypdf import PdfReader
 
 from exceptions.validation import ValidationError
-from platform_security import ModuleContext
+from platform_security_python import ModuleContext
 from permissions.constants import LIMITE_PDF_MAX_FILE_SIZE
 
 

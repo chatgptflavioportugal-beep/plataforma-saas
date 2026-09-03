@@ -1,0 +1,62 @@
+package com.saas.platformadmin;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.ForbiddenException;
+import org.eclipse.microprofile.jwt.JsonWebToken;
+
+import java.util.UUID;
+
+/**
+ * Checagem de autorização administrativa (SUPER_ADMIN / ADMIN_USER + permissão granular),
+ * compartilhada entre os serviços que expõem endpoints de backoffice de plataforma. Cada
+ * serviço injeta seus próprios {@link AdminProfileResolver}/{@link AdminPermissionResolver}
+ * (consultando user_profiles/admin_access_level_permissions localmente, sem chamada HTTP para
+ * outro microsserviço) — só a regra de decisão é compartilhada.
+ */
+@ApplicationScoped
+public class PlatformAdminAuthService {
+
+    @Inject
+    JsonWebToken jwt;
+
+    @Inject
+    AdminProfileResolver profileResolver;
+
+    @Inject
+    AdminPermissionResolver permissionResolver;
+
+    public String currentUserId() {
+        String userId = jwt.getSubject();
+        if (userId == null) throw new ForbiddenException("Não autenticado");
+        return userId;
+    }
+
+    /**
+     * Exige que o usuário seja SUPER_ADMIN ou ADMIN_USER ativo com a permissão especificada.
+     * Passar null em permissionKey verifica apenas que é um admin válido (para listagens gerais).
+     */
+    public void requireAdminPermission(String permissionKey) {
+        UUID userId = UUID.fromString(currentUserId());
+
+        AdminProfile profile = profileResolver.findProfile(userId)
+                .orElseThrow(() -> new ForbiddenException("Perfil de usuário não encontrado"));
+
+        if ("SUPER_ADMIN".equals(profile.systemRole())) return;
+
+        if (!"ADMIN_USER".equals(profile.systemRole()))
+            throw new ForbiddenException("Acesso restrito à área administrativa");
+
+        if (!profile.isActive())
+            throw new ForbiddenException("Usuário administrativo inativo");
+
+        if (permissionKey == null) return;
+
+        UUID accessLevelId = profile.adminAccessLevelId();
+        if (accessLevelId == null)
+            throw new ForbiddenException("Você não possui permissão para executar esta ação");
+
+        if (!permissionResolver.hasPermission(accessLevelId, permissionKey))
+            throw new ForbiddenException("Você não possui permissão para executar esta ação");
+    }
+}

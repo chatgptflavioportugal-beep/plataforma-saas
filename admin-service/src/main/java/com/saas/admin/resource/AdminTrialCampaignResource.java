@@ -7,7 +7,7 @@ import com.saas.admin.dto.TrialCampaignHistoryEntryDTO;
 import com.saas.admin.dto.TrialCampaignPageDTO;
 import com.saas.admin.dto.TrialCampaignParticipantDTO;
 import com.saas.admin.dto.TrialCampaignRequest;
-import com.saas.admin.security.AdminAuthService;
+import com.saas.platformadmin.PlatformAdminAuthService;
 import com.saas.admin.negocio.impl.AdminTrialCampaignNegocio;
 import io.quarkus.security.Authenticated;
 import org.eclipse.microprofile.openapi.annotations.Operation;
@@ -41,7 +41,7 @@ import java.util.Optional;
 @Consumes(MediaType.APPLICATION_JSON)
 public class AdminTrialCampaignResource {
 
-    @Inject AdminAuthService adminAuth;
+    @Inject PlatformAdminAuthService adminAuth;
     @Inject AdminTrialCampaignNegocio trialCampaignNegocio;
 
     // ─── Listagens ────────────────────────────────────────────────────────────

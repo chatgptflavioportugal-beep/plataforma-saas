@@ -5,7 +5,7 @@ import com.saas.profile.dto.request.UpdateAccessLevelStatusRequest;
 import com.saas.profile.dto.response.CreatedIdResponse;
 import com.saas.profile.dto.response.StatusResponse;
 import com.saas.profile.dto.response.SuccessResponse;
-import com.saas.profile.security.TenantContext;
+import com.saas.platformtenant.TenantContext;
 import com.saas.profile.negocio.impl.AccessLevelNegocio;
 import com.saas.profile.negocio.impl.AdminAccessNegocio;
 import io.quarkus.security.Authenticated;

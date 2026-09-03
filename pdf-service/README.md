@@ -4,7 +4,7 @@ Serviço FastAPI dedicado ao módulo PDF (merge, histórico de jobs, download). 
 
 A validação do token (assinatura, expiração, `tokenType`, `moduleSlug`, permissões, limites) não
 é implementada aqui — vem da biblioteca compartilhada
-[`platform-module-security`](../libs/platform-module-security), instalada em modo editável
+[`platform-module-security-python`](../libs/platform-module-security-python), instalada em modo editável
 (ver `requirements.txt`). Nenhum outro módulo Python deve reimplementar essa lógica.
 
 ## Estrutura
@@ -37,9 +37,9 @@ tests/
 ## Fluxo de autenticação e permissão
 
 1. O frontend (via `pdf-frontend`, carregado pelo Front Host) envia `Authorization: Bearer <ModuleAccessToken>` para o endpoint.
-2. O endpoint declara `Depends(module_security("pdf", <permission_key ou None>))`, importado de `platform_security`.
+2. O endpoint declara `Depends(module_security("pdf", <permission_key ou None>))`, importado de `platform_security_python`.
 3. `module_security` valida o token, confere que ele pertence ao módulo `pdf` e, se uma permissão foi informada, que ela está na lista de permissões do token.
-4. O resultado é um `ModuleContext` (de `platform_security`) com `tenant_id`, `user_id`, `permissions`, `limits` etc. — o endpoint não faz nenhuma validação manual, só usa o contexto já pronto.
+4. O resultado é um `ModuleContext` (de `platform_security_python`) com `tenant_id`, `user_id`, `permissions`, `limits` etc. — o endpoint não faz nenhuma validação manual, só usa o contexto já pronto.
 
 Limites (`limits` no JWT) são checados em dois níveis:
 - **`max-file-size`**: comparado direto contra o tamanho do upload em `validators/merge_validator.py`.

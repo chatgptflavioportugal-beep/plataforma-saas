@@ -7,8 +7,8 @@
 #
 # NÃO excluir: pdf-service/, whatsapp-service/, usage-service/, auth-service/,
 # profile-service/, subscription-service/, module-catalog-service/,
-# admin-service/, libs/platform-module-security/,
-# libs/platform-module-security-quarkus/, libs/platform-database/ — são
+# admin-service/, libs/platform-module-security-python/,
+# libs/platform-module-security-quarkus/, libs/platform-database-quarkus/ — são
 # usados por pelo menos um destes Dockerfiles.
 
 .git/

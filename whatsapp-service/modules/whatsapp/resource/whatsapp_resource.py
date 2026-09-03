@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from exceptions.business import BusinessRuleError
 from modules.whatsapp.permissions.constants import MODULE_WHATSAPP_SEND
 from modules.whatsapp.schemas.message import SendMessageIn
-from platform_security import ModuleContext, module_security
+from platform_security_python import ModuleContext, module_security
 
 router = APIRouter(prefix="/whatsapp", tags=["WhatsApp"])
 

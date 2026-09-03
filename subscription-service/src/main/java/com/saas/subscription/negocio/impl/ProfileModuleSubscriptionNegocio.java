@@ -4,7 +4,7 @@ import com.saas.subscription.dto.request.ConfirmSubscriptionRequest;
 import com.saas.subscription.dto.response.ModuleSubscriptionResponse;
 import com.saas.subscription.dto.response.TrialEligibilityResponse;
 import com.saas.subscription.dto.response.TrialHistoryResponse;
-import com.saas.subscription.security.TenantContext;
+import com.saas.platformtenant.TenantContext;
 
 import java.util.List;
 import java.util.UUID;

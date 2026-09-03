@@ -1,7 +1,7 @@
 import uuid
 
-from db.database import get_pool
 from enums.pdf_job_status import PdfJobStatus
+from platform_database_python import get_pool
 
 _SELECT_COLS = """
     id, tenant_id, user_id, status,

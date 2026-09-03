@@ -1,6 +1,6 @@
 package com.saas.profile.negocio.impl;
 
-import com.saas.profile.security.TenantContext;
+import com.saas.platformtenant.TenantContext;
 
 import java.util.UUID;
 

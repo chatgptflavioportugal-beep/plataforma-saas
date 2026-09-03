@@ -4,7 +4,8 @@
 # --- Build stage ---
 FROM python:3.11-slim AS build
 WORKDIR /app
-COPY libs/platform-module-security /libs/platform-module-security
+COPY libs/platform-module-security-python /libs/platform-module-security-python
+COPY libs/platform-database-python /libs/platform-database-python
 COPY pdf-service/requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
@@ -13,9 +14,10 @@ FROM python:3.11-slim AS runtime
 WORKDIR /app
 RUN adduser --disabled-password --gecos "" appuser
 COPY --from=build /root/.local /home/appuser/.local
-COPY --from=build /libs/platform-module-security /libs/platform-module-security
+COPY --from=build /libs/platform-module-security-python /libs/platform-module-security-python
+COPY --from=build /libs/platform-database-python /libs/platform-database-python
 COPY pdf-service/ .
-RUN chown -R appuser:appuser /app /libs/platform-module-security
+RUN chown -R appuser:appuser /app /libs/platform-module-security-python /libs/platform-database-python
 USER appuser
 
 ENV PATH=/home/appuser/.local/bin:$PATH \

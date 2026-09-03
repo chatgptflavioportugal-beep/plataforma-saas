@@ -7,7 +7,7 @@ import com.saas.admin.dto.CreateAdminUserRequest;
 import com.saas.admin.dto.ResetPasswordRequest;
 import com.saas.admin.dto.SendPasswordEmailRequest;
 import com.saas.admin.dto.UpdateAdminUserRequest;
-import com.saas.admin.security.AdminAuthService;
+import com.saas.platformadmin.PlatformAdminAuthService;
 import com.saas.admin.negocio.impl.AdminUsersNegocio;
 import com.saas.admin.to.EmailRoleTO;
 import com.saas.admin.to.ExistingUserTO;
@@ -44,7 +44,7 @@ public class AdminUsersResource {
 
     private static final Logger LOG = Logger.getLogger(AdminUsersResource.class);
 
-    @Inject AdminAuthService adminAuth;
+    @Inject PlatformAdminAuthService adminAuth;
     @Inject AdminUsersNegocio usersNegocio;
 
     // ─── Listagem ─────────────────────────────────────────────────────────────

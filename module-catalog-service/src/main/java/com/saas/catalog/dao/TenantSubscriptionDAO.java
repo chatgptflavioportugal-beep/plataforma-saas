@@ -2,6 +2,8 @@ package com.saas.catalog.dao;
 
 import com.saas.catalog.to.SubscriptionAccountTO;
 import com.saas.platformdatabase.query.DatabaseQuery;
+import com.saas.platformtenant.TenantSubscriptionInfo;
+import com.saas.platformtenant.TenantSubscriptionResolver;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -14,7 +16,7 @@ import java.util.Set;
 import java.util.UUID;
 
 @ApplicationScoped
-public class TenantSubscriptionDAO {
+public class TenantSubscriptionDAO implements TenantSubscriptionResolver {
 
     @Inject
     EntityManager em;
@@ -22,14 +24,8 @@ public class TenantSubscriptionDAO {
     @Inject
     DatabaseQuery databaseQuery;
 
-    public record SubscriptionResult(
-            UUID id,
-            String status,
-            String planCode,
-            Set<String> moduleSlugSet
-    ) {}
-
-    public Optional<SubscriptionResult> findActiveByTenant(UUID tenantId) {
+    @Override
+    public Optional<TenantSubscriptionInfo> findActiveByTenant(UUID tenantId) {
         Optional<SubscriptionAccountTO> account = databaseQuery
                 .nativeQuery(em, """
                         SELECT ts.id, ts.status, p.code
@@ -62,6 +58,6 @@ public class TenantSubscriptionDAO {
 
         Set<String> moduleSlugSet = new HashSet<>(slugRows);
 
-        return account.map(row -> new SubscriptionResult(row.id(), row.status(), row.planCode(), moduleSlugSet));
+        return account.map(row -> new TenantSubscriptionInfo(row.id(), row.status(), row.planCode(), moduleSlugSet));
     }
 }

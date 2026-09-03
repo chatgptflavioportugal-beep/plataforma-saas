@@ -120,26 +120,26 @@ aplicação como usuário final.
 
 | Serviço | Comando | Porta | Swagger UI | Depende de |
 |---|---|---|---|---|
-| Auth Service (ProfileAccessToken / ModuleAccessToken) | `docker-compose up --build auth-service` | 8082 | http://localhost:8082/q/swagger-ui | `libs/platform-database` (instalada automaticamente no build) |
-| Module Catalog Service (catálogo de módulos/serviços) | `docker-compose up --build module-catalog-service` | 8083 | http://localhost:8083/q/swagger-ui | `libs/platform-database` (idem) |
-| Profile Service (tenants, membros, convites) | `docker-compose up --build profile-service` | 8084 | http://localhost:8084/q/swagger-ui | `libs/platform-database` (idem) |
-| Subscription Service (planos, assinaturas, trials) | `docker-compose up --build subscription-service` | 8085 | http://localhost:8085/q/swagger-ui | `libs/platform-database` (idem) |
-| Usage Service (contadores de uso/quota por módulo) | `docker-compose up --build usage-service` | 8086 | http://localhost:8086/q/swagger-ui | `libs/platform-module-security-quarkus` + `libs/platform-database` (instaladas automaticamente no build, ver `usage-service/Dockerfile.dev`) |
-| Admin Service (tenants/clientes/usuários admin) | `docker-compose up --build admin-service` | 8087 | http://localhost:8087/q/swagger-ui | subscription-service, `libs/platform-database` (idem) |
+| Auth Service (ProfileAccessToken / ModuleAccessToken) | `docker-compose up --build auth-service` | 8082 | http://localhost:8082/q/swagger-ui | `libs/platform-database-quarkus` (instalada automaticamente no build) |
+| Module Catalog Service (catálogo de módulos/serviços) | `docker-compose up --build module-catalog-service` | 8083 | http://localhost:8083/q/swagger-ui | `libs/platform-database-quarkus` (idem) |
+| Profile Service (tenants, membros, convites) | `docker-compose up --build profile-service` | 8084 | http://localhost:8084/q/swagger-ui | `libs/platform-database-quarkus` (idem) |
+| Subscription Service (planos, assinaturas, trials) | `docker-compose up --build subscription-service` | 8085 | http://localhost:8085/q/swagger-ui | `libs/platform-database-quarkus` (idem) |
+| Usage Service (contadores de uso/quota por módulo) | `docker-compose up --build usage-service` | 8086 | http://localhost:8086/q/swagger-ui | `libs/platform-module-security-quarkus` + `libs/platform-database-quarkus` (instaladas automaticamente no build, ver `usage-service/Dockerfile.dev`) |
+| Admin Service (tenants/clientes/usuários admin) | `docker-compose up --build admin-service` | 8087 | http://localhost:8087/q/swagger-ui | subscription-service, `libs/platform-database-quarkus` (idem) |
 
 ### Backends Python (FastAPI)
 
 | Serviço | Comando | Porta | Docs | Depende de |
 |---|---|---|---|---|
-| PDF Service (módulo PDF: merge, jobs, download) | `docker-compose up --build pdf-service` | 8001 | http://localhost:8001/docs | `libs/platform-module-security` (instalada em modo editável no build) |
-| WhatsApp Service (módulo WhatsApp, esqueleto) | `docker-compose up --build whatsapp-service` | 8002 | http://localhost:8002/docs | `libs/platform-module-security` (idem) |
+| PDF Service (módulo PDF: merge, jobs, download) | `docker-compose up --build pdf-service` | 8001 | http://localhost:8001/docs | `libs/platform-module-security-python` (instalada em modo editável no build) |
+| WhatsApp Service (módulo WhatsApp, esqueleto) | `docker-compose up --build whatsapp-service` | 8002 | http://localhost:8002/docs | `libs/platform-module-security-python` (idem) |
 
-As libs `libs/platform-module-security`, `libs/platform-module-security-quarkus`
-e `libs/platform-database` não são serviços — não têm entrada própria no
+As libs `libs/platform-module-security-python`, `libs/platform-module-security-quarkus`
+e `libs/platform-database-quarkus` não são serviços — não têm entrada própria no
 `docker-compose.yml` nem porta exposta. Elas são instaladas dentro da imagem
 de cada consumidor (pdf-service/whatsapp-service para a versão Python;
 usage-service para o `platform-module-security-quarkus`; todos os backends
-Quarkus com banco para o `platform-database`) no momento do build, então não
+Quarkus com banco para o `platform-database-quarkus`) no momento do build, então não
 precisam ser "subidas" à parte.
 
 ### Subir apenas a infra
@@ -205,11 +205,11 @@ saas-plataforma/
 ├── pdf-service/                     Python 3.11 + FastAPI (módulo PDF)
 ├── whatsapp-service/                 Python 3.11 + FastAPI (módulo WhatsApp, esqueleto)
 ├── libs/
-│   ├── platform-module-security/         Validação do ModuleAccessToken p/ módulos Python
+│   ├── platform-module-security-python/  Validação do ModuleAccessToken p/ módulos Python
 │   │                                       (usada por pdf-service e whatsapp-service)
 │   ├── platform-module-security-quarkus/ Equivalente Java, validação do ModuleAccessToken
 │   │                                       (usada hoje só pelo usage-service)
-│   └── platform-database/                Mapeamento de native query (Tuple) -> TO por
+│   └── platform-database-quarkus/        Mapeamento de native query (Tuple) -> TO por
 │                                           reflection (GenericTOMapper/TupleTOMapper) +
 │                                           conversões Oracle/PostgreSQL (ConversionUtils);
 │                                           usada por todos os backends Quarkus com banco

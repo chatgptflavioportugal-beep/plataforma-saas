@@ -1,7 +1,7 @@
 package com.saas.subscription.resource;
 
 import com.saas.subscription.dto.response.DashboardModuleResponse;
-import com.saas.subscription.security.TenantContext;
+import com.saas.platformtenant.TenantContext;
 import com.saas.subscription.negocio.impl.DashboardNegocio;
 import io.quarkus.security.Authenticated;
 import org.eclipse.microprofile.openapi.annotations.Operation;

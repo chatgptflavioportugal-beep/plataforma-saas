@@ -8,7 +8,7 @@ import com.saas.subscription.dto.response.ModuleAccessResolutionResponse;
 import com.saas.subscription.entity.PlanVersionModule;
 import com.saas.subscription.entity.PlatformModule;
 import com.saas.subscription.negocio.impl.ModuleAccessNegocio;
-import com.saas.subscription.security.TenantContext;
+import com.saas.platformtenant.TenantContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 

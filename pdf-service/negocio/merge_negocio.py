@@ -17,7 +17,7 @@ from validators.merge_validator import (
     validate_limits,
     validate_request,
 )
-from platform_security import ModuleContext
+from platform_security_python import ModuleContext
 from repository.local_storage import save_file, storage_dir_for_tenant
 from utils.text import normalize_filename
 

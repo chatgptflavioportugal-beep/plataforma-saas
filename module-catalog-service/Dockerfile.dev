@@ -1,12 +1,17 @@
 # syntax=docker/dockerfile:1.4
 FROM maven:3.9-eclipse-temurin-21
 
-# libs/platform-database não tem repositório Maven privado — instala no ~/.m2
-# local do container antes de compilar o serviço (ver libs/platform-database/README.md).
+# libs/platform-database-quarkus não tem repositório Maven privado — instala no ~/.m2
+# local do container antes de compilar o serviço (ver libs/platform-database-quarkus/README.md).
 # Contexto de build é a raiz do repositório (ver docker-compose.yml).
-WORKDIR /libs/platform-database
-COPY libs/platform-database/pom.xml .
-COPY libs/platform-database/src ./src
+WORKDIR /libs/platform-database-quarkus
+COPY libs/platform-database-quarkus/pom.xml .
+COPY libs/platform-database-quarkus/src ./src
+RUN mvn install -N -DskipTests -q
+
+WORKDIR /libs/platform-tenant-security-quarkus
+COPY libs/platform-tenant-security-quarkus/pom.xml .
+COPY libs/platform-tenant-security-quarkus/src ./src
 RUN mvn install -N -DskipTests -q
 
 WORKDIR /app

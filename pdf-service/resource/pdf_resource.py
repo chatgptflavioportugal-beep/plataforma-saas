@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from exceptions.business import BusinessRuleError
 from exceptions.validation import ValidationError
 from permissions.constants import MODULE_PDF_MERGE
-from platform_security import ModuleContext, module_security
+from platform_security_python import ModuleContext, module_security
 from dao import pdf_jobs_dao
 from schemas.pdf_job import PdfJobOut, job_to_out
 from negocio import merge_negocio

@@ -1,6 +1,6 @@
 package com.saas.subscription.resource;
 
-import com.saas.subscription.security.TenantContext;
+import com.saas.platformtenant.TenantContext;
 import com.saas.subscription.negocio.impl.ModuleAccessNegocio;
 import io.quarkus.security.Authenticated;
 import org.eclipse.microprofile.openapi.annotations.Operation;

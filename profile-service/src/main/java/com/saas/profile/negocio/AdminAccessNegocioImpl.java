@@ -3,7 +3,7 @@ package com.saas.profile.negocio;
 import com.saas.profile.dao.AccessLevelDAO;
 import com.saas.profile.dao.UserProfileDAO;
 import com.saas.profile.negocio.impl.AdminAccessNegocio;
-import com.saas.profile.security.TenantContext;
+import com.saas.platformtenant.TenantContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.ForbiddenException;

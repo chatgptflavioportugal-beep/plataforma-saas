@@ -4,7 +4,7 @@ import com.saas.admin.dto.PlanModuleWithLimitsRequest;
 import com.saas.admin.dto.PlanRequest;
 import com.saas.admin.dto.PlanVersionModuleLimitRequest;
 import com.saas.admin.dto.PlanVersionModuleRequest;
-import com.saas.admin.security.AdminAuthService;
+import com.saas.platformadmin.PlatformAdminAuthService;
 import com.saas.admin.negocio.impl.AdminPlanNegocio;
 import io.quarkus.security.Authenticated;
 import org.eclipse.microprofile.openapi.annotations.Operation;
@@ -36,7 +36,7 @@ import java.util.Map;
 public class AdminPlanResource {
 
     @Inject AdminPlanNegocio planNegocio;
-    @Inject AdminAuthService adminAuth;
+    @Inject PlatformAdminAuthService adminAuth;
 
     // ----------------------------------------------------------------
     // Planos

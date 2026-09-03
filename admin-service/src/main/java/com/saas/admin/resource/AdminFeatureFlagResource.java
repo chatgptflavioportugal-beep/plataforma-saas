@@ -2,7 +2,7 @@ package com.saas.admin.resource;
 
 import com.saas.admin.dto.FeatureFlagDTO;
 import com.saas.admin.dto.FeatureFlagRequest;
-import com.saas.admin.security.AdminAuthService;
+import com.saas.platformadmin.PlatformAdminAuthService;
 import com.saas.admin.negocio.impl.FeatureFlagNegocio;
 import io.quarkus.security.Authenticated;
 import org.eclipse.microprofile.openapi.annotations.Operation;
@@ -33,7 +33,7 @@ import java.util.UUID;
 @Consumes(MediaType.APPLICATION_JSON)
 public class AdminFeatureFlagResource {
 
-    @Inject AdminAuthService adminAuth;
+    @Inject PlatformAdminAuthService adminAuth;
     @Inject FeatureFlagNegocio featureFlagNegocio;
 
     @GET

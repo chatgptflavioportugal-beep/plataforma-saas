@@ -3,7 +3,7 @@ package com.saas.admin.resource;
 import com.saas.admin.repository.SubscriptionServiceRepository;
 import com.saas.admin.dto.SubscriptionPageDTO;
 import com.saas.admin.dto.SubscriptionsSummaryDTO;
-import com.saas.admin.security.AdminAuthService;
+import com.saas.platformadmin.PlatformAdminAuthService;
 import com.saas.admin.negocio.impl.AdminGeneralNegocio;
 import io.quarkus.security.Authenticated;
 import org.eclipse.microprofile.openapi.annotations.Operation;
@@ -27,7 +27,7 @@ import org.eclipse.microprofile.rest.client.inject.RestClient;
  * via AdminGeneralNegocio. Cancelamento/reativação (POST) são um proxy puro
  * para subscription-service, único dono de escrita naquela tabela (regra de
  * table ownership) — autenticação e checagem de permissão administrativa
- * para essas duas ações são feitas por lá, em AdminAuthService, usando o
+ * para essas duas ações são feitas por lá, em PlatformAdminAuthService, usando o
  * mesmo Authorization repassado aqui.
  *
  * Todos os métodos deste recurso precisam ficar nesta única classe: duas
@@ -51,7 +51,7 @@ public class AdminSubscriptionResource {
     AdminGeneralNegocio adminGeneralNegocio;
 
     @Inject
-    AdminAuthService adminAuth;
+    PlatformAdminAuthService adminAuth;
 
     @GET
     @Path("/summary")
@@ -141,7 +141,7 @@ public class AdminSubscriptionResource {
             "`Authorization` recebido para `POST /api/v1/admin/subscriptions/{id}/cancel` no " +
             "subscription-service e devolve exatamente o status HTTP e o corpo retornados por " +
             "lá. A checagem da permissão administrativa `admin.subscriptions.cancel` (via " +
-            "AdminAuthService) é feita no subscription-service, não neste serviço. " +
+            "PlatformAdminAuthService) é feita no subscription-service, não neste serviço. " +
             "Assinaturas em TRIAL viram TRIAL_CANCELLED (acesso mantido até expirar); " +
             "assinaturas ACTIVE viram CANCELED."
     )
@@ -167,7 +167,7 @@ public class AdminSubscriptionResource {
             "proxy puro para `POST /api/v1/admin/subscriptions/{id}/reactivate` no " +
             "subscription-service — repassa o cabeçalho `Authorization` recebido e devolve " +
             "exatamente o status HTTP e o corpo retornados por lá, onde a permissão " +
-            "administrativa `admin.subscriptions.reactivate` é checada (via AdminAuthService). " +
+            "administrativa `admin.subscriptions.reactivate` é checada (via PlatformAdminAuthService). " +
             "Só reativa assinaturas ainda dentro da validade (`expires_at` nulo ou futuro): " +
             "CANCELED volta para ACTIVE, TRIAL_CANCELLED volta para TRIAL."
     )
