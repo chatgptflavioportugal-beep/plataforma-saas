@@ -1,0 +1,21 @@
+<svg width="120" height="150" viewBox="0 0 120 150" xmlns="http://www.w3.org/2000/svg">
+  <!-- Documento 1 -->
+  <path d="M18 18h45l17 17v75a7 7 0 0 1-7 7H18a7 7 0 0 1-7-7V25a7 7 0 0 1 7-7z" fill="#ffffff" stroke="#cfd8dc" stroke-width="3"></path>
+
+  <path d="M63 18l17 17H63z" fill="#eceff1"></path>
+
+  <!-- Documento 2 -->
+  <path d="M42 35h45l17 17v75a7 7 0 0 1-7 7H42a7 7 0 0 1-7-7V42a7 7 0 0 1 7-7z" fill="#ffffff" stroke="#b0bec5" stroke-width="3"></path>
+
+  <path d="M87 35l17 17H87z" fill="#eceff1"></path>
+
+  <!-- Seta de merge -->
+  <path d="M34 74h22V62l24 23-24 23V96H34z" fill="#1976d2"></path>
+
+  <!-- Barra PDF -->
+  <path d="M18 102h84a6 6 0 0 1 6 6v24a6 6 0 0 1-6 6H18a6 6 0 0 1-6-6v-24a6 6 0 0 1 6-6z" fill="#e53935"></path>
+
+  <text x="60" y="127" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#ffffff">
+    PDF
+  </text>
+</svg>

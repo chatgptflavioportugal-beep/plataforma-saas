@@ -12,6 +12,11 @@ COPY libs/platform-database-quarkus/pom.xml .
 COPY libs/platform-database-quarkus/src ./src
 RUN mvn install -N -DskipTests -q
 
+WORKDIR /libs/platform-tenant-security-quarkus
+COPY libs/platform-tenant-security-quarkus/pom.xml .
+COPY libs/platform-tenant-security-quarkus/src ./src
+RUN mvn install -N -DskipTests -q
+
 WORKDIR /app
 COPY auth-service/pom.xml .
 RUN mvn -B dependency:go-offline -q
