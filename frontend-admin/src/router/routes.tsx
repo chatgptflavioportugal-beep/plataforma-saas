@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from '@/core/auth/AuthContext'
 import { SuperAdminGuard } from '@/core/auth/SuperAdminGuard'
 import { AdminPermissionGuard } from '@/core/auth/AdminPermissionGuard'
 import { Spinner } from '@/shared/components/Spinner'
+import { ErrorBoundary } from '@/shared/components/ErrorBoundary'
 
 import { AdminLayout } from '@/shared/layouts/AdminLayout'
 
@@ -59,6 +60,7 @@ export function AppRouter() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <ErrorBoundary>
         <Suspense fallback={<Spinner fullscreen />}>
         <Routes>
           <Route path="/login" element={<AdminLoginPage />} />
@@ -86,6 +88,7 @@ export function AppRouter() {
           </Route>
         </Routes>
         </Suspense>
+        </ErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
   )
