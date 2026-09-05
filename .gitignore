@@ -27,6 +27,7 @@ subscription-service/target/
 module-catalog-service/target/
 usage-service/target/
 admin-service/target/
+payment-service/target/
 libs/platform-module-security-quarkus/target/
 libs/platform-database-quarkus/target/
 libs/platform-tenant-security-quarkus/target/

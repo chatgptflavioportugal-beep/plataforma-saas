@@ -36,4 +36,13 @@ public interface ProfileModuleSubscriptionNegocio {
     List<TrialHistoryResponse> listTrialHistory(UUID tenantId);
 
     List<TrialEligibilityResponse> listTrialEligibility(UUID tenantId);
+
+    /**
+     * Aplica uma mudança de status financeiro reportada pelo payment-service
+     * (ver InternalPaymentResource) a uma assinatura de módulo. O Payment
+     * Service não decide regra de assinatura — só informa o fato financeiro;
+     * esta é a única classe que traduz isso em status de
+     * profile_module_subscriptions.
+     */
+    void applyPaymentStatus(UUID subscriptionId, String paymentStatus);
 }

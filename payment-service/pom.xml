@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.saas</groupId>
-    <artifactId>subscription-service</artifactId>
+    <artifactId>payment-service</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
@@ -17,6 +17,7 @@
         <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
         <quarkus.platform.version>3.11.1</quarkus.platform.version>
         <surefire-plugin.version>3.2.5</surefire-plugin.version>
+        <stripe-java.version>33.4.1</stripe-java.version>
     </properties>
 
     <dependencyManagement>
@@ -38,13 +39,23 @@
             <artifactId>quarkus-resteasy-reactive-jackson</artifactId>
         </dependency>
 
-        <!-- JWT — validação do Supabase JWT (ES256) -->
+        <!-- REST Client — chamadas a subscription-service e à API do Asaas -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-rest-client-reactive-jackson</artifactId>
+        </dependency>
+
+        <!-- JWT — valida o Supabase JWT nas rotas /api/v1/payments/** (chamadas
+             pelo subscription-service repassando o Authorization do usuário).
+             Sem platform-tenant-security-quarkus: este serviço não resolve
+             membership de tenant (isso é domínio do subscription-service) — o
+             tenantId/subscriptionId chega explícito no corpo da requisição. -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-smallrye-jwt</artifactId>
         </dependency>
 
-        <!-- ORM — EntityManager para SQL nativo + AuditLog (Panache entity) -->
+        <!-- ORM — EntityManager para SQL nativo (payments, payment_webhook_events) -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-hibernate-orm-panache</artifactId>
@@ -54,39 +65,13 @@
             <artifactId>quarkus-jdbc-postgresql</artifactId>
         </dependency>
 
-        <!-- Mapeamento de native query (Tuple) -> TO por reflection, sem Object[]
-             posicional (ver com.saas.platformdatabase.mapper.TupleTOMapper) -->
-        <dependency>
-            <groupId>com.saas</groupId>
-            <artifactId>platform-database-quarkus</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
-        </dependency>
-
-        <!-- Autenticacao de tenant (Supabase JWT + X-Tenant-ID), compartilhada com
-             profile-service/module-catalog-service (ver
-             com.saas.platformtenant.AbstractTenantResolutionFilter) -->
-        <dependency>
-            <groupId>com.saas</groupId>
-            <artifactId>platform-tenant-security-quarkus</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
-        </dependency>
-
-        <!-- Permissao administrativa de plataforma, compartilhada com admin-service (ver
-             com.saas.platformadmin.PlatformAdminAuthService) -->
-        <dependency>
-            <groupId>com.saas</groupId>
-            <artifactId>platform-admin-security-quarkus</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
-        </dependency>
-
         <!-- OpenAPI -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-smallrye-openapi</artifactId>
         </dependency>
 
-        <!-- Health check — /q/health/live e /q/health/ready, padronizado com os
-             demais serviços Quarkus da plataforma -->
+        <!-- Health check -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-smallrye-health</artifactId>
@@ -99,10 +84,18 @@
             <artifactId>quarkus-logging-json</artifactId>
         </dependency>
 
-        <!-- Scheduler — expiração de trial/assinatura, sincronização de status de campanha -->
+        <!-- Mapeamento de native query (Tuple) -> TO por reflection -->
         <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-scheduler</artifactId>
+            <groupId>com.saas</groupId>
+            <artifactId>platform-database-quarkus</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
+        <!-- SDK oficial Stripe -->
+        <dependency>
+            <groupId>com.stripe</groupId>
+            <artifactId>stripe-java</artifactId>
+            <version>${stripe-java.version}</version>
         </dependency>
 
         <!-- Testes -->

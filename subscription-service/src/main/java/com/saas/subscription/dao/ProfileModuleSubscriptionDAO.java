@@ -99,6 +99,18 @@ public class ProfileModuleSubscriptionDAO implements PanacheRepositoryBase<Profi
         update("billingCycle = ?1 where tenantId = ?2 and moduleId = ?3", billingCycle, tenantId, moduleId);
     }
 
+    /**
+     * Atualiza o status apenas se ainda estiver no status esperado — usado pela
+     * notificação de pagamento do payment-service (ver InternalPaymentResource):
+     * torna a transição idempotente contra reentrega do mesmo webhook/evento
+     * sem precisar de nenhum controle adicional aqui.
+     *
+     * @return quantas linhas foram alteradas (0 = já não estava no status esperado).
+     */
+    public int updateStatusIfCurrent(UUID id, String expectedStatus, String newStatus) {
+        return update("status = ?1 where id = ?2 and status = ?3", newStatus, id, expectedStatus);
+    }
+
     public void upsertFreeActivation(UUID tenantId, UUID moduleId, UUID planVersionId, UUID userId) {
         em.createNativeQuery("""
             INSERT INTO profile_module_subscriptions

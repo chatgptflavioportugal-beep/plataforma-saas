@@ -24,6 +24,7 @@ import jakarta.transaction.Transactional;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.NotFoundException;
+import org.jboss.logging.Logger;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -38,6 +39,8 @@ import java.util.UUID;
  */
 @ApplicationScoped
 public class ProfileModuleSubscriptionNegocioImpl implements ProfileModuleSubscriptionNegocio {
+
+    private static final Logger LOG = Logger.getLogger(ProfileModuleSubscriptionNegocioImpl.class);
 
     private static final List<String> CONTRACT_ROLES = List.of("owner", "admin", "finance");
 
@@ -352,5 +355,30 @@ public class ProfileModuleSubscriptionNegocioImpl implements ProfileModuleSubscr
                     elig.campaignName(), elig.reasonCode(), elig.cooldownEndsAt());
             })
             .toList();
+    }
+
+    // ─── notificação de status financeiro (payment-service) ─────────────────────
+
+    @Override
+    @Transactional
+    public void applyPaymentStatus(UUID subscriptionId, String paymentStatus) {
+        if (subscriptionId == null || paymentStatus == null || paymentStatus.isBlank()) {
+            throw new BadRequestException("subscriptionId e status são obrigatórios");
+        }
+
+        int updated = switch (paymentStatus) {
+            case "PAID" -> subscriptionDAO.updateStatusIfCurrent(subscriptionId, "PENDING_PAYMENT", "ACTIVE");
+            case "FAILED", "CANCELLED", "EXPIRED" ->
+                subscriptionDAO.updateStatusIfCurrent(subscriptionId, "PENDING_PAYMENT", "CANCELED");
+            // OVERDUE/PROCESSING/PENDING/AUTHORIZED/REFUNDED: sem transição automática
+            // nesta primeira versão — política de dunning/cobrança recorrente vencida
+            // fica para uma iteração futura, quando houver requisito concreto.
+            default -> 0;
+        };
+
+        if (updated == 0) {
+            LOG.infof("Notificação de pagamento ignorada [subscriptionId=%s, status=%s]: assinatura não estava " +
+                "em PENDING_PAYMENT ou status não mapeado para transição automática", subscriptionId, paymentStatus);
+        }
     }
 }

@@ -1,0 +1,17 @@
+# syntax=docker/dockerfile:1.4
+FROM maven:3.9-eclipse-temurin-21
+
+# libs/platform-database-quarkus não tem repositório Maven privado — instala
+# no ~/.m2 local do container antes de compilar o serviço (ver README.md da
+# lib). Contexto de build é a raiz do repositório (ver docker-compose.yml).
+WORKDIR /libs/platform-database-quarkus
+COPY libs/platform-database-quarkus/pom.xml .
+COPY libs/platform-database-quarkus/src ./src
+RUN mvn install -N -DskipTests -q
+
+WORKDIR /app
+COPY payment-service/pom.xml .
+RUN mvn dependency:go-offline -q
+COPY payment-service/src ./src
+EXPOSE 8088
+CMD ["mvn", "quarkus:dev", "-Dquarkus.http.host=0.0.0.0"]
