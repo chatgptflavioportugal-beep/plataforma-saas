@@ -66,6 +66,12 @@ const ALL_SECTIONS: NavSection[] = [
         icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z',
       },
       {
+        path: '/payments',
+        label: 'Pagamentos',
+        permission: 'admin.payments.view',
+        icon: 'M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3M4.5 19.5h15a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5h-15A1.5 1.5 0 003 6v12a1.5 1.5 0 001.5 1.5z',
+      },
+      {
         path: '/trials',
         label: 'Trials',
         permission: 'admin.trials.view',

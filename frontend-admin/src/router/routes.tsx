@@ -15,6 +15,7 @@ const AdminCustomersPage = lazy(() => import('@/app/admin/AdminCustomersPage').t
 const AdminSystemAdminsPage = lazy(() => import('@/app/admin/AdminSystemAdminsPage').then(m => ({ default: m.AdminSystemAdminsPage })))
 const AdminPlansPage = lazy(() => import('@/app/admin/AdminPlansPage').then(m => ({ default: m.AdminPlansPage })))
 const AdminSubscriptionsPage = lazy(() => import('@/app/admin/AdminSubscriptionsPage').then(m => ({ default: m.AdminSubscriptionsPage })))
+const AdminPaymentsPage = lazy(() => import('@/app/admin/AdminPaymentsPage').then(m => ({ default: m.AdminPaymentsPage })))
 const AdminTrialsPage = lazy(() => import('@/app/admin/AdminTrialsPage').then(m => ({ default: m.AdminTrialsPage })))
 const AdminModulesPage = lazy(() => import('@/app/admin/AdminModulesPage').then(m => ({ default: m.AdminModulesPage })))
 const AdminUsersPage = lazy(() => import('@/app/admin/AdminUsersPage').then(m => ({ default: m.AdminUsersPage })))
@@ -27,6 +28,7 @@ const ADMIN_ROUTES_BY_PRIORITY = [
   { path: 'customers',           permission: 'admin.clients.view' },
   { path: 'plans',               permission: 'admin.plans.view' },
   { path: 'subscriptions',       permission: 'admin.subscriptions.view' },
+  { path: 'payments',            permission: 'admin.payments.view' },
   { path: 'trials',              permission: 'admin.trials.view' },
   { path: 'modules',             permission: 'admin.modules.view' },
   { path: 'admin-users',         permission: 'admin.users.view' },
@@ -77,6 +79,7 @@ export function AppRouter() {
             <Route path="system-admins" element={<AdminPermissionGuard permission="admin.users.view"><AdminSystemAdminsPage /></AdminPermissionGuard>} />
             <Route path="plans" element={<AdminPermissionGuard permission="admin.plans.view"><AdminPlansPage /></AdminPermissionGuard>} />
             <Route path="subscriptions" element={<AdminPermissionGuard permission="admin.subscriptions.view"><AdminSubscriptionsPage /></AdminPermissionGuard>} />
+            <Route path="payments" element={<AdminPermissionGuard permission="admin.payments.view"><AdminPaymentsPage /></AdminPermissionGuard>} />
             <Route path="trials" element={<AdminPermissionGuard permission="admin.trials.view"><AdminTrialsPage /></AdminPermissionGuard>} />
             <Route path="modules" element={<AdminPermissionGuard permission="admin.modules.view"><AdminModulesPage /></AdminPermissionGuard>} />
             <Route path="admin-users" element={<AdminPermissionGuard permission="admin.users.view"><AdminUsersPage /></AdminPermissionGuard>} />

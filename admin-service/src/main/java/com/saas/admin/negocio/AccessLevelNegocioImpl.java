@@ -61,6 +61,9 @@ public class AccessLevelNegocioImpl implements AccessLevelNegocio {
                 perm("admin.subscriptions.cancel",     "Cancelar assinatura"),
                 perm("admin.subscriptions.reactivate", "Reativar assinatura")
             )),
+            group("payments", "Pagamentos", List.of(
+                perm("admin.payments.view", "Visualizar pagamentos")
+            )),
             group("modules", "Módulos", List.of(
                 perm("admin.modules.view",               "Visualizar módulos"),
                 perm("admin.modules.create",             "Criar módulo"),

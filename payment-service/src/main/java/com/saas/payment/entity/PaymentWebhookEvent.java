@@ -37,6 +37,27 @@ public class PaymentWebhookEvent extends PanacheEntityBase {
     public String eventType;
 
     /**
+     * Pagamento a que este evento se refere. Nulo quando o evento não pôde
+     * ser associado a nenhum Payment conhecido (status = IGNORED) — o evento
+     * ainda assim é preservado para investigação administrativa.
+     */
+    @Column(name = "payment_id")
+    public UUID paymentId;
+
+    /**
+     * RECEIVED (gravado, ainda não processado), PROCESSED, FAILED ou
+     * IGNORED — ver WebhookNegocioImpl.processWebhook.
+     */
+    @Column(nullable = false)
+    public String status = "RECEIVED";
+
+    @Column(name = "error_message")
+    public String errorMessage;
+
+    @Column(nullable = false)
+    public int attempts = 1;
+
+    /**
      * Payload bruto do evento, sempre gravado/lido via SQL nativo com
      * {@code CAST(:payload AS jsonb)} (ver PaymentWebhookEventDAO) — nunca
      * persistido via Panache, então não precisa de conversor de tipo JSON aqui.

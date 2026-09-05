@@ -69,7 +69,7 @@ class WebhookNegocioImplTest {
     }
 
     @Test
-    void ignoresDuplicateEventWithoutReapplyingItToThePayment() {
+    void ignoresDuplicateEventWithoutReapplyingItToThePaymentButCountsTheAttempt() {
         when(provider.isValidWebhookSignature(anyString(), any())).thenReturn(true);
         when(provider.parseWebhookEvent(anyString(), any()))
                 .thenReturn(new WebhookParseResult("evt_1", "payment_intent.succeeded", "pi_123", null, PaymentStatus.PAID));
@@ -79,7 +79,8 @@ class WebhookNegocioImplTest {
 
         verify(paymentDAO, never()).findByGatewayPaymentId(any(), any());
         verify(subscriptionNotifier, never()).notifyStatusChange(any());
-        verify(webhookEventDAO, never()).markProcessed(any(), any());
+        verify(webhookEventDAO, times(1)).incrementAttempts("STRIPE", "evt_1");
+        verify(webhookEventDAO, never()).markOutcome(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -102,11 +103,11 @@ class WebhookNegocioImplTest {
 
         assertEquals(PaymentStatus.PAID.name(), payment.status);
         verify(subscriptionNotifier, times(1)).notifyStatusChange(payment);
-        verify(webhookEventDAO, times(1)).markProcessed("STRIPE", "evt_2");
+        verify(webhookEventDAO, times(1)).markOutcome("STRIPE", "evt_2", payment.id, "PROCESSED", null);
     }
 
     @Test
-    void marksEventProcessedEvenWhenNoMatchingPaymentIsFound() {
+    void marksEventIgnoredWithNoPaymentIdWhenNoMatchingPaymentIsFound() {
         when(provider.isValidWebhookSignature(anyString(), any())).thenReturn(true);
         when(provider.parseWebhookEvent(anyString(), any()))
                 .thenReturn(new WebhookParseResult("evt_3", "payment_intent.succeeded", "pi_unknown", null, PaymentStatus.PAID));
@@ -116,6 +117,28 @@ class WebhookNegocioImplTest {
         webhookNegocio.processWebhook(PaymentGateway.STRIPE, "{}", Map.of());
 
         verify(subscriptionNotifier, never()).notifyStatusChange(any());
-        verify(webhookEventDAO, times(1)).markProcessed("STRIPE", "evt_3");
+        verify(webhookEventDAO, times(1)).markOutcome("STRIPE", "evt_3", null, "IGNORED", null);
+    }
+
+    @Test
+    void marksEventFailedWithErrorMessageWhenApplyingToPaymentThrowsAndDoesNotPropagate() {
+        Payment payment = new Payment();
+        payment.id = UUID.randomUUID();
+        payment.gateway = "STRIPE";
+        payment.gatewayPaymentId = "pi_456";
+        payment.status = PaymentStatus.PENDING.name();
+
+        when(provider.isValidWebhookSignature(anyString(), any())).thenReturn(true);
+        when(provider.parseWebhookEvent(anyString(), any()))
+                .thenReturn(new WebhookParseResult("evt_4", "payment_intent.succeeded", "pi_456", null, PaymentStatus.PAID));
+        when(webhookEventDAO.insertIfNew(eq("STRIPE"), eq("evt_4"), any(), any())).thenReturn(true);
+        when(paymentDAO.findByGatewayPaymentId("STRIPE", "pi_456")).thenReturn(Optional.of(payment));
+        org.mockito.Mockito.doThrow(new RuntimeException("subscription-service indisponível"))
+                .when(subscriptionNotifier).notifyStatusChange(any());
+
+        webhookNegocio.processWebhook(PaymentGateway.STRIPE, "{}", Map.of());
+
+        verify(webhookEventDAO, times(1))
+                .markOutcome("STRIPE", "evt_4", payment.id, "FAILED", "subscription-service indisponível");
     }
 }
