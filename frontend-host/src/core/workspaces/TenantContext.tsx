@@ -49,7 +49,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const [permissionsVersion, setPermissionsVersion] = useState<number | null>(null)
   const permissionsVersionRef = useRef<number | null>(null)
 
-  const { data: userTenants = [], isLoading: tenantsLoading, isFetching: tenantsFetching, isError: tenantsError } = useQuery({
+  const { data: userTenants = [], isLoading: tenantsLoading, isFetching: tenantsFetching, isError: tenantsError, error: userTenantsErrorObj } = useQuery({
     queryKey: ['user-tenants', user?.id],
     queryFn: async () => {
       const { data } = await profileApi.get<UserTenant[]>('/api/v1/tenants/mine')
@@ -163,14 +163,22 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     retry: false,
   })
 
-  const tenantProfileError = (() => {
-    if (!tenantProfileErrorObj) return null
-    if (tenantProfileErrorObj instanceof AxiosError) {
-      const apiError = tenantProfileErrorObj.response?.data as ApiError | undefined
-      return apiError?.message ?? apiError?.error ?? tenantProfileErrorObj.message
+  const extractErrorMessage = (err: unknown): string => {
+    if (err instanceof AxiosError) {
+      const apiError = err.response?.data as ApiError | undefined
+      return apiError?.message ?? apiError?.error ?? err.message
     }
-    return (tenantProfileErrorObj as Error).message
-  })()
+    return (err as Error).message
+  }
+
+  // Erro ao listar os tenants do usuário (/tenants/mine) impede qualquer seleção
+  // de perfil — sem isso o TenantProvider nunca define activeTenantId e a tela
+  // ficaria presa num spinner infinito sem motivo visível (ver SubscriptionGuard).
+  const tenantProfileError = userTenantsErrorObj
+    ? extractErrorMessage(userTenantsErrorObj)
+    : tenantProfileErrorObj
+      ? extractErrorMessage(tenantProfileErrorObj)
+      : null
 
   const trialDaysRemaining = (() => {
     if (!currentTenant?.subscription?.trial_end) return null
